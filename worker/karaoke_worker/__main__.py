@@ -1,4 +1,3 @@
-from importlib.metadata import version
 import json
 import sys
 
@@ -27,7 +26,7 @@ def healthcheck() -> None:
         {
             "status": "ready",
             "workerVersion": "0.1.0",
-            "dependencies": {package: version(package) for package in packages},
+            "dependencies": packages,
         }
     )
 

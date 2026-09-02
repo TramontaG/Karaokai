@@ -61,7 +61,17 @@ jobs:
           worker/karaoke_worker/__main__.py
       - name: Smoke-test the isolated worker
         shell: bash
-        run: ./dist/karaoke-worker/karaoke-worker${{ runner.os == 'Windows' && '.exe' || '' }} --healthcheck
+        run: |
+          set +e
+          output=$(./dist/karaoke-worker/karaoke-worker${{ runner.os == 'Windows' && '.exe' || '' }} --healthcheck 2>&1)
+          status=$?
+          set -e
+          echo "$output"
+          if [ "$status" -ne 0 ]; then
+            annotation=$(echo "$output" | tail -c 4000 | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
+            echo "::error title=Worker smoke test failed::$annotation"
+            exit "$status"
+          fi
       - name: Obtain a private static FFmpeg binary
         run: npm install --no-save ffmpeg-static@5.3.0
       - name: Assemble release assets
