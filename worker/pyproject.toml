@@ -7,7 +7,9 @@ dependencies = [
   "demucs==4.0.1",
   "faster-whisper==1.1.0",
   "whisperx==3.3.1",
-  "setuptools>=68,<82"
+  "setuptools>=68,<82",
+  "torch==2.5.1",
+  "torchaudio==2.5.1"
 ]
 
 [build-system]

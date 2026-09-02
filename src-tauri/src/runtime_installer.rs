@@ -15,7 +15,7 @@ use zip::ZipArchive;
 const APP_DIRECTORY_NAME: &str = "KaraokAI";
 const INSTALL_PROGRESS_EVENT: &str = "runtime-install-progress";
 const RUNTIME_INSTALL_JOB_ID: &str = "runtime-bootstrap";
-const RUNTIME_RELEASE_TAG: &str = "runtime-v0.1.3";
+const RUNTIME_RELEASE_TAG: &str = "runtime-v0.1.4";
 const RELEASE_BASE_URL: &str = "https://github.com/TramontaG/Karaokai/releases/download";
 const WHISPER_FILES: [&str; 4] = [
     "config.json",
