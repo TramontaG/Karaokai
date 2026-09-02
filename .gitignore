@@ -1,0 +1,11 @@
+# Frontend
+node_modules/
+dist/
+
+# Tauri / Rust
+src-tauri/target/
+
+# Local environment files
+.env
+.env.*
+!.env.example
