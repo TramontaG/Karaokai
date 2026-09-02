@@ -58,6 +58,7 @@ jobs:
           --collect-all lightning_fabric
           --collect-all pyannote.audio
           --collect-all pytorch_lightning
+          --collect-all speechbrain
           --collect-all torch
           --collect-all torchaudio
           --collect-all torchmetrics
