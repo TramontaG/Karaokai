@@ -48,7 +48,7 @@ jobs:
         with:
           node-version: "22"
       - name: Install the isolated worker build dependencies
-        run: python -m pip install --upgrade pip pyinstaller && python -m pip install ./worker
+        run: python -m pip install --upgrade pip pyinstaller "setuptools<82" && python -m pip install ./worker && python -m pip install --upgrade "setuptools<82"
       - name: Package the ML worker
         run: >-
           pyinstaller --clean --noconfirm --name karaoke-worker

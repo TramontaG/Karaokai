@@ -6,9 +6,10 @@ requires-python = ">=3.11,<3.12"
 dependencies = [
   "demucs==4.0.1",
   "faster-whisper==1.1.0",
-  "whisperx==3.3.1"
+  "whisperx==3.3.1",
+  "setuptools>=68,<82"
 ]
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=68,<82"]
 build-backend = "setuptools.build_meta"
