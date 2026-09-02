@@ -1,5 +1,14 @@
 import { useTranslation } from "../../hooks/useTranslation";
+import { useAppContext } from "../../hooks/useAppContext";
 export function useBehavior(_: Record<string, never>) {
   const { t } = useTranslation();
-  return { label: t("app.loading") };
+  const [data] = useAppContext();
+  const labels = {
+    waiting: t("bootstrap.loadingPreferences"),
+    running: t("bootstrap.initializing"),
+    ready: t("app.loading"),
+    failed: t("bootstrap.failed"),
+  };
+
+  return { label: labels[data.bootstrap.status] };
 }

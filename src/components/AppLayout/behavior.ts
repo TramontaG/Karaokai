@@ -6,6 +6,7 @@ export function useBehavior(_: Record<string, never>) {
     navigationLabel: t("navigation.label"),
     home: t("navigation.home"),
     library: t("navigation.library"),
+    models: t("navigation.models"),
     settings: t("navigation.settings"),
   };
 }

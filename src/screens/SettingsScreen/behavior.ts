@@ -4,10 +4,17 @@ import { type ThemePreference } from "../../theme";
 import { useSound } from "../../hooks/useSound";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "../../hooks/useTranslation";
+import { useOnboarding } from "../../hooks/useOnboarding";
 export function useBehavior(_: Record<string, never>) {
   const { language, setLanguage, t } = useTranslation();
   const { themePreference, setThemePreference } = useTheme();
   const { soundEnabled, setSoundEnabled } = useSound();
+  const { removeDownloads } = useOnboarding();
+  const onRemoveDownloads = useCallback(() => {
+    if (window.confirm(t("settings.removeDownloadsConfirmation"))) {
+      void removeDownloads();
+    }
+  }, [removeDownloads, t]);
   const onLanguageChange = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) =>
       setLanguage(event.target.value as Language),
@@ -40,5 +47,7 @@ export function useBehavior(_: Record<string, never>) {
     onLanguageChange,
     onThemeChange,
     onSoundChange,
+    onRemoveDownloads,
+    removeDownloadsLabel: t("settings.removeDownloads"),
   };
 }

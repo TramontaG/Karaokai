@@ -2,6 +2,7 @@ import { ThemeProvider } from "@emotion/react";
 import { RouterProvider } from "@tanstack/react-router";
 import { router } from "../../router";
 import { LoadingScreen } from "../LoadingScreen";
+import { Onboarding } from "../Onboarding";
 import { Render } from "../Render";
 import { useBehavior } from "./behavior";
 export function Application() {
@@ -12,7 +13,12 @@ export function Application() {
         <LoadingScreen />
       </Render>
       <Render when={behavior.isReady}>
-        <RouterProvider router={router} />
+        <Render when={behavior.needsOnboarding}>
+          <Onboarding />
+        </Render>
+        <Render when={behavior.canOpenApp}>
+          <RouterProvider router={router} />
+        </Render>
       </Render>
     </ThemeProvider>
   );

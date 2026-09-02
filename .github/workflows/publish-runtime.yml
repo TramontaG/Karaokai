@@ -1,0 +1,125 @@
+name: Publish runtime assets
+
+on:
+  push:
+    tags:
+      - "runtime-v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Runtime release tag, for example runtime-v0.1.0
+        required: true
+        type: string
+      prerelease:
+        description: Mark the GitHub Release as a prerelease
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+env:
+  RUNTIME_RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+
+jobs:
+  build-worker-and-ffmpeg:
+    name: ${{ matrix.platform }} / ${{ matrix.architecture }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux
+            architecture: x86_64
+          - runner: windows-2025
+            platform: windows
+            architecture: x86_64
+          - runner: macos-14
+            platform: macos
+            architecture: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install the isolated worker build dependencies
+        run: python -m pip install --upgrade pip pyinstaller && python -m pip install ./worker
+      - name: Package the ML worker
+        run: >-
+          pyinstaller --clean --noconfirm --name karaoke-worker
+          --collect-all ctranslate2
+          --collect-all demucs
+          --collect-all faster_whisper
+          --collect-all torch
+          --collect-all torchaudio
+          --collect-all whisperx
+          worker/karaoke_worker/__main__.py
+      - name: Smoke-test the isolated worker
+        shell: bash
+        run: ./dist/karaoke-worker/karaoke-worker${{ runner.os == 'Windows' && '.exe' || '' }} --healthcheck
+      - name: Obtain a private static FFmpeg binary
+        run: npm install --no-save ffmpeg-static@5.3.0
+      - name: Assemble release assets
+        shell: bash
+        run: |
+          mkdir -p runtime-assets/ffmpeg runtime-assets/ml-worker
+          node -e "const fs=require('node:fs'); fs.copyFileSync(require('ffmpeg-static'), process.argv[1])" "runtime-assets/ffmpeg/ffmpeg${{ runner.os == 'Windows' && '.exe' || '' }}"
+          cp -R dist/karaoke-worker/. runtime-assets/ml-worker/
+          chmod +x "runtime-assets/ffmpeg/ffmpeg${{ runner.os == 'Windows' && '.exe' || '' }}" "runtime-assets/ml-worker/karaoke-worker${{ runner.os == 'Windows' && '.exe' || '' }}"
+          python -c "import shutil; shutil.make_archive('ffmpeg-${{ matrix.platform }}-${{ matrix.architecture }}', 'zip', 'runtime-assets/ffmpeg')"
+          python -c "import shutil; shutil.make_archive('ml-worker-${{ matrix.platform }}-${{ matrix.architecture }}', 'zip', 'runtime-assets/ml-worker')"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-${{ matrix.platform }}-${{ matrix.architecture }}
+          path: |
+            ffmpeg-${{ matrix.platform }}-${{ matrix.architecture }}.zip
+            ml-worker-${{ matrix.platform }}-${{ matrix.architecture }}.zip
+          if-no-files-found: error
+
+  package-demucs-model:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Download the pinned HTDemucs model for the release
+        run: |
+          python -m pip install --upgrade pip demucs==4.0.1
+          python - <<'PY'
+          from demucs.pretrained import get_model
+
+          get_model("htdemucs")
+          PY
+          mkdir -p runtime-assets/htdemucs
+          find ~/.cache/torch -type f \( -name '*.th' -o -name '*.ckpt' \) -exec cp {} runtime-assets/htdemucs/ \;
+          cd runtime-assets
+          zip -r ../demucs-htdemucs-any-any.zip htdemucs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: demucs-model
+          path: |
+            demucs-htdemucs-any-any.zip
+          if-no-files-found: error
+
+  publish:
+    needs: [build-worker-and-ffmpeg, package-demucs-model]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Generate the signed-content manifest
+        run: node runtime/scripts/create-runtime-manifest.mjs "$RUNTIME_RELEASE_TAG" release-assets release-assets/runtime-manifest.json
+      - name: Publish GitHub Release and its assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$RUNTIME_RELEASE_TAG" release-assets/* --title "KaraokAI Runtime $RUNTIME_RELEASE_TAG" --generate-notes ${{ inputs.prerelease && '--prerelease' || '' }}

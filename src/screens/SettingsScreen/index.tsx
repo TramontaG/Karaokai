@@ -37,6 +37,9 @@ export function SettingsScreen() {
         />
         {behavior.soundLabel}
       </Label>
+      <button onClick={behavior.onRemoveDownloads}>
+        {behavior.removeDownloadsLabel}
+      </button>
     </Panel>
   );
 }

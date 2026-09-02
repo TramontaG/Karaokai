@@ -1,0 +1,14 @@
+[project]
+name = "karaoke-worker"
+version = "0.1.0"
+description = "Isolated local processing worker for KaraokAI"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "demucs==4.0.1",
+  "faster-whisper==1.1.0",
+  "whisperx==3.3.1"
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

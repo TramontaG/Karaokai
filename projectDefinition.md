@@ -254,6 +254,18 @@ Ele deverá conter:
 
 Componentes pesados serão baixados sob demanda.
 
+### Fontes dos artefatos
+
+- modelos faster-whisper serão obtidos diretamente dos repositórios oficiais no Hugging Face, sempre com revisão fixada;
+- FFmpeg privado, ML Worker isolado e pesos do HTDemucs serão distribuídos por GitHub Releases do próprio repositório KaraokAI;
+- cada Release de runtime deverá conter um manifest com plataforma, arquitetura, tamanho e SHA-256 de todos os arquivos;
+- um artefato só poderá ser ativado depois da validação de tamanho, checksum, conteúdo e healthcheck quando aplicável;
+- as versões de runtime usadas pelo aplicativo serão fixadas e Releases já publicadas não deverão ter seus arquivos substituídos.
+
+### Bootstrap visual
+
+No primeiro acesso, o usuário deverá escolher a pasta de armazenamento e o modelo Whisper. O aplicativo executará um único job visual que instala o modelo selecionado, FFmpeg, ML Worker e HTDemucs, apresentando a etapa atual, bytes transferidos e progresso agregado. O onboarding só poderá terminar depois que todas as dependências passarem pela validação final.
+
 Exemplo:
 
 ```text

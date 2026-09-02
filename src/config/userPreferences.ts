@@ -6,11 +6,15 @@ export interface UserPreferences {
   language: Language;
   themePreference: ThemePreference;
   soundEnabled: boolean;
+  onboardingCompleted: boolean;
+  storageDirectory: string | null;
 }
 export const defaultPreferences: UserPreferences = {
   language: "pt-BR",
   themePreference: "system",
   soundEnabled: true,
+  onboardingCompleted: false,
+  storageDirectory: null,
 };
 
 export function getSystemTheme(): ThemeName {
@@ -36,6 +40,15 @@ export function loadUserPreferences(): UserPreferences {
         typeof stored.soundEnabled === "boolean"
           ? stored.soundEnabled
           : defaultPreferences.soundEnabled,
+      onboardingCompleted:
+        typeof stored.onboardingCompleted === "boolean"
+          ? stored.onboardingCompleted
+          : defaultPreferences.onboardingCompleted,
+      storageDirectory:
+        typeof stored.storageDirectory === "string" &&
+        stored.storageDirectory.length > 0
+          ? stored.storageDirectory
+          : defaultPreferences.storageDirectory,
     };
   } catch {
     return defaultPreferences;

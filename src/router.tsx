@@ -8,6 +8,7 @@ import { AppLayout } from "./components/AppLayout";
 import { EditorScreen } from "./screens/EditorScreen";
 import { HomeScreen } from "./screens/HomeScreen";
 import { LibraryScreen } from "./screens/LibraryScreen";
+import { ModelsScreen } from "./screens/ModelsScreen";
 import { SettingsScreen } from "./screens/SettingsScreen";
 const root = createRootRoute({ component: AppLayout });
 const home = createRoute({
@@ -30,8 +31,13 @@ const settings = createRoute({
   path: "/settings",
   component: SettingsScreen,
 });
+const models = createRoute({
+  getParentRoute: () => root,
+  path: "/models",
+  component: ModelsScreen,
+});
 export const router = createRouter({
-  routeTree: root.addChildren([home, library, editor, settings]),
+  routeTree: root.addChildren([home, library, editor, settings, models]),
   history: createMemoryHistory({ initialEntries: ["/"] }),
 });
 declare module "@tanstack/react-router" {

@@ -10,6 +10,7 @@ export function AppLayout() {
         <Navigation aria-label={behavior.navigationLabel}>
           <Link to="/">{behavior.home}</Link>
           <Link to="/library">{behavior.library}</Link>
+          <Link to="/models">{behavior.models}</Link>
           <Link to="/settings">{behavior.settings}</Link>
         </Navigation>
       </Sidebar>
