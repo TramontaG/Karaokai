@@ -13,10 +13,11 @@
     "windows": [
       {
         "title": "KaraokAI",
-        "width": 1024,
+        "width": 1280,
         "height": 720,
         "minWidth": 800,
         "minHeight": 600,
+        "decorations": false,
         "resizable": true
       }
     ],
@@ -26,6 +27,10 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all"
+    "targets": "all",
+    "resources": {
+      "../worker/pyproject.toml": "worker/pyproject.toml",
+      "../worker/karaoke_worker": "worker/karaoke_worker"
+    }
   }
 }

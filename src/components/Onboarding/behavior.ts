@@ -7,10 +7,14 @@ import { type ModelStatus } from "../../services/models";
 export function useBehavior(_: Record<string, never>) {
   const onboarding = useOnboarding();
   const { language, t } = useTranslation();
-  const modelOptions = onboarding.models.map((model) => ({
-    ...model,
-    selected: model.id === onboarding.onboarding.selectedModelId,
-  }));
+
+  const modelOptions = onboarding.models
+    .filter((model) => model.kind === "whisper")
+    .map((model) => ({
+      ...model,
+      selected: model.id === onboarding.onboarding.selectedModelId,
+    }));
+
   const errorMessage = (() => {
     if (onboarding.onboarding.error) {
       return t("onboarding.error.details", {
@@ -19,13 +23,29 @@ export function useBehavior(_: Record<string, never>) {
     }
     return t("onboarding.error.download");
   })();
+
   const statusMessage = (() => {
     const componentId = onboarding.onboarding.statusMessage;
+    if (onboarding.onboarding.error !== null) {
+      return t("onboarding.stage.failed");
+    }
+    if (componentId === "uv") {
+      return t("onboarding.stage.uv");
+    }
+    if (componentId === "python") {
+      return t("onboarding.stage.python");
+    }
+    if (componentId === "python-environment") {
+      return t("onboarding.stage.environment");
+    }
     if (componentId?.startsWith("whisper-")) {
       return t("onboarding.stage.whisper");
     }
     if (componentId === "ffmpeg") {
       return t("onboarding.stage.ffmpeg");
+    }
+    if (componentId === "yt-dlp") {
+      return t("onboarding.stage.ytDlp");
     }
     if (componentId === "ml-worker") {
       return t("onboarding.stage.worker");
@@ -41,6 +61,7 @@ export function useBehavior(_: Record<string, never>) {
     }
     return t("onboarding.stage.manifest");
   })();
+
   const formatBytes = (bytes: number) => {
     const useGigabytes = bytes >= 1_000_000_000;
     const divisor = useGigabytes ? 1_000_000_000 : 1_000_000;
@@ -51,6 +72,7 @@ export function useBehavior(_: Record<string, never>) {
       maximumFractionDigits: 1,
     }).format(bytes / divisor);
   };
+
   const progressDetails = (() => {
     const totalBytes = onboarding.onboarding.totalBytes;
     if (!totalBytes) return null;

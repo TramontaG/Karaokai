@@ -2,18 +2,16 @@ import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect } from "react";
 import { bootstrapApplication } from "../services/bootstrap";
-import {
-  clearDownloadedData,
-  installRuntime,
-  type InstallProgress,
-} from "../services/models";
+import { installRuntime, type InstallProgress } from "../services/models";
 import { selectStorageDirectory } from "../services/storage";
 import { useAppContext } from "./useAppContext";
+import { useDownloadedData } from "./useDownloadedData";
 import { useModels } from "./useModels";
 
 export function useOnboarding() {
   const [data, setData] = useAppContext();
   const { models, refresh } = useModels();
+  const { removeDownloads } = useDownloadedData();
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -131,7 +129,7 @@ export function useOnboarding() {
       onboarding: {
         step: "download",
         progress: 1,
-        statusMessage: "manifest",
+        statusMessage: "uv",
         completedBytes: 0,
         totalBytes: null,
         error: null,
@@ -170,21 +168,6 @@ export function useOnboarding() {
     () => setData({ preferences: { onboardingCompleted: true } }),
     [setData]
   );
-
-  const removeDownloads = useCallback(async () => {
-    await clearDownloadedData(data.preferences.storageDirectory);
-    setData({
-      preferences: { onboardingCompleted: false },
-      onboarding: {
-        step: "welcome",
-        progress: 0,
-        completedBytes: 0,
-        totalBytes: null,
-        error: null,
-        errorCode: null,
-      },
-    });
-  }, [data.preferences.storageDirectory, setData]);
 
   return {
     onboarding: data.onboarding,

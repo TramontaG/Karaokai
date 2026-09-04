@@ -9,6 +9,7 @@ export function useBehavior(_: Record<string, never>) {
     id: "whisper-tiny",
     name: "Whisper Tiny",
     category: t("models.category"),
+    kind: "whisper" as const,
     sizeLabel: "~78 MB",
     installed: false,
   };

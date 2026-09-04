@@ -10,7 +10,13 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  overflow: hidden;
+  background: #11111b;
 }
 #root {
   min-height: 100vh;
+}
+button,
+input {
+  font: inherit;
 }

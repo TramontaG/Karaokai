@@ -149,6 +149,16 @@ O frontend utilizará **Prettier** para formatação consistente do código.
 - O arquivo será a fonte de verdade para as regras de formatação.
 - As regras específicas serão definidas e mantidas pelo projeto.
 
+### Estrutura dos componentes React
+
+Por padrão, componentes React serão organizados em arquivos separados:
+
+- `index.tsx` para o template declarativo;
+- `behavior.ts` para estado, callbacks, cálculos e demais comportamentos;
+- `styles.tsx` para styled components.
+
+O arquivo `behavior.ts` é opcional quando o componente for puramente estático ou apresentacional e não possuir lógica comportamental. Valores visuais fixos, como proporções internas de uma marca, podem ficar diretamente no template ou nos estilos. Não deverá ser criado um hook de behavior que apenas repasse props ou constantes para cumprir a estrutura.
+
 ## ML Worker
 
 Python isolado contendo:
@@ -165,6 +175,7 @@ O Python do sistema **não deverá ser utilizado**.
 ## Media
 
 - FFmpeg privado da aplicação.
+- yt-dlp privado da aplicação para importação de mídia por URL.
 
 ## Render
 
@@ -257,10 +268,16 @@ Componentes pesados serão baixados sob demanda.
 ### Fontes dos artefatos
 
 - modelos faster-whisper serão obtidos diretamente dos repositórios oficiais no Hugging Face, sempre com revisão fixada;
-- FFmpeg privado, ML Worker isolado e pesos do HTDemucs serão distribuídos por GitHub Releases do próprio repositório KaraokAI;
-- cada Release de runtime deverá conter um manifest com plataforma, arquitetura, tamanho e SHA-256 de todos os arquivos;
-- um artefato só poderá ser ativado depois da validação de tamanho, checksum, conteúdo e healthcheck quando aplicável;
-- as versões de runtime usadas pelo aplicativo serão fixadas e Releases já publicadas não deverão ter seus arquivos substituídos.
+- o KaraokAI não redistribuirá Python, FFmpeg, bibliotecas de ML ou modelos em seu instalador nem em Releases próprias;
+- o Runtime Manager baixará o `uv` diretamente de uma Release oficial da Astral, validará seu SHA-256 e o utilizará para instalar um Python gerenciado e privado;
+- as bibliotecas do ML Worker serão instaladas durante o onboarding a partir do PyPI e do índice oficial de wheels do PyTorch, dentro de um ambiente virtual exclusivo do KaraokAI;
+- o FFmpeg privado será obtido durante o onboarding por meio da wheel específica da plataforma do `imageio-ffmpeg` publicada no PyPI;
+- o yt-dlp será instalado durante o onboarding a partir do PyPI dentro do ambiente Python privado e validado antes da conclusão;
+- os pesos do HTDemucs serão obtidos pelo próprio Demucs diretamente do repositório de modelos da Meta;
+- um componente só poderá ser considerado instalado depois da validação de conteúdo e healthcheck quando aplicável;
+- as versões de cada ferramenta e biblioteca serão fixadas no Runtime Manager e registradas na instalação local.
+
+O pequeno código próprio do protocolo do ML Worker poderá ser incluído como recurso do aplicativo. Esse código não conterá dependências, interpretador, binários de terceiros ou modelos.
 
 ### Bootstrap visual
 
@@ -276,6 +293,7 @@ KaraokeAI
    └── Runtime Manager
             │
             ├── FFmpeg
+            ├── yt-dlp
             ├── ML Worker
             ├── Demucs models
             └── Whisper models
@@ -1034,24 +1052,25 @@ O usuário poderá:
 
 ---
 
-# 31. Runtime Packages
+# 31. Runtime Installation
 
-Distribuir builds específicas por plataforma.
+O KaraokAI não distribuirá builds próprias das dependências. O Runtime Manager instalará somente o runtime necessário para a plataforma e o perfil de hardware detectados.
 
-Exemplos:
+Fluxo inicial:
 
 ```text
-worker-win-x64-cpu
-worker-win-x64-cuda
-
-worker-linux-x64-cpu
-worker-linux-x64-cuda
-
-worker-macos-arm64
-worker-macos-x64
+uv oficial
+   ↓
+Python privado gerenciado
+   ↓
+ambiente virtual do KaraokAI
+   ↓
+wheels de ML e FFmpeg
+   ↓
+modelos escolhidos
 ```
 
-Não distribuir todos os runtimes para todos os usuários.
+Nenhuma dessas instalações deverá modificar o Python do sistema, o `PATH`, o registro global do Windows ou ambientes virtuais externos ao diretório escolhido pelo usuário.
 
 ---
 
@@ -1128,30 +1147,33 @@ Sempre utilizar caminho absoluto para o runtime selecionado.
 
 # 35. Segurança dos runtimes
 
-Componentes baixados deverão possuir:
+Componentes baixados diretamente pelo Runtime Manager deverão possuir:
 
 - versão;
 - URL;
 - tamanho;
 - SHA-256;
 - plataforma;
-- arquitetura.
+- arquitetura;
+- fonte oficial ou índice de pacotes confiável.
+
+Para instalações delegadas ao `uv`, serão utilizadas versões fixadas e a verificação de integridade fornecida pelos índices e metadados dos pacotes. Pesos de modelos deverão usar revisões fixadas ou hashes publicados pela fonte sempre que disponíveis.
 
 Fluxo:
 
 ```text
 download
    ↓
-verify SHA-256
+verify source metadata/checksum
    ↓
-verify manifest
+install in the private directory
    ↓
-extract
+run component healthcheck
    ↓
-activate
+record local runtime state
 ```
 
-Nunca executar componente baixado antes da validação.
+O executável do `uv`, por ser baixado diretamente pelo KaraokAI, deverá ter o SHA-256 validado antes da primeira execução. Nenhum gerenciador, interpretador ou pacote baixado poderá ser exposto globalmente ao sistema.
 
 ---
 
@@ -1587,8 +1609,7 @@ karaoke-ai/
 │   └── shared-types/
 │
 ├── runtime/
-│   ├── manifests/
-│   └── scripts/
+│   └── manifests/
 │
 ├── renderer/
 │   └── ass/
@@ -1597,7 +1618,7 @@ karaoke-ai/
     ├── architecture.md
     ├── project-format.md
     ├── worker-protocol.md
-    └── runtime-distribution.md
+    └── runtime-installation.md
 ```
 
 ---

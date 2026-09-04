@@ -1,9 +1,10 @@
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "@tauri-apps/api/core";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   downloadModel,
   getModels,
+  removeModel,
   type InstallProgress,
   type ModelStatus,
 } from "../services/models";
@@ -12,9 +13,12 @@ import { useAppContext } from "./useAppContext";
 export function useModels() {
   const [data, setData] = useAppContext();
   const storageDirectory = data.preferences.storageDirectory;
+  const modelsRef = useRef(data.models);
+  modelsRef.current = data.models;
 
   const refresh = useCallback(async () => {
     const models = await getModels(storageDirectory);
+    modelsRef.current = models;
     setData({ models });
   }, [setData, storageDirectory]);
 
@@ -24,42 +28,81 @@ export function useModels() {
 
   useEffect(() => {
     if (!isTauri()) return;
+    let disposed = false;
     let unlisten: (() => void) | undefined;
     void listen<InstallProgress>("runtime-install-progress", (event) => {
-      const { componentId, stage } = event.payload;
+      const { componentId, progress, stage } = event.payload;
+      const currentModels = modelsRef.current;
+      if (!currentModels.some((model) => model.id === componentId)) {
+        return;
+      }
+
+      const models = currentModels.map((model) =>
+        model.id === componentId
+          ? {
+              ...model,
+              downloading:
+                stage === "started" ||
+                stage === "downloading" ||
+                stage === "installing",
+              progress: Math.round(progress),
+            }
+          : model
+      );
+      modelsRef.current = models;
+      setData({
+        models,
+      });
       if (stage === "completed" || stage === "failed") {
         void refresh();
       }
-      setData({
-        models: data.models.map((model) =>
-          model.id === componentId
-            ? {
-                ...model,
-                downloading:
-                  stage === "started" ||
-                  stage === "downloading" ||
-                  stage === "installing",
-              }
-            : model
-        ),
-      });
     }).then((dispose) => {
+      if (disposed) {
+        dispose();
+        return;
+      }
       unlisten = dispose;
     });
-    return () => unlisten?.();
-  }, [data.models, refresh, setData]);
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [refresh, setData]);
 
   const download = useCallback(
     async (model: ModelStatus) => {
+      const models = modelsRef.current.map((item) =>
+        item.id === model.id
+          ? { ...item, downloading: true, progress: 0 }
+          : item
+      );
+      modelsRef.current = models;
       setData({
-        models: data.models.map((item) =>
-          item.id === model.id ? { ...item, downloading: true } : item
-        ),
+        models,
       });
-      await downloadModel(model.id, storageDirectory);
+      try {
+        await downloadModel(model.id, storageDirectory);
+      } catch (error) {
+        const restoredModels = modelsRef.current.map((item) =>
+          item.id === model.id
+            ? { ...item, downloading: false, progress: 0 }
+            : item
+        );
+        modelsRef.current = restoredModels;
+        setData({ models: restoredModels });
+        throw error;
+      }
     },
-    [data.models, setData, storageDirectory]
+    [setData, storageDirectory]
   );
 
-  return { models: data.models, download, refresh };
+  const remove = useCallback(
+    async (modelId: string) => {
+      await removeModel(modelId, storageDirectory);
+      await refresh();
+    },
+    [refresh, storageDirectory]
+  );
+
+  return { models: data.models, download, remove, refresh };
 }
