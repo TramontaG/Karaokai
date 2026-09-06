@@ -67,28 +67,32 @@ export function AppLayout() {
           <StorageLine />
         </SidebarFooter>
       </Sidebar>
-      <Workspace>
-        <Titlebar>
-          <SearchBox>
-            <Search aria-hidden="true" size={18} />
-            <SearchInput
-              aria-label={behavior.searchLabel}
-              type="search"
-              placeholder={behavior.searchPlaceholder}
-            />
-          </SearchBox>
-          <ThemeButton
-            type="button"
-            aria-label={behavior.themeLabel}
-            onClick={behavior.onToggleTheme}
-          >
-            <Render when={behavior.isDarkTheme}>
-              <Moon aria-hidden="true" size={19} />
-            </Render>
-            <Render when={behavior.isLightTheme}>
-              <Sun aria-hidden="true" size={19} />
-            </Render>
-          </ThemeButton>
+      <Workspace data-editor={behavior.isEditorRoute}>
+        <Titlebar data-editor={behavior.isEditorRoute}>
+          <Render when={!behavior.isEditorRoute}>
+            <SearchBox>
+              <Search aria-hidden="true" size={18} />
+              <SearchInput
+                aria-label={behavior.searchLabel}
+                type="search"
+                placeholder={behavior.searchPlaceholder}
+              />
+            </SearchBox>
+          </Render>
+          <Render when={!behavior.isEditorRoute}>
+            <ThemeButton
+              type="button"
+              aria-label={behavior.themeLabel}
+              onClick={behavior.onToggleTheme}
+            >
+              <Render when={behavior.isDarkTheme}>
+                <Moon aria-hidden="true" size={19} />
+              </Render>
+              <Render when={behavior.isLightTheme}>
+                <Sun aria-hidden="true" size={19} />
+              </Render>
+            </ThemeButton>
+          </Render>
           <WindowActions>
             <WindowAction
               type="button"
@@ -113,7 +117,7 @@ export function AppLayout() {
             </WindowAction>
           </WindowActions>
         </Titlebar>
-        <Content>
+        <Content data-editor={behavior.isEditorRoute}>
           <Outlet />
         </Content>
       </Workspace>

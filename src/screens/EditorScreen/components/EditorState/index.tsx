@@ -11,7 +11,7 @@ import { useRecursiveState } from "../../../../hooks/useRecursiveState";
 import type { KaraokeProject } from "../../../../domain/project";
 import type { DeepPartial } from "../../../../util/dataManipulation";
 
-export type EditorInspectorTab = "general" | "style" | "animation" | "mixer";
+export type EditorInspectorTab = "properties" | "mixer";
 
 export interface EditorData extends Record<string, unknown> {
   project: KaraokeProject | null;
@@ -41,7 +41,7 @@ const initialEditorData: EditorData = {
   selectedPhraseId: null,
   selectedWordId: null,
   trackPendingDeletionId: null,
-  inspectorTab: "general",
+  inspectorTab: "properties",
   timelineZoom: 1,
   bpmInputValue: "120",
   trackScaleInputValue: "100",

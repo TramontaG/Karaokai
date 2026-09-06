@@ -5,19 +5,27 @@ export const EditorPage = styled.main`
   height: 100%;
   min-height: 0;
   grid-template-columns: minmax(0, 1fr) 19.5rem;
+  grid-template-rows: auto minmax(0, 1fr);
   background: ${({ theme }) => theme.colors.background};
+
   @media (max-width: 1150px) {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 `;
 export const Workspace = styled.section`
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-rows: auto minmax(15rem, 1fr) auto minmax(13rem, 0.72fr);
+  grid-template-rows: minmax(15rem, 1fr) auto minmax(13rem, 0.72fr);
   border-right: 1px solid ${({ theme }) => theme.colors.border};
+
+  @media (max-width: 1150px) {
+    border-right: 0;
+  }
 `;
 export const EditorHeader = styled.header`
+  grid-column: 1 / -1;
   display: flex;
   min-height: 4rem;
   padding: 0.7rem 1rem;
@@ -25,6 +33,15 @@ export const EditorHeader = styled.header`
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  user-select: none;
+  -webkit-app-region: drag;
+
+  padding-right: 9.5rem;
+
+  button {
+    -webkit-app-region: no-drag;
+  }
+
   @media (max-width: 780px) {
     padding-inline: 0.6rem;
   }
@@ -34,6 +51,8 @@ export const ProjectTitle = styled.div`
   min-width: 0;
   align-items: center;
   gap: 0.7rem;
+  flex: 1;
+
   button {
     display: grid;
     width: 2.2rem;
@@ -68,6 +87,7 @@ export const SavedState = styled.span`
 `;
 export const HeaderActions = styled.div`
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 0.55rem;
   button {
@@ -79,6 +99,7 @@ export const HeaderActions = styled.div`
     background: ${({ theme }) => theme.colors.surface};
     font: inherit;
     font-size: 0.72rem;
+    white-space: nowrap;
     cursor: pointer;
   }
   & button:last-child {
@@ -98,17 +119,18 @@ export const PreviewArea = styled.section`
   min-height: 0;
   padding: 1rem;
   place-items: center;
+  container-type: size;
   background: #08080d;
 `;
 export const PreviewCanvas = styled.div`
   position: relative;
   display: grid;
-  width: min(100%, 56rem);
-  height: 100%;
-  min-height: 14rem;
+  width: min(100cqw, calc(100cqh * 16 / 9), 56rem);
+  aspect-ratio: 16 / 9;
   overflow: hidden;
   border-radius: 0.35rem;
   place-items: center;
+  container-type: inline-size;
   background:
     linear-gradient(180deg, rgba(40, 31, 79, 0.2), rgba(6, 11, 31, 0.72)),
     radial-gradient(
@@ -146,7 +168,7 @@ export const SubtitlePreview = styled.div`
   text-shadow:
     0 0.16rem 0.2rem #000,
     0 0 0.45rem #000;
-  font-size: clamp(1.35rem, 3vw, 2.6rem);
+  font-size: 3cqw;
   font-weight: 800;
   line-height: 1.3;
 `;
@@ -540,12 +562,13 @@ export const TimelineClip = styled.button<{
 `;
 export const Inspector = styled.aside`
   display: grid;
+  min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 1rem;
+  scrollbar-gutter: stable;
   border-left: 1px solid ${({ theme }) => theme.colors.border};
   align-content: start;
-  gap: 1rem;
+  gap: 0;
   background: ${({ theme }) => theme.colors.surface};
   @media (max-width: 1150px) {
     display: none;
@@ -568,22 +591,73 @@ export const InspectorHeader = styled.div`
 `;
 export const Tabs = styled.div`
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.35rem;
+  grid-template-columns: repeat(2, 1fr);
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+
   button {
-    height: 2rem;
-    border: 1px solid ${({ theme }) => theme.colors.border};
-    border-radius: 0.4rem;
+    position: relative;
+    height: 2.35rem;
+    border: 0;
+    border-bottom: 2px solid transparent;
     color: ${({ theme }) => theme.colors.textMuted};
     background: transparent;
     font: inherit;
-    font-size: 0.65rem;
+    font-size: 0.68rem;
+    cursor: pointer;
   }
+
+  button:hover {
+    color: ${({ theme }) => theme.colors.text};
+  }
+
   button[data-active="true"] {
-    border-color: transparent;
-    color: #251531;
-    background: ${({ theme }) => theme.colors.accent};
+    border-bottom-color: ${({ theme }) => theme.colors.accent};
+    color: ${({ theme }) => theme.colors.text};
   }
+`;
+export const PropertyAccordions = styled.section`
+  display: grid;
+`;
+export const PropertyAccordion = styled.details`
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+
+  summary {
+    display: flex;
+    min-height: 2.6rem;
+    padding: 0 1rem;
+    align-items: center;
+    justify-content: space-between;
+    color: ${({ theme }) => theme.colors.text};
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  summary::after {
+    content: "⌄";
+    color: ${({ theme }) => theme.colors.textMuted};
+    font-size: 1rem;
+    font-weight: 400;
+    transition: transform 150ms ease;
+  }
+
+  &[open] summary::after {
+    transform: rotate(180deg);
+  }
+
+  &[open] summary {
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  }
+`;
+export const PropertyAccordionContent = styled.div`
+  display: grid;
+  padding: 0.8rem 1rem 1rem;
+  gap: 0.8rem;
 `;
 export const AnimationPanel = styled.section`
   display: grid;
@@ -685,11 +759,92 @@ export const Field = styled.label`
   textarea {
     min-height: 3.5rem;
   }
+  input[data-draggable-number="true"] {
+    cursor: ns-resize;
+  }
+  input[data-draggable-number="true"]:focus {
+    cursor: text;
+  }
 `;
 export const FieldGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.65rem;
+`;
+export const ColorField = styled(Field)`
+  grid-column: 1 / -1;
+`;
+export const ColorFieldControl = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+
+  button {
+    flex: 0 0 auto;
+    min-height: 2rem;
+    padding: 0 0.45rem;
+    border: 1px solid ${({ theme }) => theme.colors.border};
+    border-radius: 0.35rem;
+    color: ${({ theme }) => theme.colors.textMuted};
+    background: transparent;
+    font: inherit;
+    font-size: 0.62rem;
+    cursor: pointer;
+  }
+
+  button:hover {
+    color: ${({ theme }) => theme.colors.text};
+    border-color: ${({ theme }) => theme.colors.accent};
+  }
+`;
+export const ColorInputValue = styled.div`
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 0.4rem;
+  background: color-mix(
+    in srgb,
+    ${({ theme }) => theme.colors.background} 80%,
+    transparent
+  );
+
+  input[type="text"] {
+    width: 100%;
+    min-width: 0;
+    padding: 0.65rem;
+    border: 0;
+    border-radius: 0 0.4rem 0.4rem 0;
+    color: ${({ theme }) => theme.colors.text};
+    background: transparent;
+    font: inherit;
+    font-size: 0.75rem;
+    flex: 1;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  input[type="color"] {
+    box-sizing: border-box;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: 0;
+    border-right: 1px solid ${({ theme }) => theme.colors.border};
+    border-radius: 0.4rem;
+    background: transparent;
+    cursor: pointer;
+
+    &::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+
+    &::-webkit-color-swatch {
+      border: 0;
+      border-radius: 0.35rem 0 0 0.35rem;
+    }
+  }
 `;
 export const SectionTitle = styled.h3`
   margin: 0.1rem 0 0;
@@ -708,6 +863,54 @@ export const WordList = styled.div`
   overflow: hidden;
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: 0.4rem;
+`;
+export const WordTimingRow = styled.div<{ $active: boolean }>`
+  display: grid;
+  padding: 0.48rem 0.6rem;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  grid-template-columns: minmax(0, 1fr) 4.2rem 4.2rem;
+  align-items: center;
+  gap: 0.4rem;
+  color: ${({ theme }) => theme.colors.textMuted};
+  background: ${({ $active, theme }) =>
+    $active
+      ? `color-mix(in srgb,${theme.colors.accent} 20%,transparent)`
+      : "transparent"};
+  font-size: 0.68rem;
+
+  button {
+    overflow: hidden;
+    padding: 0;
+    border: 0;
+    color: ${({ theme }) => theme.colors.text};
+    background: transparent;
+    font: inherit;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  input {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    padding: 0.3rem;
+    border: 1px solid ${({ theme }) => theme.colors.border};
+    border-radius: 0.3rem;
+    color: ${({ theme }) => theme.colors.text};
+    background: ${({ theme }) => theme.colors.background};
+    font: inherit;
+    font-size: 0.64rem;
+  }
+
+  input[data-draggable-number="true"] {
+    cursor: ns-resize;
+  }
+
+  input[data-draggable-number="true"]:focus {
+    cursor: text;
+  }
 `;
 export const PhraseActions = styled.div`
   display: flex;

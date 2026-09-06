@@ -151,6 +151,10 @@ export const Workspace = styled.div`
   min-width: 0;
   min-height: 0;
   grid-template-rows: 5.4rem minmax(0, 1fr);
+
+  &[data-editor="true"] {
+    grid-template-rows: minmax(0, 1fr);
+  }
 `;
 
 export const Titlebar = styled.header`
@@ -162,6 +166,14 @@ export const Titlebar = styled.header`
   gap: 1rem;
   user-select: none;
   -webkit-app-region: drag;
+
+  &[data-editor="true"] {
+    position: absolute;
+    z-index: 10;
+    top: 0;
+    right: 0;
+    padding: 0.7rem 1rem;
+  }
 `;
 
 export const SearchBox = styled.label`
@@ -265,4 +277,8 @@ export const Content = styled.main`
   min-width: 0;
   min-height: 0;
   overflow: auto;
+
+  &[data-editor="true"] {
+    overflow: hidden;
+  }
 `;

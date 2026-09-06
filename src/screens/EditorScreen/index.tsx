@@ -31,6 +31,7 @@ function EditorScreenContent() {
   return (
     <EditorBehaviorProvider behavior={behavior}>
       <EditorPage>
+        <EditorHeader />
         <Workspace>
           <audio
             ref={behavior.instrumentalAudio}
@@ -46,8 +47,6 @@ function EditorScreenContent() {
             src={behavior.vocalsSource}
             preload="auto"
           />
-          <EditorHeader />
-
           <PreviewArea>
             <PreviewCanvas>
               <ForEach

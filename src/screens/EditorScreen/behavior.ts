@@ -1,5 +1,6 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { Image, Music2, Subtitles, Type } from "lucide-react";
+import { flushSync } from "react-dom";
 import {
   createElement,
   useCallback,
@@ -115,6 +116,15 @@ function optionalStyleScale(
   const next = { ...style };
   if (scale === undefined) delete next.scale;
   else next.scale = scale;
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+function withoutStyleProperty(
+  style: SubtitlePhrase["style"],
+  property: "unreadColor" | "readColor"
+) {
+  const next = { ...style };
+  delete next[property];
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
@@ -347,6 +357,8 @@ export function useBehavior(_: Record<string, never>) {
   const timelineLabelsRef = useRef<HTMLDivElement>(null);
   const timelineContentRef = useRef<HTMLDivElement>(null);
   const timelinePlayheadRef = useRef<HTMLDivElement>(null);
+  const timelineZoomRef = useRef(timelineZoom);
+  const timelineZoomingUntilRef = useRef(0);
   const saveTimerRef = useRef<number | null>(null);
   const phraseClipboardRef = useRef<SubtitlePhrase | null>(null);
   const historyRef = useRef<EditorHistoryEntry[]>([]);
@@ -579,6 +591,7 @@ export function useBehavior(_: Record<string, never>) {
   const followTimelineAt = useCallback(
     (milliseconds: number) => {
       if (!timelineAutoFollow) return;
+      if (performance.now() < timelineZoomingUntilRef.current) return;
       const viewport = timelineRef.current;
       const content = timelineContentRef.current;
       if (!viewport || !content) return;
@@ -740,21 +753,82 @@ export function useBehavior(_: Record<string, never>) {
     },
     [activePhrase, persistProject, subtitleTrack]
   );
-  const onUpdateStyle = useCallback(
+  const updateScopedStyle = useCallback(
     (
+      scope: SubtitlePropertyScope,
       property: "unreadColor" | "readColor" | "x" | "y" | "hasCaret",
       value: string | number | boolean
     ) => {
       const currentProject = projectRef.current;
-      if (!currentProject || !subtitleTrack || !activePhrase) return;
+      if (!currentProject || !subtitleTrack) return;
+      if (scope === "track") {
+        persistProject({
+          ...currentProject,
+          updatedAt: String(Date.now()),
+          tracks: currentProject.tracks.map((track) =>
+            track.type === "subtitle" && track.id === subtitleTrack.id
+              ? { ...track, style: { ...track.style, [property]: value } }
+              : track
+          ),
+        });
+        return;
+      }
+      if (!activePhrase) return;
+      if (scope === "phrase") {
+        persistProject(
+          replacePhrase(currentProject, subtitleTrack.id, activePhrase.id, {
+            ...activePhrase,
+            style: { ...activePhrase.style, [property]: value },
+          })
+        );
+        return;
+      }
+      if (!selectedWord) return;
       persistProject(
         replacePhrase(currentProject, subtitleTrack.id, activePhrase.id, {
           ...activePhrase,
-          style: { ...activePhrase.style, [property]: value },
+          words: activePhrase.words.map((word) =>
+            word.id === selectedWord.id
+              ? { ...word, style: { ...word.style, [property]: value } }
+              : word
+          ),
         })
       );
     },
-    [activePhrase, persistProject, subtitleTrack]
+    [activePhrase, persistProject, selectedWord, subtitleTrack]
+  );
+  const resetScopedColor = useCallback(
+    (
+      scope: Exclude<SubtitlePropertyScope, "track">,
+      property: "unreadColor" | "readColor"
+    ) => {
+      const currentProject = projectRef.current;
+      if (!currentProject || !subtitleTrack || !activePhrase) return;
+      if (scope === "phrase") {
+        persistProject(
+          replacePhrase(currentProject, subtitleTrack.id, activePhrase.id, {
+            ...activePhrase,
+            style: withoutStyleProperty(activePhrase.style, property),
+          })
+        );
+        return;
+      }
+      if (!selectedWord) return;
+      persistProject(
+        replacePhrase(currentProject, subtitleTrack.id, activePhrase.id, {
+          ...activePhrase,
+          words: activePhrase.words.map((word) =>
+            word.id === selectedWord.id
+              ? {
+                  ...word,
+                  style: withoutStyleProperty(word.style, property),
+                }
+              : word
+          ),
+        })
+      );
+    },
+    [activePhrase, persistProject, selectedWord, subtitleTrack]
   );
   const updateScale = useCallback(
     (scope: SubtitlePropertyScope, scale: number | undefined) => {
@@ -888,6 +962,61 @@ export function useBehavior(_: Record<string, never>) {
     },
     [persistProject, subtitleTrack]
   );
+  const updatePhraseTime = useCallback(
+    (edge: "start" | "end", value: number) => {
+      const currentProject = projectRef.current;
+      if (!currentProject || !subtitleTrack || !activePhrase) return;
+      const phrase =
+        edge === "start"
+          ? resizePhraseStart(activePhrase, value)
+          : resizePhraseEnd(activePhrase, value, timelineDuration);
+      persistProject(
+        replacePhrase(currentProject, subtitleTrack.id, activePhrase.id, phrase)
+      );
+    },
+    [activePhrase, persistProject, subtitleTrack, timelineDuration]
+  );
+  const updateWordTime = useCallback(
+    (edge: "start" | "end", value: number) => {
+      const currentProject = projectRef.current;
+      if (!currentProject || !subtitleTrack || !activePhrase || !selectedWord)
+        return;
+      const phrase = resizeWordBoundary(
+        activePhrase,
+        selectedWord.id,
+        edge,
+        value,
+        timelineDuration
+      );
+      persistProject(
+        replacePhrase(currentProject, subtitleTrack.id, activePhrase.id, phrase)
+      );
+    },
+    [
+      activePhrase,
+      persistProject,
+      selectedWord,
+      subtitleTrack,
+      timelineDuration,
+    ]
+  );
+  const updateInspectorWordTime = useCallback(
+    (wordId: string, edge: "start" | "end", value: number) => {
+      const currentProject = projectRef.current;
+      if (!currentProject || !subtitleTrack || !activePhrase) return;
+      const phrase = resizeWordBoundary(
+        activePhrase,
+        wordId,
+        edge,
+        value,
+        timelineDuration
+      );
+      persistProject(
+        replacePhrase(currentProject, subtitleTrack.id, activePhrase.id, phrase)
+      );
+    },
+    [activePhrase, persistProject, subtitleTrack, timelineDuration]
+  );
   const onAddSubtitleTrack = useCallback(() => {
     const currentProject = projectRef.current;
     if (!currentProject) return;
@@ -916,7 +1045,7 @@ export function useBehavior(_: Record<string, never>) {
     setSelectedTrackId(track.id);
     setSelectedPhraseId(null);
     setSelectedWordId(null);
-    setInspectorTab("general");
+    setInspectorTab("properties");
     persistProject(
       {
         ...currentProject,
@@ -1382,25 +1511,43 @@ export function useBehavior(_: Record<string, never>) {
       if (!event.ctrlKey) return;
       event.preventDefault();
       const viewport = timelineRef.current;
-      const previousZoom = timelineZoom;
+      const content = timelineContentRef.current;
+      if (!viewport || !content) return;
+      const previousZoom = timelineZoomRef.current;
       const nextZoom = clamp(
         previousZoom * (event.deltaY < 0 ? 1.16 : 1 / 1.16),
         1,
         256
       );
       if (nextZoom === previousZoom) return;
-      const cursor = viewport
-        ? event.clientX - viewport.getBoundingClientRect().left
-        : 0;
-      const previousScroll = viewport?.scrollLeft ?? 0;
-      setTimelineZoom(nextZoom);
-      requestAnimationFrame(() => {
-        if (!viewport) return;
-        viewport.scrollLeft =
-          ((previousScroll + cursor) * nextZoom) / previousZoom - cursor;
-      });
+      const viewportBounds = viewport.getBoundingClientRect();
+      const contentBounds = content.getBoundingClientRect();
+      const cursorPosition = clamp(
+        event.clientX - viewportBounds.left,
+        0,
+        viewport.clientWidth
+      );
+      const contentPosition = clamp(
+        (event.clientX - contentBounds.left) / Math.max(1, contentBounds.width),
+        0,
+        1
+      );
+      timelineZoomRef.current = nextZoom;
+      timelineZoomingUntilRef.current = performance.now() + 150;
+      flushSync(() => setTimelineZoom(nextZoom));
+      const maximumScrollLeft = Math.max(
+        0,
+        viewport.scrollWidth - viewport.clientWidth
+      );
+      viewport.scrollLeft = clamp(
+        content.offsetLeft +
+          content.offsetWidth * contentPosition -
+          cursorPosition,
+        0,
+        maximumScrollLeft
+      );
     },
-    [timelineZoom]
+    [setTimelineZoom]
   );
 
   useEffect(() => {
@@ -1495,9 +1642,15 @@ export function useBehavior(_: Record<string, never>) {
     [navigate]
   );
 
-  const activeStyle = resolveSubtitleStyle(
+  const trackStyle = resolveSubtitleStyle(subtitleTrack?.style ?? {});
+  const phraseStyle = resolveSubtitleStyle(
     subtitleTrack?.style ?? {},
     activePhrase?.style
+  );
+  const wordStyle = resolveSubtitleStyle(
+    subtitleTrack?.style ?? {},
+    activePhrase?.style,
+    selectedWord?.style
   );
   const trackPositionX = subtitleTrack?.style.x ?? 0;
   const trackPositionY = subtitleTrack?.style.y ?? 0;
@@ -1619,7 +1772,7 @@ export function useBehavior(_: Record<string, never>) {
             setSelectedTrackId(row.id);
             setSelectedPhraseId(null);
             setSelectedWordId(null);
-            setInspectorTab("general");
+            setInspectorTab("properties");
           },
         },
         createElement(row.Icon, { size: 15 }),
@@ -1821,15 +1974,17 @@ export function useBehavior(_: Record<string, never>) {
     showTrackBezierEditor,
     showPhraseBezierEditor,
     showWordBezierEditor,
-    showGeneralEmpty: activePhrase === null && subtitleTrack === null,
-    showStyleEmpty: subtitleTrack === null,
     subtitlePreviews,
     inspectorWords: activePhrase?.words ?? [],
     timelineRows,
-    activeStyle,
-    generalActive: inspectorTab === "general",
-    styleActive: inspectorTab === "style",
-    animationActive: inspectorTab === "animation",
+    trackStyle,
+    phraseStyle,
+    wordStyle,
+    phrasePositionX: activePhrase?.style?.x ?? 0,
+    phrasePositionY: activePhrase?.style?.y ?? 0,
+    wordPositionX: selectedWord?.style?.x ?? 0,
+    wordPositionY: selectedWord?.style?.y ?? 0,
+    propertiesActive: inspectorTab === "properties",
     mixerActive: inspectorTab === "mixer",
     savedLabel: t("editor.saved"),
     backLabel: t("editor.back"),
@@ -1860,9 +2015,7 @@ export function useBehavior(_: Record<string, never>) {
     aspectLabel: "16:9",
     inspectorTitle:
       inspectorTab === "mixer" ? t("editor.mixer") : t("editor.properties"),
-    generalLabel: t("editor.general"),
-    styleLabel: t("editor.style"),
-    animationLabel: t("editor.animation"),
+    propertiesLabel: t("editor.properties"),
     mixerLabel: t("editor.mixer"),
     animationTemplateLabel: t("editor.animationTemplate"),
     animationTemplateOneLabel: t("editor.animationTemplateOne"),
@@ -1888,6 +2041,7 @@ export function useBehavior(_: Record<string, never>) {
     scaleLabel: t("editor.scale"),
     readAnimationLabel: t("editor.readAnimation"),
     inheritScaleLabel: t("editor.inheritScale"),
+    inheritLabel: t("editor.inherit"),
     bezierLabels: {
       title: t("editor.bezier.title"),
       p1x: t("editor.bezier.p1x"),
@@ -1939,22 +2093,14 @@ export function useBehavior(_: Record<string, never>) {
     onBack,
     onTextInput: (event: ChangeEvent<HTMLTextAreaElement>) =>
       onUpdatePhraseText(event.target.value),
-    onUnreadInput: (event: ChangeEvent<HTMLInputElement>) =>
-      onUpdateStyle("unreadColor", event.target.value),
-    onReadInput: (event: ChangeEvent<HTMLInputElement>) =>
-      onUpdateStyle("readColor", event.target.value),
-    onXInput: (event: ChangeEvent<HTMLInputElement>) =>
-      onUpdateStyle("x", Number(event.target.value)),
-    onYInput: (event: ChangeEvent<HTMLInputElement>) =>
-      onUpdateStyle("y", Number(event.target.value)),
-    onCaretChange: (event: ChangeEvent<HTMLInputElement>) =>
-      onUpdateStyle("hasCaret", event.target.checked),
-    onTrackScaleInput: (event: ChangeEvent<HTMLInputElement>) =>
-      setTrackScaleInputValue(event.target.value),
-    onPhraseScaleInput: (event: ChangeEvent<HTMLInputElement>) =>
-      setPhraseScaleInputValue(event.target.value),
-    onWordScaleInput: (event: ChangeEvent<HTMLInputElement>) =>
-      setWordScaleInputValue(event.target.value),
+    onTrackStyleChange: updateScopedStyle.bind(null, "track"),
+    onPhraseStyleChange: updateScopedStyle.bind(null, "phrase"),
+    onWordStyleChange: updateScopedStyle.bind(null, "word"),
+    onPhraseColorInherit: resetScopedColor.bind(null, "phrase"),
+    onWordColorInherit: resetScopedColor.bind(null, "word"),
+    onTrackScaleInput: setTrackScaleInputValue,
+    onPhraseScaleInput: setPhraseScaleInputValue,
+    onWordScaleInput: setWordScaleInputValue,
     onTrackScaleBlur: () =>
       commitScaleInput(
         "track",
@@ -1989,6 +2135,19 @@ export function useBehavior(_: Record<string, never>) {
       onUpdateTrackPosition("x", Number(event.target.value)),
     onTrackYInput: (event: ChangeEvent<HTMLInputElement>) =>
       onUpdateTrackPosition("y", Number(event.target.value)),
+    onPhraseStartInput: (value: string) =>
+      updatePhraseTime("start", Number(value) * 1000),
+    onPhraseEndInput: (value: string) =>
+      updatePhraseTime("end", Number(value) * 1000),
+    onWordStartInput: (value: string) =>
+      updateWordTime("start", Number(value) * 1000),
+    onWordEndInput: (value: string) =>
+      updateWordTime("end", Number(value) * 1000),
+    onInspectorWordSelect: (wordId: string) => setSelectedWordId(wordId),
+    onInspectorWordStartInput: (wordId: string, value: string) =>
+      updateInspectorWordTime(wordId, "start", Number(value) * 1000),
+    onInspectorWordEndInput: (wordId: string, value: string) =>
+      updateInspectorWordTime(wordId, "end", Number(value) * 1000),
     onAnimationTemplateChange,
     onInsertPhrase,
     onDeletePhrase,
@@ -2006,10 +2165,11 @@ export function useBehavior(_: Record<string, never>) {
     onBpmKeyDown,
     onBeatOffsetInput: (event: ChangeEvent<HTMLInputElement>) =>
       updateTempo("offset", Number(event.target.value) * 1000),
-    onResetZoom: () => setTimelineZoom(1),
-    onShowGeneral: () => setInspectorTab("general"),
-    onShowStyle: () => setInspectorTab("style"),
-    onShowAnimation: () => setInspectorTab("animation"),
+    onResetZoom: () => {
+      timelineZoomRef.current = 1;
+      setTimelineZoom(1);
+    },
+    onShowProperties: () => setInspectorTab("properties"),
     onShowMixer: () => setInspectorTab("mixer"),
   };
 }

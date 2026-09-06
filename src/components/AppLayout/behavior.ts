@@ -9,6 +9,8 @@ export function useBehavior(_: Record<string, never>) {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+  const normalizedPathname = pathname.replace(/\/+$/, "") || "/";
+  const isEditorRoute = /^\/projects\/[^/]+\/editor$/.test(normalizedPathname);
   const { theme, setThemePreference } = useTheme();
   const onToggleTheme = useCallback(() => {
     setThemePreference(theme.name === "dark" ? "light" : "dark");
@@ -42,6 +44,7 @@ export function useBehavior(_: Record<string, never>) {
     closeLabel: t("appLayout.window.close"),
     storageLabel: t("appLayout.storage.label"),
     storageDescription: t("appLayout.storage.description"),
+    isEditorRoute,
     isDarkTheme: theme.name === "dark",
     isLightTheme: theme.name === "light",
     onToggleTheme,

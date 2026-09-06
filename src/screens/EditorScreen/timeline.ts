@@ -109,21 +109,39 @@ function templateOneSubtitlePreviewAt(
     );
     const previousCandidate = ordered[currentIndex - 1] ?? null;
     const nextCandidate = ordered[currentIndex + 1] ?? null;
-    const nextPhrase =
-      nextCandidate &&
-      nextCandidate.start - currentPhrase.end < NEXT_PHRASE_MAX_GAP
-        ? nextCandidate
-        : null;
     const followsContinuousPhrase =
       previousCandidate !== null &&
       currentPhrase.start - previousCandidate.end < NEXT_PHRASE_MAX_GAP;
+    const nextGap = nextCandidate
+      ? nextCandidate.start - currentPhrase.end
+      : Number.POSITIVE_INFINITY;
+    const nextTransitionStartsAt =
+      nextGap >= FAST_PHRASE_FADE_DURATION
+        ? currentPhrase.end
+        : (nextCandidate?.start ?? 0) - FAST_PHRASE_FADE_DURATION;
+    const previewStartsAt = Math.max(
+      currentPhrase.start,
+      nextTransitionStartsAt - fadeDuration
+    );
+    const shouldShowNextPreview =
+      nextCandidate !== null &&
+      nextGap < NEXT_PHRASE_MAX_GAP &&
+      currentTime >= previewStartsAt;
+    const previewProgress = shouldShowNextPreview
+      ? clamp(
+          (currentTime - previewStartsAt) /
+            Math.max(1, nextTransitionStartsAt - previewStartsAt),
+          0,
+          1
+        )
+      : 0;
     return {
       currentPhrase,
       primaryPhrase: currentPhrase,
       primaryOpacity: 1,
       primaryFullyRead: false,
-      secondaryPhrase: nextPhrase,
-      secondaryOpacity: SECONDARY_PHRASE_OPACITY,
+      secondaryPhrase: shouldShowNextPreview ? nextCandidate : null,
+      secondaryOpacity: SECONDARY_PHRASE_OPACITY * previewProgress,
       secondaryOffset: 1,
       secondaryScale: SECONDARY_PHRASE_SCALE,
       suppressEntryCue: followsContinuousPhrase,

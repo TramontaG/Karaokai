@@ -1,319 +1,414 @@
-import { memo } from "react";
-import { Mic2, Trash2, Volume2, X } from "lucide-react";
+import { memo, useEffect, useState } from "react";
+import { Mic2, Trash2, Volume2 } from "lucide-react";
+import { DraggableNumberInput } from "../../../../components/DraggableNumberInput";
 import { ForEach } from "../../../../components/ForEach";
 import { Render } from "../../../../components/Render";
 import { useEditorBehavior, useEditorState } from "../EditorState";
 import {
   AnimationDescription,
-  AnimationPanel,
+  ColorFieldControl,
+  ColorField,
+  ColorInputValue,
   Field,
   FieldGrid,
   InheritanceHint,
   Inspector,
   InspectorEmpty,
-  InspectorHeader,
   MixerChannel,
   MixerContent,
   MixerHeader,
   MixerMeter,
   PhraseActions,
-  SectionTitle,
+  PropertyAccordion,
+  PropertyAccordionContent,
+  PropertyAccordions,
   Tabs,
   TrackActions,
   WordList,
+  WordTimingRow,
 } from "../../styles";
 import { CubicBezierEditor } from "../CubicBezierEditor";
+
+type Scope = "Track" | "Phrase" | "Word";
+
+function normalizeHexColor(value: string) {
+  const compact = value.trim();
+  const shorthand = /^#([\da-f]{3})$/i.exec(compact);
+
+  if (shorthand) {
+    return `#${shorthand[1]
+      .split("")
+      .map((character) => character.repeat(2))
+      .join("")}`.toUpperCase();
+  }
+
+  return /^#[\da-f]{6}$/i.test(compact) ? compact.toUpperCase() : null;
+}
+
+function ColorInput({
+  color,
+  label,
+  onChange,
+}: {
+  color: string;
+  label: string;
+  onChange: (color: string) => void;
+}) {
+  const [value, setValue] = useState(color);
+
+  useEffect(() => setValue(color), [color]);
+
+  const commit = () => {
+    const normalizedColor = normalizeHexColor(value);
+
+    if (normalizedColor) {
+      onChange(normalizedColor);
+      setValue(normalizedColor);
+      return;
+    }
+
+    setValue(color);
+  };
+
+  return (
+    <ColorInputValue>
+      <input
+        type="color"
+        value={color}
+        aria-label={label}
+        onChange={(event) => onChange(event.target.value.toUpperCase())}
+      />
+      <input
+        type="text"
+        value={value}
+        aria-label={`${label} hexadecimal`}
+        spellCheck="false"
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.currentTarget.blur();
+          }
+
+          if (event.key === "Escape") {
+            setValue(color);
+            event.currentTarget.blur();
+          }
+        }}
+      />
+    </ColorInputValue>
+  );
+}
+
+function StyleFields({ scope }: { scope: Scope }) {
+  const behavior = useEditorBehavior();
+  const lower = scope.toLowerCase() as "track" | "phrase" | "word";
+  const style = behavior[`${lower}Style`];
+  const onStyleChange = behavior[`on${scope}StyleChange`];
+  const onColorInherit =
+    scope === "Track" ? null : behavior[`on${scope}ColorInherit`];
+  const positionX = behavior[`${lower}PositionX`] ?? behavior.trackPositionX;
+  const positionY = behavior[`${lower}PositionY`] ?? behavior.trackPositionY;
+  const scale = behavior[`${lower}ScaleInputValue`];
+  const inheritedScale =
+    scope === "Track"
+      ? undefined
+      : behavior[`inherited${scope}ScalePlaceholder`];
+  const onScaleInput = behavior[`on${scope}ScaleInput`];
+  const onScaleBlur = behavior[`on${scope}ScaleBlur`];
+  const curve = behavior[`${lower}Curve`];
+  const curveOptions = behavior[`${lower}CurveOptions`];
+  const onCurveChange = behavior[`on${scope}CurveChange`];
+  const showBezier = behavior[`show${scope}BezierEditor`];
+  const onBezierChange = behavior[`on${scope}BezierChange`];
+
+  return (
+    <>
+      <FieldGrid>
+        <Field>
+          <span>{behavior.positionXLabel}</span>
+          <DraggableNumberInput
+            value={positionX}
+            onValueChange={(value) => onStyleChange("x", Number(value))}
+          />
+        </Field>
+        <Field>
+          <span>{behavior.positionYLabel}</span>
+          <DraggableNumberInput
+            value={positionY}
+            onValueChange={(value) => onStyleChange("y", Number(value))}
+          />
+        </Field>
+        <Field>
+          <span>{behavior.scaleLabel}</span>
+          <DraggableNumberInput
+            min="25"
+            max="400"
+            step="1"
+            value={scale}
+            placeholder={inheritedScale}
+            onValueChange={onScaleInput}
+            onBlur={onScaleBlur}
+          />
+        </Field>
+        <Field>
+          <span>{behavior.readAnimationLabel}</span>
+          <select value={curve} onChange={onCurveChange}>
+            <ForEach
+              data={curveOptions}
+              idCompute={behavior.getCurveOptionId}
+              render={behavior.renderCurveOption}
+            />
+          </select>
+        </Field>
+        <ColorField>
+          <span>{behavior.unreadLabel}</span>
+          <ColorFieldControl>
+            <ColorInput
+              color={style.unreadColor}
+              label={behavior.unreadLabel}
+              onChange={(color) => onStyleChange("unreadColor", color)}
+            />
+            <Render when={onColorInherit !== null}>
+              <button
+                type="button"
+                aria-label={`${behavior.inheritLabel} ${behavior.unreadLabel}`}
+                onClick={() => onColorInherit?.("unreadColor")}
+              >
+                {behavior.inheritLabel}
+              </button>
+            </Render>
+          </ColorFieldControl>
+        </ColorField>
+        <ColorField>
+          <span>{behavior.readLabel}</span>
+          <ColorFieldControl>
+            <ColorInput
+              color={style.readColor}
+              label={behavior.readLabel}
+              onChange={(color) => onStyleChange("readColor", color)}
+            />
+            <Render when={onColorInherit !== null}>
+              <button
+                type="button"
+                aria-label={`${behavior.inheritLabel} ${behavior.readLabel}`}
+                onClick={() => onColorInherit?.("readColor")}
+              >
+                {behavior.inheritLabel}
+              </button>
+            </Render>
+          </ColorFieldControl>
+        </ColorField>
+      </FieldGrid>
+      <Field>
+        <span>{behavior.caretLabel}</span>
+        <input
+          type="checkbox"
+          checked={style.hasCaret}
+          onChange={(event) => onStyleChange("hasCaret", event.target.checked)}
+        />
+      </Field>
+      <Render when={showBezier}>
+        <CubicBezierEditor
+          value={curve}
+          labels={behavior.bezierLabels}
+          onChange={onBezierChange}
+        />
+      </Render>
+    </>
+  );
+}
 
 function EditorSidebarView() {
   useEditorState((behavior) => behavior.sidebarRenderKey);
   const behavior = useEditorBehavior();
   return (
     <Inspector>
-      <InspectorHeader>
-        <h2>{behavior.inspectorTitle}</h2>
-        <button type="button">
-          <X size={15} />
-        </button>
-      </InspectorHeader>
-      <Tabs>
+      <Tabs role="tablist" aria-label={behavior.inspectorTitle}>
         <button
           type="button"
-          data-active={behavior.generalActive}
-          onClick={behavior.onShowGeneral}
+          role="tab"
+          aria-selected={behavior.propertiesActive}
+          data-active={behavior.propertiesActive}
+          onClick={behavior.onShowProperties}
         >
-          {behavior.generalLabel}
+          {behavior.propertiesLabel}
         </button>
         <button
           type="button"
-          data-active={behavior.styleActive}
-          onClick={behavior.onShowStyle}
-        >
-          {behavior.styleLabel}
-        </button>
-        <button
-          type="button"
-          data-active={behavior.animationActive}
-          onClick={behavior.onShowAnimation}
-        >
-          {behavior.animationLabel}
-        </button>
-        <button
-          type="button"
+          role="tab"
+          aria-selected={behavior.mixerActive}
           data-active={behavior.mixerActive}
           onClick={behavior.onShowMixer}
         >
           {behavior.mixerLabel}
         </button>
       </Tabs>
-      <Render when={behavior.generalActive}>
+      <Render when={behavior.propertiesActive}>
         <Render when={behavior.selectedSubtitleTrack !== null}>
-          <SectionTitle>{behavior.trackPositionLabel}</SectionTitle>
-          <FieldGrid>
-            <Field>
-              <span>{behavior.positionXLabel}</span>
-              <input
-                type="number"
-                value={behavior.trackPositionX}
-                onChange={behavior.onTrackXInput}
-              />
-            </Field>
-            <Field>
-              <span>{behavior.positionYLabel}</span>
-              <input
-                type="number"
-                value={behavior.trackPositionY}
-                onChange={behavior.onTrackYInput}
-              />
-            </Field>
-          </FieldGrid>
-          <TrackActions>
-            <button type="button" onClick={behavior.onRequestDeleteTrack}>
-              <Trash2 size={15} />
-              {behavior.deleteTrackLabel}
-            </button>
-          </TrackActions>
+          <PropertyAccordions>
+            <PropertyAccordion open>
+              <summary>{behavior.trackStyleLabel}</summary>
+              <PropertyAccordionContent>
+                <StyleFields scope="Track" />
+                <Field>
+                  <span>{behavior.animationTemplateLabel}</span>
+                  <select
+                    value={behavior.animationTemplate}
+                    onChange={behavior.onAnimationTemplateChange}
+                  >
+                    <option value="template-1">
+                      {behavior.animationTemplateOneLabel}
+                    </option>
+                  </select>
+                </Field>
+                <AnimationDescription>
+                  {behavior.animationTemplateOneDescription}
+                </AnimationDescription>
+                <TrackActions>
+                  <button type="button" onClick={behavior.onRequestDeleteTrack}>
+                    <Trash2 size={15} />
+                    {behavior.deleteTrackLabel}
+                  </button>
+                </TrackActions>
+              </PropertyAccordionContent>
+            </PropertyAccordion>
+            <PropertyAccordion>
+              <summary>{behavior.phraseStyleLabel}</summary>
+              <Render when={behavior.activePhrase !== null}>
+                <PropertyAccordionContent>
+                  <Field>
+                    <span>{behavior.textLabel}</span>
+                    <textarea
+                      value={behavior.activePhrase?.text ?? ""}
+                      onChange={behavior.onTextInput}
+                    />
+                  </Field>
+                  <FieldGrid>
+                    <Field>
+                      <span>{behavior.startLabel}</span>
+                      <DraggableNumberInput
+                        min="0"
+                        step="0.01"
+                        value={(behavior.activePhrase?.start ?? 0) / 1000}
+                        onValueChange={behavior.onPhraseStartInput}
+                      />
+                    </Field>
+                    <Field>
+                      <span>{behavior.endLabel}</span>
+                      <DraggableNumberInput
+                        min="0"
+                        step="0.01"
+                        value={(behavior.activePhrase?.end ?? 0) / 1000}
+                        onValueChange={behavior.onPhraseEndInput}
+                      />
+                    </Field>
+                  </FieldGrid>
+                  <StyleFields scope="Phrase" />
+                  <Field>
+                    <span>{behavior.wordsLabel}</span>
+                    <WordList>
+                      <ForEach
+                        data={behavior.inspectorWords}
+                        idCompute={behavior.getWordId}
+                        render={(word) => (
+                          <WordTimingRow
+                            $active={word.id === behavior.selectedWord?.id}
+                          >
+                            <button
+                              type="button"
+                              onClick={() =>
+                                behavior.onInspectorWordSelect(word.id)
+                              }
+                            >
+                              {word.text}
+                            </button>
+                            <DraggableNumberInput
+                              aria-label={`${word.text} ${behavior.startLabel}`}
+                              min="0"
+                              step="0.01"
+                              value={word.start / 1000}
+                              onValueChange={(value) =>
+                                behavior.onInspectorWordStartInput(
+                                  word.id,
+                                  value
+                                )
+                              }
+                            />
+                            <DraggableNumberInput
+                              aria-label={`${word.text} ${behavior.endLabel}`}
+                              min="0"
+                              step="0.01"
+                              value={word.end / 1000}
+                              onValueChange={(value) =>
+                                behavior.onInspectorWordEndInput(word.id, value)
+                              }
+                            />
+                          </WordTimingRow>
+                        )}
+                      />
+                    </WordList>
+                  </Field>
+                  <PhraseActions>
+                    <button
+                      type="button"
+                      title={behavior.deletePhraseShortcut}
+                      onClick={behavior.onDeletePhrase}
+                    >
+                      <Trash2 size={15} />
+                      {behavior.deletePhraseLabel}
+                      <kbd>{behavior.deleteKeyLabel}</kbd>
+                    </button>
+                  </PhraseActions>
+                </PropertyAccordionContent>
+              </Render>
+              <Render when={behavior.activePhrase === null}>
+                <PropertyAccordionContent>
+                  <InspectorEmpty>{behavior.emptyInspector}</InspectorEmpty>
+                </PropertyAccordionContent>
+              </Render>
+            </PropertyAccordion>
+            <PropertyAccordion>
+              <summary>{behavior.wordStyleLabel}</summary>
+              <Render when={behavior.selectedWord !== null}>
+                <PropertyAccordionContent>
+                  <InheritanceHint>
+                    {behavior.inheritScaleLabel}
+                  </InheritanceHint>
+                  <FieldGrid>
+                    <Field>
+                      <span>{behavior.startLabel}</span>
+                      <DraggableNumberInput
+                        min="0"
+                        step="0.01"
+                        value={(behavior.selectedWord?.start ?? 0) / 1000}
+                        onValueChange={behavior.onWordStartInput}
+                      />
+                    </Field>
+                    <Field>
+                      <span>{behavior.endLabel}</span>
+                      <DraggableNumberInput
+                        min="0"
+                        step="0.01"
+                        value={(behavior.selectedWord?.end ?? 0) / 1000}
+                        onValueChange={behavior.onWordEndInput}
+                      />
+                    </Field>
+                  </FieldGrid>
+                  <StyleFields scope="Word" />
+                </PropertyAccordionContent>
+              </Render>
+              <Render when={behavior.selectedWord === null}>
+                <PropertyAccordionContent>
+                  <InspectorEmpty>{behavior.emptyInspector}</InspectorEmpty>
+                </PropertyAccordionContent>
+              </Render>
+            </PropertyAccordion>
+          </PropertyAccordions>
         </Render>
-        <Render when={behavior.activePhrase !== null}>
-          <Field>
-            <span>{behavior.textLabel}</span>
-            <textarea
-              value={behavior.activePhrase?.text ?? ""}
-              onChange={behavior.onTextInput}
-            />
-          </Field>
-          <FieldGrid>
-            <Field>
-              <span>{behavior.startLabel}</span>
-              <input value={behavior.formattedStart} readOnly />
-            </Field>
-            <Field>
-              <span>{behavior.endLabel}</span>
-              <input value={behavior.formattedEnd} readOnly />
-            </Field>
-          </FieldGrid>
-          <SectionTitle>{behavior.wordsLabel}</SectionTitle>
-          <WordList>
-            <ForEach
-              data={behavior.inspectorWords}
-              idCompute={behavior.getWordId}
-              render={behavior.renderWord}
-            />
-          </WordList>
-          <PhraseActions>
-            <button
-              type="button"
-              title={behavior.deletePhraseShortcut}
-              onClick={behavior.onDeletePhrase}
-            >
-              <Trash2 size={15} />
-              {behavior.deletePhraseLabel}
-              <kbd>{behavior.deleteKeyLabel}</kbd>
-            </button>
-          </PhraseActions>
-        </Render>
-        <Render when={behavior.showGeneralEmpty}>
+        <Render when={behavior.selectedSubtitleTrack === null}>
           <InspectorEmpty>{behavior.emptyInspector}</InspectorEmpty>
         </Render>
-      </Render>
-      <Render when={behavior.styleActive}>
-        <Render when={behavior.selectedSubtitleTrack !== null}>
-          <SectionTitle>{behavior.trackStyleLabel}</SectionTitle>
-          <FieldGrid>
-            <Field>
-              <span>{behavior.scaleLabel}</span>
-              <input
-                type="number"
-                min="25"
-                max="400"
-                step="1"
-                value={behavior.trackScaleInputValue}
-                onChange={behavior.onTrackScaleInput}
-                onBlur={behavior.onTrackScaleBlur}
-              />
-            </Field>
-            <Field>
-              <span>{behavior.readAnimationLabel}</span>
-              <select
-                value={behavior.trackCurve}
-                onChange={behavior.onTrackCurveChange}
-              >
-                <ForEach
-                  data={behavior.trackCurveOptions}
-                  idCompute={behavior.getCurveOptionId}
-                  render={behavior.renderCurveOption}
-                />
-              </select>
-            </Field>
-          </FieldGrid>
-          <Render when={behavior.showTrackBezierEditor}>
-            <CubicBezierEditor
-              value={behavior.trackCurve}
-              labels={behavior.bezierLabels}
-              onChange={behavior.onTrackBezierChange}
-            />
-          </Render>
-        </Render>
-        <Render when={behavior.activePhrase !== null}>
-          <SectionTitle>{behavior.phraseStyleLabel}</SectionTitle>
-          <FieldGrid>
-            <Field>
-              <span>{behavior.unreadLabel}</span>
-              <input
-                type="color"
-                value={behavior.activeStyle.unreadColor}
-                onChange={behavior.onUnreadInput}
-              />
-            </Field>
-            <Field>
-              <span>{behavior.readLabel}</span>
-              <input
-                type="color"
-                value={behavior.activeStyle.readColor}
-                onChange={behavior.onReadInput}
-              />
-            </Field>
-            <Field>
-              <span>{behavior.positionXLabel}</span>
-              <input
-                type="number"
-                value={behavior.activeStyle.x}
-                onChange={behavior.onXInput}
-              />
-            </Field>
-            <Field>
-              <span>{behavior.positionYLabel}</span>
-              <input
-                type="number"
-                value={behavior.activeStyle.y}
-                onChange={behavior.onYInput}
-              />
-            </Field>
-          </FieldGrid>
-          <Field>
-            <span>{behavior.caretLabel}</span>
-            <input
-              type="checkbox"
-              checked={behavior.activeStyle.hasCaret}
-              onChange={behavior.onCaretChange}
-            />
-          </Field>
-          <InheritanceHint>{behavior.inheritScaleLabel}</InheritanceHint>
-          <FieldGrid>
-            <Field>
-              <span>{behavior.scaleLabel}</span>
-              <input
-                type="number"
-                min="25"
-                max="400"
-                step="1"
-                value={behavior.phraseScaleInputValue}
-                placeholder={behavior.inheritedPhraseScalePlaceholder}
-                onChange={behavior.onPhraseScaleInput}
-                onBlur={behavior.onPhraseScaleBlur}
-              />
-            </Field>
-            <Field>
-              <span>{behavior.readAnimationLabel}</span>
-              <select
-                value={behavior.phraseCurve}
-                onChange={behavior.onPhraseCurveChange}
-              >
-                <ForEach
-                  data={behavior.phraseCurveOptions}
-                  idCompute={behavior.getCurveOptionId}
-                  render={behavior.renderCurveOption}
-                />
-              </select>
-            </Field>
-          </FieldGrid>
-          <Render when={behavior.showPhraseBezierEditor}>
-            <CubicBezierEditor
-              value={behavior.phraseCurve}
-              labels={behavior.bezierLabels}
-              onChange={behavior.onPhraseBezierChange}
-            />
-          </Render>
-        </Render>
-        <Render when={behavior.selectedWord !== null}>
-          <SectionTitle>{behavior.wordStyleLabel}</SectionTitle>
-          <InheritanceHint>{behavior.inheritScaleLabel}</InheritanceHint>
-          <FieldGrid>
-            <Field>
-              <span>{behavior.scaleLabel}</span>
-              <input
-                type="number"
-                min="25"
-                max="400"
-                step="1"
-                value={behavior.wordScaleInputValue}
-                placeholder={behavior.inheritedWordScalePlaceholder}
-                onChange={behavior.onWordScaleInput}
-                onBlur={behavior.onWordScaleBlur}
-              />
-            </Field>
-            <Field>
-              <span>{behavior.readAnimationLabel}</span>
-              <select
-                value={behavior.wordCurve}
-                onChange={behavior.onWordCurveChange}
-              >
-                <ForEach
-                  data={behavior.wordCurveOptions}
-                  idCompute={behavior.getCurveOptionId}
-                  render={behavior.renderCurveOption}
-                />
-              </select>
-            </Field>
-          </FieldGrid>
-          <Render when={behavior.showWordBezierEditor}>
-            <CubicBezierEditor
-              value={behavior.wordCurve}
-              labels={behavior.bezierLabels}
-              onChange={behavior.onWordBezierChange}
-            />
-          </Render>
-        </Render>
-        <Render when={behavior.showStyleEmpty}>
-          <InspectorEmpty>{behavior.emptyInspector}</InspectorEmpty>
-        </Render>
-      </Render>
-      <Render when={behavior.animationActive}>
-        <AnimationPanel>
-          <Field>
-            <span>{behavior.animationTemplateLabel}</span>
-            <select
-              value={behavior.animationTemplate}
-              onChange={behavior.onAnimationTemplateChange}
-            >
-              <option value="template-1">
-                {behavior.animationTemplateOneLabel}
-              </option>
-            </select>
-          </Field>
-          <AnimationDescription>
-            {behavior.animationTemplateOneDescription}
-          </AnimationDescription>
-        </AnimationPanel>
       </Render>
       <Render when={behavior.mixerActive}>
         <MixerContent>
