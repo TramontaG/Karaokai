@@ -475,4 +475,10 @@ async function run(command, args, context) {
   return undefined;
 }
 
-module.exports = { run, pythonBinary, ffmpegBinary };
+module.exports = {
+  run,
+  projectRoot,
+  loadProject,
+  pythonBinary,
+  ffmpegBinary,
+};

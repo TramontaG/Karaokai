@@ -36,6 +36,7 @@ import { useTranslation } from "../../hooks/useTranslation";
 import { useTimelineAutoFollow } from "../../hooks/useTimelineAutoFollow";
 import {
   chooseBackgroundFile,
+  chooseVideoDestination,
   isDesktop,
   listenDesktop,
 } from "../../services/desktop";
@@ -46,7 +47,10 @@ import {
   projectAudioSources,
   readProjectAudio,
   readProjectAsset,
+  cancelProjectRender,
   saveProject,
+  startProjectRender,
+  type ProjectRenderProgress,
 } from "../../services/projects";
 import { PhraseClip } from "./components/PhraseClip";
 import {
@@ -197,6 +201,8 @@ function subtitlePreviewView(track: SubtitleTrack, currentTime: number) {
     entryCuePhrase?.style,
     entryCuePhrase?.words[0]?.style
   );
+  const positionReferenceWidth = track.style.positionReferenceWidth ?? 640;
+  const positionReferenceHeight = track.style.positionReferenceHeight ?? 360;
   const words = (timing.primaryPhrase?.words ?? []).map((word) => {
     const style = resolveSubtitleStyle(
       track.style,
@@ -245,8 +251,8 @@ function subtitlePreviewView(track: SubtitleTrack, currentTime: number) {
     visible:
       track.visible && (words.length > 0 || timing.secondaryPhrase !== null),
     containerStyle: {
-      left: `calc(50% + ${track.style.x ?? 0}px)`,
-      top: `calc(38% + ${track.style.y ?? 0}px)`,
+      left: `calc(50% + ${((track.style.x ?? 0) / positionReferenceWidth) * 100}%)`,
+      top: `calc(38% + ${((track.style.y ?? 0) / positionReferenceHeight) * 100}%)`,
       zIndex: track.zIndex,
     } as CSSProperties,
     currentStyle: { opacity: timing.primaryOpacity },
@@ -290,6 +296,32 @@ export function useBehavior(_: Record<string, never>) {
   const [backgroundAssetUrl, setBackgroundAssetUrl] = useState<string | null>(
     null
   );
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportResolution, setExportResolution] = useState<
+    "480p" | "720p" | "1080p" | "1440p"
+  >("1080p");
+  const [exportFps, setExportFps] = useState<30 | 60>(60);
+  const [exportAudioMode, setExportAudioMode] = useState<
+    "mix" | "vocals" | "instrumental"
+  >("instrumental");
+  const [exportInstrumentalVolume, setExportInstrumentalVolume] = useState(1);
+  const [exportVocalsVolume, setExportVocalsVolume] = useState(0);
+  const [exportEncodingPreset, setExportEncodingPreset] = useState<
+    | "ultrafast"
+    | "superfast"
+    | "veryfast"
+    | "faster"
+    | "fast"
+    | "medium"
+    | "slow"
+  >("veryfast");
+  const [renderProgress, setRenderProgress] = useState<{
+    jobId: string;
+    status: ProjectRenderProgress["status"];
+    progress: number;
+    outputPath?: string;
+    error?: string;
+  } | null>(null);
   const {
     project,
     currentTime,
@@ -389,6 +421,7 @@ export function useBehavior(_: Record<string, never>) {
   const instrumentalAudio = useRef<HTMLAudioElement>(null);
   const vocalsAudio = useRef<HTMLAudioElement>(null);
   const backgroundVideo = useRef<HTMLVideoElement>(null);
+  const previewCanvas = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const timelineLabelsRef = useRef<HTMLDivElement>(null);
   const timelineContentRef = useRef<HTMLDivElement>(null);
@@ -548,6 +581,29 @@ export function useBehavior(_: Record<string, never>) {
     });
     return () => unlisten?.();
   }, [projectId, refresh]);
+  useEffect(() => {
+    if (!isDesktop()) return;
+    let unlisten: (() => void) | undefined;
+    void listenDesktop<ProjectRenderProgress>(
+      "project-render-progress",
+      (event) => {
+        setRenderProgress((current) =>
+          current?.jobId === event.payload.jobId
+            ? {
+                ...current,
+                status: event.payload.status,
+                progress: event.payload.progress ?? current.progress,
+                outputPath: event.payload.outputPath ?? current.outputPath,
+                error: event.payload.error ?? current.error,
+              }
+            : current
+        );
+      }
+    ).then((stop) => {
+      unlisten = stop;
+    });
+    return () => unlisten?.();
+  }, []);
 
   const subtitleTracks = useMemo(
     () => project?.tracks.filter(isSubtitleTrack) ?? [],
@@ -900,12 +956,27 @@ export function useBehavior(_: Record<string, never>) {
       const currentProject = projectRef.current;
       if (!currentProject || !subtitleTrack) return;
       if (scope === "track") {
+        const bounds = previewCanvas.current?.getBoundingClientRect();
+        const positionReference =
+          property === "x" || property === "y"
+            ? {
+                positionReferenceWidth: Math.round(bounds?.width ?? 640),
+                positionReferenceHeight: Math.round(bounds?.height ?? 360),
+              }
+            : {};
         persistProject({
           ...currentProject,
           updatedAt: String(Date.now()),
           tracks: currentProject.tracks.map((track) =>
             track.type === "subtitle" && track.id === subtitleTrack.id
-              ? { ...track, style: { ...track.style, [property]: value } }
+              ? {
+                  ...track,
+                  style: {
+                    ...track.style,
+                    ...positionReference,
+                    [property]: value,
+                  },
+                }
               : track
           ),
         });
@@ -1209,6 +1280,69 @@ export function useBehavior(_: Record<string, never>) {
     },
     [persistProject]
   );
+  const onOpenExport = useCallback(() => {
+    const audio = projectRef.current?.tracks.find(isAudioTrack);
+    const instrumental = audio?.volume ?? 1;
+    const vocals = audio?.vocalsVolume ?? 0;
+    setExportInstrumentalVolume(instrumental);
+    setExportVocalsVolume(vocals);
+    setExportAudioMode("instrumental");
+    setExportDialogOpen(true);
+  }, []);
+  const onStartExport = useCallback(async () => {
+    const currentProject = projectRef.current;
+    if (!currentProject || !isDesktop()) return;
+    const selectedOutputPath = await chooseVideoDestination(
+      `${currentProject.name}.mp4`
+    );
+    if (!selectedOutputPath) return;
+    const outputPath = selectedOutputPath.toLowerCase().endsWith(".mp4")
+      ? selectedOutputPath
+      : `${selectedOutputPath}.mp4`;
+    const resolution = {
+      "480p": [854, 480],
+      "720p": [1280, 720],
+      "1080p": [1920, 1080],
+      "1440p": [2560, 1440],
+    } as const;
+    const [width, height] = resolution[exportResolution];
+    const instrumentalVolume =
+      exportAudioMode === "vocals" ? 0 : exportInstrumentalVolume;
+    const vocalsVolume =
+      exportAudioMode === "instrumental" ? 0 : exportVocalsVolume;
+    try {
+      await saveProject(currentProject, data.preferences.storageDirectory);
+      const jobId = await startProjectRender({
+        projectId,
+        storageDirectory: data.preferences.storageDirectory,
+        outputPath,
+        width,
+        height,
+        fps: exportFps,
+        instrumentalVolume,
+        vocalsVolume,
+        encodingPreset: exportEncodingPreset,
+      });
+      setExportDialogOpen(false);
+      setRenderProgress({ jobId, status: "rendering", progress: 0 });
+    } catch (reason) {
+      setError(String(reason));
+    }
+  }, [
+    data.preferences.storageDirectory,
+    exportAudioMode,
+    exportFps,
+    exportInstrumentalVolume,
+    exportResolution,
+    exportVocalsVolume,
+    exportEncodingPreset,
+    projectId,
+  ]);
+  const onCancelExport = useCallback(() => {
+    if (renderProgress?.status === "rendering")
+      void cancelProjectRender(renderProgress.jobId);
+    setRenderProgress(null);
+  }, [renderProgress]);
   const updateBackground = useCallback(
     (patch: Partial<BackgroundTrack>) => {
       const currentProject = projectRef.current;
@@ -2180,6 +2314,7 @@ export function useBehavior(_: Record<string, never>) {
     instrumentalAudio,
     vocalsAudio,
     backgroundVideo,
+    previewCanvas,
     timelineRef,
     timelineLabelsRef,
     timelineContentRef,
@@ -2228,6 +2363,31 @@ export function useBehavior(_: Record<string, never>) {
     savedLabel: t("editor.saved"),
     backLabel: t("editor.back"),
     exportLabel: t("editor.export"),
+    exportDialogOpen,
+    exportResolution,
+    exportFps,
+    exportAudioMode,
+    exportInstrumentalVolume,
+    exportVocalsVolume,
+    exportEncodingPreset,
+    renderProgress,
+    exportTitle: t("editor.exportTitle"),
+    exportDescription: t("editor.exportDescription"),
+    exportAdvancedOptionsLabel: t("editor.exportAdvancedOptions"),
+    exportResolutionLabel: t("editor.exportResolution"),
+    exportFpsLabel: t("editor.exportFps"),
+    exportAudioLabel: t("editor.exportAudio"),
+    exportEncodingPresetLabel: t("editor.exportEncodingPreset"),
+    exportEncodingPresetNotice: t("editor.exportEncodingPresetNotice"),
+    exportMixLabel: t("editor.exportMix"),
+    exportVocalsOnlyLabel: t("editor.exportVocalsOnly"),
+    exportInstrumentalOnlyLabel: t("editor.exportInstrumentalOnly"),
+    exportCancelLabel: t("editor.exportCancel"),
+    exportConfirmLabel: t("editor.exportConfirm"),
+    exportCloseLabel: t("editor.exportClose"),
+    exportRenderingLabel: t("editor.exportRendering"),
+    exportCompletedLabel: t("editor.exportCompleted"),
+    exportFailedLabel: t("editor.exportFailed"),
     zoomLabel: `${Math.round(timelineZoom * 100)}%`,
     zoomResetLabel: t("editor.zoomReset"),
     zoomHint: t("editor.zoomHint"),
@@ -2342,6 +2502,16 @@ export function useBehavior(_: Record<string, never>) {
     getTimelineRowId: (row: TimelineRow) => row.id,
     getCurveOptionId: (option: CurveOption) => option.id,
     onTogglePlayback,
+    onOpenExport,
+    onStartExport,
+    onCloseExportDialog: () => setExportDialogOpen(false),
+    onExportResolutionChange: setExportResolution,
+    onExportFpsChange: setExportFps,
+    onExportAudioModeChange: setExportAudioMode,
+    onExportInstrumentalVolumeChange: setExportInstrumentalVolume,
+    onExportVocalsVolumeChange: setExportVocalsVolume,
+    onExportEncodingPresetChange: setExportEncodingPreset,
+    onCancelExport,
     onSeek,
     onSeekInput: (event: ChangeEvent<HTMLInputElement>) =>
       onSeek(Number(event.target.value)),

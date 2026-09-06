@@ -114,6 +114,66 @@ export const HeaderActions = styled.div`
     }
   }
 `;
+export const RenderProgress = styled.section`
+  position: absolute;
+  z-index: 20;
+  top: 4.5rem;
+  right: 1rem;
+  display: grid;
+  width: min(19rem, calc(100vw - 2rem));
+  padding: 0.75rem;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 0.55rem;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.45rem 0.7rem;
+  color: ${({ theme }) => theme.colors.text};
+  background: color-mix(
+    in srgb,
+    ${({ theme }) => theme.colors.surface} 94%,
+    transparent
+  );
+  box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 25%);
+  font-size: 0.7rem;
+
+  span {
+    color: ${({ theme }) => theme.colors.textMuted};
+    font-variant-numeric: tabular-nums;
+  }
+  small {
+    grid-column: 1;
+    color: #ff9caf;
+    font-size: 0.62rem;
+    line-height: 1.35;
+  }
+  button {
+    grid-column: 2;
+    min-height: 1.8rem;
+    padding: 0 0.55rem;
+    border: 1px solid ${({ theme }) => theme.colors.border};
+    border-radius: 0.3rem;
+    color: ${({ theme }) => theme.colors.text};
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+  }
+`;
+export const RenderProgressBar = styled.div<{ $progress: number }>`
+  grid-column: 1 / -1;
+  height: 0.32rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: ${({ theme }) => theme.colors.border};
+  &::before {
+    display: block;
+    width: ${({ $progress }) => `${Math.max(0, Math.min(100, $progress))}%`};
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #bd65f2, #dc8dff);
+    content: "";
+    transition: width 100ms linear;
+  }
+`;
 export const PreviewArea = styled.section`
   display: grid;
   min-height: 0;
@@ -156,6 +216,22 @@ export const PreviewCanvas = styled.div`
       linear-gradient(180deg, transparent, #080c1e);
     content: "";
   }
+
+  &[data-render-preview="true"] {
+    width: 100vw;
+    height: 100vh;
+    aspect-ratio: auto;
+    border-radius: 0;
+  }
+
+  &[data-render-video-overlay="true"] {
+    background: transparent;
+    box-shadow: none;
+
+    &::before {
+      display: none;
+    }
+  }
 `;
 export const PreviewBackground = styled.div`
   position: absolute;
@@ -165,7 +241,10 @@ export const PreviewBackground = styled.div`
   background: #0b1732;
 
   img,
-  video {
+  video,
+  canvas {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: var(--background-fit, cover);
@@ -218,13 +297,13 @@ export const PreviewWordFill = styled.span<{
 `;
 export const EntryCue = styled.div`
   position: absolute;
-  top: calc(100% + 0.55rem);
+  top: calc(100% + 0.98cqw);
   left: 50%;
   transform: translateX(-50%);
 `;
 export const EntryCueBar = styled.div`
-  width: clamp(4.5rem, 12vw, 7rem);
-  height: 0.28rem;
+  width: 12cqw;
+  height: 0.5cqw;
   overflow: hidden;
   border-radius: 999px;
   background: var(--entry-cue-empty-color);

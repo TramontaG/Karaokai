@@ -37,7 +37,7 @@ function EditorHeaderView() {
           {behavior.zoomLabel}
         </button>
         <button type="button">{behavior.aspectLabel}</button>
-        <button type="button">
+        <button type="button" onClick={behavior.onOpenExport}>
           <Download size={15} />
           {behavior.exportLabel}
         </button>

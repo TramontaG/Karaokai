@@ -20,6 +20,31 @@ export interface ProjectAudioSources {
   instrumental: string | null;
   vocals: string | null;
 }
+export interface ProjectRenderOptions {
+  projectId: string;
+  storageDirectory: string | null;
+  outputPath: string;
+  width: number;
+  height: number;
+  fps: 30 | 60;
+  instrumentalVolume: number;
+  vocalsVolume: number;
+  encodingPreset:
+    | "ultrafast"
+    | "superfast"
+    | "veryfast"
+    | "faster"
+    | "fast"
+    | "medium"
+    | "slow";
+}
+export interface ProjectRenderProgress {
+  jobId: string;
+  status: "rendering" | "completed" | "failed";
+  progress?: number;
+  outputPath?: string;
+  error?: string;
+}
 
 function browserProjects() {
   try {
@@ -157,6 +182,12 @@ export async function readProjectAsset(
     asset,
     storageDirectory,
   });
+}
+export function startProjectRender(options: ProjectRenderOptions) {
+  return invokeDesktop<string>("start_project_render", { ...options });
+}
+export function cancelProjectRender(jobId: string) {
+  return invokeDesktop<void>("cancel_project_render", { jobId });
 }
 
 export async function listProjects(storageDirectory: string | null) {

@@ -16,6 +16,11 @@ body {
 #root {
   min-height: 100vh;
 }
+html[data-render-video-overlay="true"],
+html[data-render-video-overlay="true"] body,
+html[data-render-video-overlay="true"] #root {
+  background: transparent;
+}
 button,
 input {
   font: inherit;

@@ -5,19 +5,26 @@ import { LoadingScreen } from "../LoadingScreen";
 import { Onboarding } from "../Onboarding";
 import { Render } from "../Render";
 import { useBehavior } from "./behavior";
+import { renderJobId } from "../../services/desktop";
+import { RenderScreen } from "../../screens/RenderScreen";
 export function Application() {
   const behavior = useBehavior({});
   return (
     <ThemeProvider theme={behavior.theme}>
-      <Render when={behavior.isLoading}>
-        <LoadingScreen />
+      <Render when={renderJobId() !== null}>
+        <RenderScreen />
       </Render>
-      <Render when={behavior.isReady}>
-        <Render when={behavior.needsOnboarding}>
-          <Onboarding />
+      <Render when={renderJobId() === null}>
+        <Render when={behavior.isLoading}>
+          <LoadingScreen />
         </Render>
-        <Render when={behavior.canOpenApp}>
-          <RouterProvider router={router} />
+        <Render when={behavior.isReady}>
+          <Render when={behavior.needsOnboarding}>
+            <Onboarding />
+          </Render>
+          <Render when={behavior.canOpenApp}>
+            <RouterProvider router={router} />
+          </Render>
         </Render>
       </Render>
     </ThemeProvider>

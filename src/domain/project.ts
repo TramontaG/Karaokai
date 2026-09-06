@@ -11,6 +11,8 @@ export interface SubtitleStyle {
   scale?: number;
   x?: number;
   y?: number;
+  positionReferenceWidth?: number;
+  positionReferenceHeight?: number;
   hasCaret?: boolean;
 }
 
@@ -150,6 +152,8 @@ export function resolveSubtitleStyle(
     scale: word?.scale ?? phrase?.scale ?? track.scale ?? 1,
     x: (track.x ?? 0) + (phrase?.x ?? 0) + (word?.x ?? 0),
     y: (track.y ?? 0) + (phrase?.y ?? 0) + (word?.y ?? 0),
+    positionReferenceWidth: track.positionReferenceWidth ?? 640,
+    positionReferenceHeight: track.positionReferenceHeight ?? 360,
     hasCaret: word?.hasCaret ?? phrase?.hasCaret ?? track.hasCaret ?? false,
   };
 }
