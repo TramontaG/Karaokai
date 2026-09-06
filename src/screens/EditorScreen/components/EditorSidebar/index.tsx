@@ -1,11 +1,12 @@
-import { memo, useEffect, useState } from "react";
-import { Mic2, Trash2, Volume2 } from "lucide-react";
+import { memo, useState } from "react";
+import { FileUp, Mic2, Trash2, Volume2 } from "lucide-react";
 import { DraggableNumberInput } from "../../../../components/DraggableNumberInput";
 import { ForEach } from "../../../../components/ForEach";
 import { Render } from "../../../../components/Render";
 import { useEditorBehavior, useEditorState } from "../EditorState";
 import {
   AnimationDescription,
+  BackgroundAssetName,
   ColorFieldControl,
   ColorField,
   ColorInputValue,
@@ -18,6 +19,7 @@ import {
   MixerContent,
   MixerHeader,
   MixerMeter,
+  BackgroundAssetButton,
   PhraseActions,
   PropertyAccordion,
   PropertyAccordionContent,
@@ -54,20 +56,19 @@ function ColorInput({
   label: string;
   onChange: (color: string) => void;
 }) {
-  const [value, setValue] = useState(color);
-
-  useEffect(() => setValue(color), [color]);
+  const [draft, setDraft] = useState<string | null>(null);
+  const value = draft ?? color;
 
   const commit = () => {
     const normalizedColor = normalizeHexColor(value);
 
     if (normalizedColor) {
       onChange(normalizedColor);
-      setValue(normalizedColor);
+      setDraft(null);
       return;
     }
 
-    setValue(color);
+    setDraft(null);
   };
 
   return (
@@ -76,14 +77,17 @@ function ColorInput({
         type="color"
         value={color}
         aria-label={label}
-        onChange={(event) => onChange(event.target.value.toUpperCase())}
+        onChange={(event) => {
+          setDraft(null);
+          onChange(event.target.value.toUpperCase());
+        }}
       />
       <input
         type="text"
         value={value}
         aria-label={`${label} hexadecimal`}
         spellCheck="false"
-        onChange={(event) => setValue(event.target.value)}
+        onChange={(event) => setDraft(event.target.value)}
         onBlur={commit}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
@@ -91,7 +95,7 @@ function ColorInput({
           }
 
           if (event.key === "Escape") {
-            setValue(color);
+            setDraft(null);
             event.currentTarget.blur();
           }
         }}
@@ -245,6 +249,156 @@ function EditorSidebarView() {
         </button>
       </Tabs>
       <Render when={behavior.propertiesActive}>
+        <Render when={behavior.backgroundTrackSelected}>
+          <PropertyAccordions>
+            <PropertyAccordion open>
+              <summary>{behavior.backgroundClipLabel}</summary>
+              <PropertyAccordionContent>
+                <Field>
+                  <span>{behavior.backgroundPresetLabel}</span>
+                  <select
+                    value={behavior.backgroundPreset}
+                    onChange={(event) =>
+                      void behavior.onBackgroundPresetChange(
+                        event.target.value as
+                          "album-art" | "video" | "image" | "solid" | "gradient"
+                      )
+                    }
+                  >
+                    <option value="album-art">
+                      {behavior.backgroundAlbumArtLabel}
+                    </option>
+                    <option value="video">
+                      {behavior.backgroundVideoLabel}
+                    </option>
+                    <option value="image">
+                      {behavior.backgroundImageLabel}
+                    </option>
+                    <option value="solid">
+                      {behavior.backgroundSolidLabel}
+                    </option>
+                    <option value="gradient">
+                      {behavior.backgroundGradientLabel}
+                    </option>
+                  </select>
+                </Field>
+                <Render
+                  when={
+                    behavior.backgroundPreset === "video" ||
+                    behavior.backgroundPreset === "image"
+                  }
+                >
+                  <Field>
+                    <span>
+                      {behavior.backgroundAsset
+                        ? behavior.backgroundReplaceLabel
+                        : behavior.backgroundChooseLabel}
+                    </span>
+                    <BackgroundAssetButton
+                      type="button"
+                      onClick={() =>
+                        void behavior.onBackgroundAssetImport(
+                          behavior.backgroundPreset === "video"
+                            ? "video"
+                            : "image"
+                        )
+                      }
+                    >
+                      <FileUp size={15} aria-hidden="true" />
+                      {behavior.backgroundAsset
+                        ? behavior.backgroundReplaceLabel
+                        : behavior.backgroundChooseLabel}
+                    </BackgroundAssetButton>
+                    <Render when={behavior.backgroundAssetName !== null}>
+                      <BackgroundAssetName
+                        title={behavior.backgroundAssetName ?? undefined}
+                      >
+                        {behavior.backgroundSelectedFileLabel}
+                      </BackgroundAssetName>
+                    </Render>
+                  </Field>
+                </Render>
+                <Render
+                  when={
+                    behavior.backgroundPreset === "video" ||
+                    behavior.backgroundPreset === "image" ||
+                    behavior.backgroundPreset === "album-art"
+                  }
+                >
+                  <Field>
+                    <span>{behavior.backgroundFitLabel}</span>
+                    <select
+                      value={behavior.backgroundFit}
+                      onChange={(event) =>
+                        behavior.onBackgroundChange({
+                          fit: event.target.value as "cover" | "contain",
+                        })
+                      }
+                    >
+                      <option value="cover">Cover</option>
+                      <option value="contain">Contain</option>
+                    </select>
+                  </Field>
+                </Render>
+                <Render
+                  when={
+                    behavior.backgroundPreset === "solid" ||
+                    behavior.backgroundPreset === "image" ||
+                    behavior.backgroundPreset === "album-art"
+                  }
+                >
+                  <Field>
+                    <span>{behavior.backgroundColorLabel}</span>
+                    <ColorInput
+                      color={behavior.backgroundColor}
+                      label={behavior.backgroundColorLabel}
+                      onChange={(color) =>
+                        behavior.onBackgroundChange({ color })
+                      }
+                    />
+                  </Field>
+                </Render>
+                <Render when={behavior.backgroundPreset === "gradient"}>
+                  <>
+                    <Field>
+                      <span>{behavior.backgroundGradientStartLabel}</span>
+                      <ColorInput
+                        color={behavior.backgroundGradientStart}
+                        label={behavior.backgroundGradientStartLabel}
+                        onChange={(gradientStart) =>
+                          behavior.onBackgroundChange({ gradientStart })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <span>{behavior.backgroundGradientEndLabel}</span>
+                      <ColorInput
+                        color={behavior.backgroundGradientEnd}
+                        label={behavior.backgroundGradientEndLabel}
+                        onChange={(gradientEnd) =>
+                          behavior.onBackgroundChange({ gradientEnd })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <span>{behavior.backgroundGradientAngleLabel}</span>
+                      <DraggableNumberInput
+                        min="0"
+                        max="360"
+                        value={behavior.backgroundGradientAngle}
+                        onValueChange={(value) =>
+                          behavior.onBackgroundChange({
+                            gradientAngle: Number(value),
+                          })
+                        }
+                      />
+                    </Field>
+                  </>
+                </Render>
+              </PropertyAccordionContent>
+            </PropertyAccordion>
+          </PropertyAccordions>
+        </Render>
         <Render when={behavior.selectedSubtitleTrack !== null}>
           <PropertyAccordions>
             <PropertyAccordion open>
@@ -363,9 +517,7 @@ function EditorSidebarView() {
                 </PropertyAccordionContent>
               </Render>
               <Render when={behavior.activePhrase === null}>
-                <PropertyAccordionContent>
-                  <InspectorEmpty>{behavior.emptyInspector}</InspectorEmpty>
-                </PropertyAccordionContent>
+                <PropertyAccordionContent></PropertyAccordionContent>
               </Render>
             </PropertyAccordion>
             <PropertyAccordion>
@@ -398,16 +550,8 @@ function EditorSidebarView() {
                   <StyleFields scope="Word" />
                 </PropertyAccordionContent>
               </Render>
-              <Render when={behavior.selectedWord === null}>
-                <PropertyAccordionContent>
-                  <InspectorEmpty>{behavior.emptyInspector}</InspectorEmpty>
-                </PropertyAccordionContent>
-              </Render>
             </PropertyAccordion>
           </PropertyAccordions>
-        </Render>
-        <Render when={behavior.selectedSubtitleTrack === null}>
-          <InspectorEmpty>{behavior.emptyInspector}</InspectorEmpty>
         </Render>
       </Render>
       <Render when={behavior.mixerActive}>

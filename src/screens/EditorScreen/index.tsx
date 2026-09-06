@@ -14,6 +14,7 @@ import {
   EditorPage,
   PlayerError,
   PreviewArea,
+  PreviewBackground,
   PreviewCanvas,
   Workspace,
 } from "./styles";
@@ -49,6 +50,32 @@ function EditorScreenContent() {
           />
           <PreviewArea>
             <PreviewCanvas>
+              <PreviewBackground style={behavior.backgroundStyle}>
+                <Render
+                  when={
+                    behavior.backgroundPreset === "video" &&
+                    behavior.backgroundAssetUrl !== null
+                  }
+                >
+                  <video
+                    ref={behavior.backgroundVideo}
+                    src={behavior.backgroundAssetUrl ?? undefined}
+                    loop
+                    muted
+                    playsInline
+                    onLoadedMetadata={behavior.onBackgroundVideoLoadedMetadata}
+                  />
+                </Render>
+                <Render
+                  when={
+                    ["album-art", "image"].includes(
+                      behavior.backgroundPreset
+                    ) && behavior.backgroundAssetUrl !== null
+                  }
+                >
+                  <img src={behavior.backgroundAssetUrl ?? undefined} alt="" />
+                </Render>
+              </PreviewBackground>
               <ForEach
                 data={behavior.subtitlePreviews}
                 idCompute={behavior.getSubtitlePreviewId}

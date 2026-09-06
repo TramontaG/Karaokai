@@ -11,6 +11,9 @@ const PROJECT_COMMANDS = new Set([
   "delete_project",
   "project_audio_sources",
   "read_project_audio",
+  "import_background_asset",
+  "extract_album_art",
+  "read_project_asset",
 ]);
 
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
@@ -113,6 +116,18 @@ ipcMain.handle("karaokai:dialog:audio", async () => {
         extensions: ["mp3", "wav", "flac", "m4a", "aac", "ogg"],
       },
     ],
+  });
+  return result.canceled ? null : (result.filePaths[0] ?? null);
+});
+
+ipcMain.handle("karaokai:dialog:background", async (_event, kind) => {
+  const extensions =
+    kind === "video"
+      ? ["mp4", "mov", "webm", "mkv"]
+      : ["png", "jpg", "jpeg", "webp", "gif"];
+  const result = await dialog.showOpenDialog({
+    properties: ["openFile"],
+    filters: [{ name: kind === "video" ? "Video" : "Image", extensions }],
   });
   return result.canceled ? null : (result.filePaths[0] ?? null);
 });

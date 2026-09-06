@@ -6,8 +6,10 @@ export function recursiveAssign<T extends Record<string, unknown>>(
   current: T,
   patch: DeepPartial<T>
 ): T {
-  return Object.entries(patch).reduce<T>((result, [key, value]) => {
-    const currentValue = result[key];
+  let result = current;
+
+  Object.entries(patch).forEach(([key, value]) => {
+    const currentValue = current[key];
     const nextValue =
       value && typeof value === "object" && !Array.isArray(value)
         ? recursiveAssign(
@@ -16,6 +18,9 @@ export function recursiveAssign<T extends Record<string, unknown>>(
           )
         : value;
 
-    return { ...result, [key]: nextValue } as T;
-  }, current);
+    if (Object.is(currentValue, nextValue)) return;
+    result = { ...result, [key]: nextValue } as T;
+  });
+
+  return result;
 }

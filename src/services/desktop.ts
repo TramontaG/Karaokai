@@ -2,6 +2,7 @@ interface DesktopBridge {
   invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
   listen<T>(channel: string, callback: (payload: T) => void): () => void;
   chooseAudioFile(): Promise<string | null>;
+  chooseBackgroundFile(kind: "video" | "image"): Promise<string | null>;
   chooseDirectory(): Promise<string | null>;
   filePath(file: File): string;
   windowAction(action: "minimize" | "maximize" | "close"): void;
@@ -37,6 +38,8 @@ export function listenDesktop<T>(
 
 export const chooseAudioFile = () =>
   window.karaokaiDesktop?.chooseAudioFile() ?? Promise.resolve(null);
+export const chooseBackgroundFile = (kind: "video" | "image") =>
+  window.karaokaiDesktop?.chooseBackgroundFile(kind) ?? Promise.resolve(null);
 
 export const chooseDirectory = () =>
   window.karaokaiDesktop?.chooseDirectory() ?? Promise.resolve(null);

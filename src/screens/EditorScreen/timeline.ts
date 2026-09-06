@@ -10,7 +10,6 @@ export const SUBTITLE_FADE_DURATION = 2_000;
 export const NEXT_PHRASE_MAX_GAP = 4_000;
 export const FAST_PHRASE_FADE_DURATION = 350;
 
-const SECONDARY_PHRASE_OPACITY = 0.54;
 const SECONDARY_PHRASE_SCALE = 0.62;
 
 const clamp = (value: number, minimum: number, maximum: number) =>
@@ -92,9 +91,7 @@ function templateOneSubtitlePreviewAt(
       primaryOpacity: 1 - transitionProgress,
       primaryFullyRead: currentTime >= previousPhrase.end,
       secondaryPhrase: nextPhrase,
-      secondaryOpacity:
-        SECONDARY_PHRASE_OPACITY +
-        (1 - SECONDARY_PHRASE_OPACITY) * transitionProgress,
+      secondaryOpacity: 1,
       secondaryOffset: 1 - transitionProgress,
       secondaryScale:
         SECONDARY_PHRASE_SCALE +
@@ -141,7 +138,7 @@ function templateOneSubtitlePreviewAt(
       primaryOpacity: 1,
       primaryFullyRead: false,
       secondaryPhrase: shouldShowNextPreview ? nextCandidate : null,
-      secondaryOpacity: SECONDARY_PHRASE_OPACITY * previewProgress,
+      secondaryOpacity: previewProgress,
       secondaryOffset: 1,
       secondaryScale: SECONDARY_PHRASE_SCALE,
       suppressEntryCue: followsContinuousPhrase,
@@ -169,9 +166,7 @@ function templateOneSubtitlePreviewAt(
       primaryOpacity: clamp(1 - previousAge / fadeWindow, 0, 1),
       primaryFullyRead: true,
       secondaryPhrase: showNext ? nextPhrase : null,
-      secondaryOpacity: showNext
-        ? SECONDARY_PHRASE_OPACITY * clamp(1 - nextLead / fadeWindow, 0, 1)
-        : 0,
+      secondaryOpacity: showNext ? clamp(1 - nextLead / fadeWindow, 0, 1) : 0,
       secondaryOffset: 1,
       secondaryScale: SECONDARY_PHRASE_SCALE,
       suppressEntryCue: false,

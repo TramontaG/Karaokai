@@ -157,6 +157,20 @@ export const PreviewCanvas = styled.div`
     content: "";
   }
 `;
+export const PreviewBackground = styled.div`
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  background: #0b1732;
+
+  img,
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: var(--background-fit, cover);
+  }
+`;
 export const SubtitlePreview = styled.div`
   position: absolute;
   z-index: 1;
@@ -675,6 +689,7 @@ export const AnimationDescription = styled.p`
 `;
 export const MixerContent = styled.section`
   display: grid;
+  padding: 1rem;
   gap: 1rem;
 `;
 export const MixerHeader = styled.p`
@@ -765,6 +780,66 @@ export const Field = styled.label`
   input[data-draggable-number="true"]:focus {
     cursor: text;
   }
+
+  select {
+    padding-right: 2.5rem;
+  }
+`;
+export const BackgroundAssetButton = styled.button`
+  display: inline-flex;
+  min-height: 2.5rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid
+    color-mix(in srgb, ${({ theme }) => theme.colors.accent} 45%, transparent);
+  border-radius: 0.45rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: ${({ theme }) => theme.colors.text};
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, ${({ theme }) => theme.colors.accent} 18%, transparent),
+    color-mix(in srgb, ${({ theme }) => theme.colors.surface} 90%, transparent)
+  );
+  box-shadow: inset 0 1px rgb(255 255 255 / 8%);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease;
+
+  svg {
+    color: ${({ theme }) => theme.colors.accent};
+  }
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.accent};
+    background: color-mix(
+      in srgb,
+      ${({ theme }) => theme.colors.accent} 23%,
+      ${({ theme }) => theme.colors.surface}
+    );
+  }
+
+  &:active {
+    transform: translateY(1px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.accent};
+    outline-offset: 2px;
+  }
+`;
+export const BackgroundAssetName = styled.span`
+  overflow: hidden;
+  padding: 0.1rem 0.15rem 0;
+  color: ${({ theme }) => theme.colors.textMuted};
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
 `;
 export const FieldGrid = styled.div`
   display: grid;

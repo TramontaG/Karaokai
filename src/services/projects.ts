@@ -118,6 +118,46 @@ export async function readProjectAudio(sourceId: string) {
   if (!isDesktop()) return new ArrayBuffer(0);
   return invokeDesktop<ArrayBuffer>("read_project_audio", { sourceId });
 }
+export async function importBackgroundAsset(
+  projectId: string,
+  sourcePath: string,
+  kind: "image" | "video",
+  storageDirectory: string | null
+) {
+  if (!isDesktop())
+    throw new Error("Background import is available in the desktop app only.");
+  return invokeDesktop<string>("import_background_asset", {
+    projectId,
+    sourcePath,
+    kind,
+    storageDirectory,
+  });
+}
+export async function extractAlbumArt(
+  projectId: string,
+  storageDirectory: string | null
+) {
+  if (!isDesktop())
+    throw new Error(
+      "Album art extraction is available in the desktop app only."
+    );
+  return invokeDesktop<string>("extract_album_art", {
+    projectId,
+    storageDirectory,
+  });
+}
+export async function readProjectAsset(
+  projectId: string,
+  asset: string,
+  storageDirectory: string | null
+) {
+  if (!isDesktop()) return new ArrayBuffer(0);
+  return invokeDesktop<ArrayBuffer>("read_project_asset", {
+    projectId,
+    asset,
+    storageDirectory,
+  });
+}
 
 export async function listProjects(storageDirectory: string | null) {
   if (isDesktop()) {

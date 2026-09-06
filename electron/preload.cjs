@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld("karaokaiDesktop", {
     return () => ipcRenderer.removeListener(eventName, listener);
   },
   chooseAudioFile: () => ipcRenderer.invoke("karaokai:dialog:audio"),
+  chooseBackgroundFile: (kind) =>
+    ipcRenderer.invoke("karaokai:dialog:background", kind),
   chooseDirectory: () => ipcRenderer.invoke("karaokai:dialog:directory"),
   filePath: (file) => webUtils.getPathForFile(file),
   windowAction: (action) => ipcRenderer.send("karaokai:window", action),

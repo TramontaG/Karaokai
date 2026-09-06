@@ -31,6 +31,27 @@ export interface AudioTrack extends BaseTrack {
   muted: boolean;
 }
 
+export type BackgroundPreset =
+  "album-art" | "video" | "image" | "solid" | "gradient";
+export type BackgroundFit = "cover" | "contain";
+export interface BackgroundTrack extends BaseTrack {
+  type: "background";
+  preset?: BackgroundPreset;
+  /** Legacy shared media asset and album artwork asset. */
+  asset?: string;
+  assetName?: string;
+  videoAsset?: string;
+  videoAssetName?: string;
+  imageAsset?: string;
+  imageAssetName?: string;
+  fit?: BackgroundFit;
+  loop?: boolean;
+  color?: string;
+  gradientStart?: string;
+  gradientEnd?: string;
+  gradientAngle?: number;
+}
+
 export interface SubtitleWord extends TimedElement {
   id: string;
   text: string;
@@ -85,7 +106,8 @@ export function normalizeSubtitlePhraseOrder(project: KaraokeProject) {
 export type ProjectTrack =
   | AudioTrack
   | SubtitleTrack
-  | (BaseTrack & { type: "background" | "image" | "text" });
+  | BackgroundTrack
+  | (BaseTrack & { type: "image" | "text" });
 
 export interface ProjectStage {
   id: "import" | "separation" | "transcription" | "subtitles";

@@ -412,6 +412,66 @@ async function run(command, args, context) {
       throw new Error("Audio source is not registered for this project");
     return fs.promises.readFile(source);
   }
+  if (command === "import_background_asset") {
+    const source = path.resolve(args.sourcePath);
+    const stat = await fs.promises.stat(source).catch(() => null);
+    if (!stat?.isFile())
+      throw new Error("The selected background file does not exist");
+    const extension = path.extname(source).toLowerCase();
+    const kind = args.kind === "video" ? "video" : "image";
+    const asset = `background-${kind}${extension}`;
+    const directory = path.join(
+      projectRoot(dataRoot, args.projectId),
+      "assets"
+    );
+    await fs.promises.mkdir(directory, { recursive: true });
+    const existingAssets = await fs.promises.readdir(directory);
+    await Promise.all(
+      existingAssets
+        .filter((name) => new RegExp(`^background-${kind}\\.`, "i").test(name))
+        .map((name) =>
+          fs.promises.rm(path.join(directory, name), { force: true })
+        )
+    );
+    await fs.promises.copyFile(source, path.join(directory, asset));
+    return asset;
+  }
+  if (command === "extract_album_art") {
+    const directory = projectRoot(dataRoot, args.projectId);
+    const source = await findSource(directory);
+    const asset = "album-art.jpg";
+    const destination = path.join(directory, "assets", asset);
+    await new Promise((resolve, reject) => {
+      const child = spawn(ffmpegBinary(dataRoot), [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        source,
+        "-an",
+        "-map",
+        "0:v:0",
+        "-frames:v",
+        "1",
+        destination,
+      ]);
+      child.once("error", reject);
+      child.once("close", (code) =>
+        code === 0
+          ? resolve()
+          : reject(new Error("No embedded album artwork was found"))
+      );
+    });
+    return asset;
+  }
+  if (command === "read_project_asset") {
+    const asset = path.basename(String(args.asset ?? ""));
+    if (!asset) throw new Error("Invalid project asset");
+    return fs.promises.readFile(
+      path.join(projectRoot(dataRoot, args.projectId), "assets", asset)
+    );
+  }
   return undefined;
 }
 

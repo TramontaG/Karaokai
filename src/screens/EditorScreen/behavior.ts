@@ -7,6 +7,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   type ChangeEvent,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -19,6 +20,8 @@ import {
   resolveTimingCurve,
   wordReadProgress,
   type AudioTrack,
+  type BackgroundPreset,
+  type BackgroundTrack,
   type KaraokeProject,
   type ProjectTrack,
   type SubtitleAnimationTemplate,
@@ -31,11 +34,18 @@ import {
 import { useAppContext } from "../../hooks/useAppContext";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useTimelineAutoFollow } from "../../hooks/useTimelineAutoFollow";
-import { isDesktop, listenDesktop } from "../../services/desktop";
 import {
+  chooseBackgroundFile,
+  isDesktop,
+  listenDesktop,
+} from "../../services/desktop";
+import {
+  extractAlbumArt,
+  importBackgroundAsset,
   loadProject,
   projectAudioSources,
   readProjectAudio,
+  readProjectAsset,
   saveProject,
 } from "../../services/projects";
 import { PhraseClip } from "./components/PhraseClip";
@@ -97,6 +107,9 @@ const MINIMUM_BPM = 20;
 const MAXIMUM_BPM = 400;
 const MINIMUM_SCALE_PERCENTAGE = 25;
 const MAXIMUM_SCALE_PERCENTAGE = 400;
+const VOCALS_HARD_SYNC_THRESHOLD = 0.25;
+const VOCALS_HARD_SYNC_INTERVAL = 1_000;
+const VOCALS_SYNC_RATE_ADJUSTMENT = 0.04;
 
 const isSubtitleTrack = (
   track: KaraokeProject["tracks"][number] | null | undefined
@@ -104,6 +117,9 @@ const isSubtitleTrack = (
 const isAudioTrack = (
   track: KaraokeProject["tracks"][number]
 ): track is AudioTrack => track.type === "audio";
+const isBackgroundTrack = (
+  track: KaraokeProject["tracks"][number] | null | undefined
+): track is BackgroundTrack => track?.type === "background";
 const formatTime = (milliseconds: number) =>
   new Date(Math.max(0, milliseconds)).toISOString().slice(14, 23);
 const clamp = (value: number, minimum: number, maximum: number) =>
@@ -248,6 +264,22 @@ function subtitlePreviewView(track: SubtitleTrack, currentTime: number) {
   };
 }
 
+const backgroundMimeType = (asset: string) => {
+  const extension = asset.split(".").pop()?.toLowerCase();
+  if (extension === "mp4") return "video/mp4";
+  if (extension === "webm") return "video/webm";
+  if (extension === "mov") return "video/quicktime";
+  if (extension === "mkv") return "video/x-matroska";
+  if (extension === "png") return "image/png";
+  if (extension === "webp") return "image/webp";
+  if (extension === "gif") return "image/gif";
+  return "image/jpeg";
+};
+const isVideoBackgroundAsset = (asset: string) =>
+  ["mp4", "webm", "mov", "mkv"].includes(
+    asset.split(".").pop()?.toLowerCase() ?? ""
+  );
+
 export function useBehavior(_: Record<string, never>) {
   const { projectId } = useParams({ from: "/projects/$projectId/editor" });
   const navigate = useNavigate();
@@ -255,6 +287,9 @@ export function useBehavior(_: Record<string, never>) {
   const { timelineAutoFollow, setTimelineAutoFollow } = useTimelineAutoFollow();
   const [data] = useAppContext();
   const [editorData, setEditorData] = useEditorData();
+  const [backgroundAssetUrl, setBackgroundAssetUrl] = useState<string | null>(
+    null
+  );
   const {
     project,
     currentTime,
@@ -353,12 +388,14 @@ export function useBehavior(_: Record<string, never>) {
   };
   const instrumentalAudio = useRef<HTMLAudioElement>(null);
   const vocalsAudio = useRef<HTMLAudioElement>(null);
+  const backgroundVideo = useRef<HTMLVideoElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const timelineLabelsRef = useRef<HTMLDivElement>(null);
   const timelineContentRef = useRef<HTMLDivElement>(null);
   const timelinePlayheadRef = useRef<HTMLDivElement>(null);
   const timelineZoomRef = useRef(timelineZoom);
   const timelineZoomingUntilRef = useRef(0);
+  const lastVocalsHardSyncRef = useRef(Number.NEGATIVE_INFINITY);
   const saveTimerRef = useRef<number | null>(null);
   const phraseClipboardRef = useRef<SubtitlePhrase | null>(null);
   const historyRef = useRef<EditorHistoryEntry[]>([]);
@@ -523,6 +560,13 @@ export function useBehavior(_: Record<string, never>) {
   const subtitleTrack = isSubtitleTrack(selectedProjectTrack)
     ? selectedProjectTrack
     : null;
+  const backgroundTrack = isBackgroundTrack(selectedProjectTrack)
+    ? selectedProjectTrack
+    : null;
+  const projectBackgroundTrack = useMemo(
+    () => project?.tracks.find(isBackgroundTrack) ?? null,
+    [project]
+  );
   useEffect(() => {
     if (!project) return;
     if (project.tracks.some((track) => track.id === selectedTrackId)) return;
@@ -561,6 +605,79 @@ export function useBehavior(_: Record<string, never>) {
     0,
     100
   );
+  const backgroundPreset = projectBackgroundTrack?.preset ?? "solid";
+  const legacyBackgroundAsset = projectBackgroundTrack?.asset ?? null;
+  const backgroundAsset =
+    backgroundPreset === "video"
+      ? (projectBackgroundTrack?.videoAsset ??
+        (legacyBackgroundAsset && isVideoBackgroundAsset(legacyBackgroundAsset)
+          ? legacyBackgroundAsset
+          : null))
+      : backgroundPreset === "image"
+        ? (projectBackgroundTrack?.imageAsset ??
+          (legacyBackgroundAsset &&
+          !isVideoBackgroundAsset(legacyBackgroundAsset)
+            ? legacyBackgroundAsset
+            : null))
+        : backgroundPreset === "album-art"
+          ? legacyBackgroundAsset
+          : null;
+  const backgroundAssetName =
+    backgroundPreset === "video"
+      ? (projectBackgroundTrack?.videoAssetName ??
+        (backgroundAsset === legacyBackgroundAsset
+          ? projectBackgroundTrack?.assetName
+          : undefined) ??
+        backgroundAsset)
+      : backgroundPreset === "image"
+        ? (projectBackgroundTrack?.imageAssetName ??
+          (backgroundAsset === legacyBackgroundAsset
+            ? projectBackgroundTrack?.assetName
+            : undefined) ??
+          backgroundAsset)
+        : null;
+  const backgroundFit = projectBackgroundTrack?.fit ?? "cover";
+  const backgroundStyle = {
+    background:
+      backgroundPreset === "gradient"
+        ? `linear-gradient(${projectBackgroundTrack?.gradientAngle ?? 135}deg, ${projectBackgroundTrack?.gradientStart ?? "#273660"}, ${projectBackgroundTrack?.gradientEnd ?? "#0b1732"})`
+        : (projectBackgroundTrack?.color ?? "#0b1732"),
+    "--background-fit": backgroundFit,
+  } as CSSProperties;
+  useEffect(() => {
+    if (
+      !backgroundAsset ||
+      !["album-art", "image", "video"].includes(backgroundPreset)
+    ) {
+      setBackgroundAssetUrl(null);
+      return;
+    }
+    let disposed = false;
+    let url: string | null = null;
+    void readProjectAsset(
+      projectId,
+      backgroundAsset,
+      data.preferences.storageDirectory
+    )
+      .then((bytes) => {
+        if (disposed) return;
+        url = URL.createObjectURL(
+          new Blob([bytes], { type: backgroundMimeType(backgroundAsset) })
+        );
+        setBackgroundAssetUrl(url);
+      })
+      .catch((reason) => setError(String(reason)));
+    return () => {
+      disposed = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [
+    backgroundAsset,
+    backgroundAssetName,
+    backgroundPreset,
+    data.preferences.storageDirectory,
+    projectId,
+  ]);
   const animationTemplate: SubtitleAnimationTemplate =
     subtitleTrack?.animation?.template ?? "template-1";
   const tempoBpm = clamp(
@@ -577,17 +694,37 @@ export function useBehavior(_: Record<string, never>) {
   } as CSSProperties;
   useEffect(() => setBpmInputValue(String(tempoBpm)), [tempoBpm]);
 
-  const updateMediaTime = useCallback((milliseconds: number) => {
-    const seconds = milliseconds / 1000;
-    [instrumentalAudio.current, vocalsAudio.current].forEach((audio) => {
-      if (!audio) return;
-      try {
-        audio.currentTime = seconds;
-      } catch {
-        // Metadata may still be loading; the next seek will apply the position.
-      }
-    });
+  const syncBackgroundVideoTime = useCallback((seconds: number) => {
+    const video = backgroundVideo.current;
+    if (!video) return;
+    const duration = video.duration;
+    const videoTime =
+      Number.isFinite(duration) && duration > 0 ? seconds % duration : seconds;
+
+    if (Math.abs(video.currentTime - videoTime) < 0.12) return;
+    try {
+      video.currentTime = videoTime;
+      video.playbackRate = 1;
+    } catch {
+      // Metadata may still be loading; onLoadedMetadata will apply the position.
+    }
   }, []);
+  const updateMediaTime = useCallback(
+    (milliseconds: number) => {
+      const seconds = milliseconds / 1000;
+      [instrumentalAudio.current, vocalsAudio.current].forEach((audio) => {
+        if (!audio) return;
+        try {
+          audio.currentTime = seconds;
+          audio.playbackRate = 1;
+        } catch {
+          // Metadata may still be loading; the next seek will apply the position.
+        }
+      });
+      syncBackgroundVideoTime(seconds);
+    },
+    [syncBackgroundVideoTime]
+  );
   const followTimelineAt = useCallback(
     (milliseconds: number) => {
       if (!timelineAutoFollow) return;
@@ -632,6 +769,7 @@ export function useBehavior(_: Record<string, never>) {
     () => () => {
       instrumentalAudio.current?.pause();
       vocalsAudio.current?.pause();
+      backgroundVideo.current?.pause();
     },
     []
   );
@@ -1071,6 +1209,80 @@ export function useBehavior(_: Record<string, never>) {
     },
     [persistProject]
   );
+  const updateBackground = useCallback(
+    (patch: Partial<BackgroundTrack>) => {
+      const currentProject = projectRef.current;
+      if (!currentProject || !backgroundTrack) return;
+      persistProject({
+        ...currentProject,
+        updatedAt: String(Date.now()),
+        tracks: currentProject.tracks.map((track) =>
+          track.id === backgroundTrack.id ? { ...track, ...patch } : track
+        ),
+      });
+    },
+    [backgroundTrack, persistProject]
+  );
+  const onBackgroundPresetChange = useCallback(
+    async (preset: BackgroundPreset) => {
+      if (!backgroundTrack) return;
+      if (preset === "album-art") {
+        try {
+          const asset = await extractAlbumArt(
+            projectId,
+            data.preferences.storageDirectory
+          );
+          updateBackground({ preset, asset, fit: "cover" });
+        } catch (reason) {
+          setError(String(reason));
+        }
+        return;
+      }
+      updateBackground({ preset });
+    },
+    [
+      backgroundTrack,
+      data.preferences.storageDirectory,
+      projectId,
+      updateBackground,
+    ]
+  );
+  const onBackgroundAssetImport = useCallback(
+    async (kind: "image" | "video") => {
+      if (!backgroundTrack) return;
+      try {
+        const sourcePath = await chooseBackgroundFile(kind);
+        if (!sourcePath) return;
+        const asset = await importBackgroundAsset(
+          projectId,
+          sourcePath,
+          kind,
+          data.preferences.storageDirectory
+        );
+        updateBackground({
+          preset: kind,
+          ...(kind === "video"
+            ? {
+                videoAsset: asset,
+                videoAssetName: sourcePath.split(/[\\/]/).pop() ?? asset,
+              }
+            : {
+                imageAsset: asset,
+                imageAssetName: sourcePath.split(/[\\/]/).pop() ?? asset,
+              }),
+          fit: "cover",
+        });
+      } catch (reason) {
+        setError(String(reason));
+      }
+    },
+    [
+      backgroundTrack,
+      data.preferences.storageDirectory,
+      projectId,
+      updateBackground,
+    ]
+  );
   const updateTempo = useCallback(
     (property: "bpm" | "offset", value: number) => {
       const currentProject = projectRef.current;
@@ -1146,6 +1358,7 @@ export function useBehavior(_: Record<string, never>) {
     if (isPlaying) {
       instrumental.pause();
       vocals?.pause();
+      backgroundVideo.current?.pause();
       setIsPlaying(false);
       return;
     }
@@ -1163,10 +1376,12 @@ export function useBehavior(_: Record<string, never>) {
       try {
         await instrumentalPlayback;
         setIsPlaying(true);
+        void backgroundVideo.current?.play().catch(() => undefined);
         await vocalsPlayback;
       } catch (reason) {
         instrumental.pause();
         vocals?.pause();
+        backgroundVideo.current?.pause();
         setError(t("editor.audioPlaybackError", { details: String(reason) }));
         setIsPlaying(false);
       }
@@ -1585,15 +1800,32 @@ export function useBehavior(_: Record<string, never>) {
     const audio = instrumentalAudio.current;
     const vocals = vocalsAudio.current;
     if (!audio) return;
-    if (vocals && Math.abs(vocals.currentTime - audio.currentTime) > 0.08) {
-      vocals.currentTime = audio.currentTime;
+    if (vocals) {
+      const drift = vocals.currentTime - audio.currentTime;
+      const now = performance.now();
+
+      if (
+        Math.abs(drift) > VOCALS_HARD_SYNC_THRESHOLD &&
+        now - lastVocalsHardSyncRef.current >= VOCALS_HARD_SYNC_INTERVAL
+      ) {
+        vocals.currentTime = audio.currentTime;
+        vocals.playbackRate = 1;
+        lastVocalsHardSyncRef.current = now;
+      } else {
+        vocals.playbackRate = clamp(
+          1 - drift * VOCALS_SYNC_RATE_ADJUSTMENT,
+          0.96,
+          1.04
+        );
+      }
     }
+    syncBackgroundVideoTime(audio.currentTime);
     const next = Math.round(audio.currentTime * 1000);
     currentTimeRef.current = next;
     updateTimelinePlayhead(next);
     setCurrentTime(next);
     followTimelineAt(next);
-  }, [followTimelineAt, updateTimelinePlayhead]);
+  }, [followTimelineAt, syncBackgroundVideoTime, updateTimelinePlayhead]);
   useEffect(() => {
     if (!isPlaying) return;
     let frameId = 0;
@@ -1614,6 +1846,7 @@ export function useBehavior(_: Record<string, never>) {
       followTimelineAt(next);
     }
     vocalsAudio.current?.pause();
+    backgroundVideo.current?.pause();
     setIsPlaying(false);
   }, [followTimelineAt, updateTimelinePlayhead]);
   const onInstrumentalError = useCallback(() => {
@@ -1624,11 +1857,16 @@ export function useBehavior(_: Record<string, never>) {
     );
     setIsAudioReady(false);
     setIsPlaying(false);
+    backgroundVideo.current?.pause();
   }, [t]);
   const onInstrumentalCanPlay = useCallback(() => {
     setIsAudioReady(true);
     setError(null);
   }, []);
+  const onBackgroundVideoLoadedMetadata = useCallback(() => {
+    syncBackgroundVideoTime(currentTimeRef.current / 1000);
+    if (isPlaying) void backgroundVideo.current?.play().catch(() => undefined);
+  }, [isPlaying, syncBackgroundVideoTime]);
   const onSkipBack = useCallback(
     () => onSeek(currentTime - 5_000),
     [currentTime, onSeek]
@@ -1941,6 +2179,7 @@ export function useBehavior(_: Record<string, never>) {
     vocalsSource,
     instrumentalAudio,
     vocalsAudio,
+    backgroundVideo,
     timelineRef,
     timelineLabelsRef,
     timelineContentRef,
@@ -2016,6 +2255,33 @@ export function useBehavior(_: Record<string, never>) {
     inspectorTitle:
       inspectorTab === "mixer" ? t("editor.mixer") : t("editor.properties"),
     propertiesLabel: t("editor.properties"),
+    backgroundTrackSelected: backgroundTrack !== null,
+    backgroundPreset,
+    backgroundAsset,
+    backgroundAssetName,
+    backgroundFit,
+    backgroundColor: projectBackgroundTrack?.color ?? "#0B1732",
+    backgroundGradientStart: projectBackgroundTrack?.gradientStart ?? "#273660",
+    backgroundGradientEnd: projectBackgroundTrack?.gradientEnd ?? "#0B1732",
+    backgroundGradientAngle: projectBackgroundTrack?.gradientAngle ?? 135,
+    backgroundPresetLabel: t("editor.backgroundPreset"),
+    backgroundAlbumArtLabel: t("editor.background.albumArt"),
+    backgroundVideoLabel: t("editor.background.video"),
+    backgroundImageLabel: t("editor.background.image"),
+    backgroundSolidLabel: t("editor.background.solid"),
+    backgroundGradientLabel: t("editor.background.gradient"),
+    backgroundChooseLabel: t("editor.background.choose"),
+    backgroundReplaceLabel: t("editor.background.replace"),
+    backgroundSelectedFileLabel: t("editor.background.selectedFile", {
+      file: backgroundAssetName ?? "",
+    }),
+    backgroundFitLabel: t("editor.background.fit"),
+    backgroundColorLabel: t("editor.background.color"),
+    backgroundGradientStartLabel: t("editor.background.gradientStart"),
+    backgroundGradientEndLabel: t("editor.background.gradientEnd"),
+    backgroundGradientAngleLabel: t("editor.background.gradientAngle"),
+    backgroundAssetUrl,
+    backgroundStyle,
     mixerLabel: t("editor.mixer"),
     animationTemplateLabel: t("editor.animationTemplate"),
     animationTemplateOneLabel: t("editor.animationTemplateOne"),
@@ -2052,7 +2318,6 @@ export function useBehavior(_: Record<string, never>) {
     wordsLabel: t("editor.words", {
       count: String(activePhrase?.words.length ?? 0),
     }),
-    emptyInspector: t("editor.emptyInspector"),
     mixerDescription: t("editor.mixerDescription"),
     backgroundClipLabel: t("editor.track.background"),
     titleClipLabel: t("editor.track.text"),
@@ -2086,10 +2351,14 @@ export function useBehavior(_: Record<string, never>) {
     onPlaybackEnded,
     onInstrumentalError,
     onInstrumentalCanPlay,
+    onBackgroundVideoLoadedMetadata,
     onInstrumentalVolumeChange: (event: ChangeEvent<HTMLInputElement>) =>
       updateAudioMix("volume", Number(event.target.value)),
     onVocalsVolumeChange: (event: ChangeEvent<HTMLInputElement>) =>
       updateAudioMix("vocalsVolume", Number(event.target.value)),
+    onBackgroundPresetChange,
+    onBackgroundAssetImport,
+    onBackgroundChange: updateBackground,
     onBack,
     onTextInput: (event: ChangeEvent<HTMLTextAreaElement>) =>
       onUpdatePhraseText(event.target.value),
