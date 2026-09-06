@@ -20,5 +20,5 @@ contextBridge.exposeInMainWorld("karaokaiDesktop", {
   chooseVideoDestination: (defaultPath) =>
     ipcRenderer.invoke("karaokai:dialog:video-destination", defaultPath),
   filePath: (file) => webUtils.getPathForFile(file),
-  windowAction: (action) => ipcRenderer.send("karaokai:window", action),
+  windowAction: (action) => ipcRenderer.invoke("karaokai:window", action),
 });

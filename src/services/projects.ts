@@ -1,5 +1,5 @@
 import { invokeDesktop, isDesktop } from "./desktop";
-import { type KaraokeProject } from "../domain/project";
+import { createProjectThumbnail, type KaraokeProject } from "../domain/project";
 
 const browserKey = "karaokai.projects";
 
@@ -11,9 +11,67 @@ export interface ProjectSummary {
   id: string;
   name: string;
   duration: number;
+  sizeBytes: number;
+  thumbnail?: string | null;
   createdAt: string;
   updatedAt: string;
   processing: KaraokeProject["processing"];
+}
+
+export async function renameProject(
+  id: string,
+  name: string,
+  storageDirectory: string | null
+) {
+  if (isDesktop()) {
+    await invokeDesktop<void>("rename_project", {
+      projectId: id,
+      name,
+      storageDirectory,
+    });
+    return;
+  }
+  const project = await loadProject(id, storageDirectory);
+  if (!project) throw new Error("Project does not exist.");
+  await saveProject(
+    { ...project, name, updatedAt: String(Date.now()) },
+    storageDirectory
+  );
+}
+
+export async function duplicateProject(
+  id: string,
+  storageDirectory: string | null
+) {
+  if (isDesktop()) {
+    return invokeDesktop<KaraokeProject>("duplicate_project", {
+      projectId: id,
+      storageDirectory,
+    });
+  }
+  const project = await loadProject(id, storageDirectory);
+  if (!project) throw new Error("Project does not exist.");
+  const now = new Date().toISOString();
+  const duplicate = {
+    ...project,
+    id: crypto.randomUUID(),
+    name: `${project.name} (copy)`,
+    createdAt: now,
+    updatedAt: now,
+  };
+  localStorage.setItem(
+    browserKey,
+    JSON.stringify([duplicate, ...browserProjects()])
+  );
+  return duplicate;
+}
+
+export function openProjectFolder(id: string, storageDirectory: string | null) {
+  if (!isDesktop()) return Promise.resolve();
+  return invokeDesktop<void>("open_project_folder", {
+    projectId: id,
+    storageDirectory,
+  });
 }
 
 export interface ProjectAudioSources {
@@ -44,6 +102,47 @@ export interface ProjectRenderProgress {
   progress?: number;
   outputPath?: string;
   error?: string;
+}
+
+export async function ensureProjectThumbnail(
+  summary: ProjectSummary,
+  storageDirectory: string | null
+) {
+  if (isDesktop()) return summary;
+  if (summary.thumbnail) return summary;
+  const project = await loadProject(summary.id, storageDirectory);
+  if (!project) return summary;
+  const thumbnail = createProjectThumbnail(project);
+  if (!thumbnail) return summary;
+  await saveProject({ ...project, thumbnail }, storageDirectory);
+  return { ...summary, thumbnail };
+}
+
+export async function saveProjectThumbnail(
+  projectId: string,
+  thumbnail: Blob,
+  storageDirectory: string | null
+) {
+  if (!isDesktop()) return;
+  const bytes = Array.from(new Uint8Array(await thumbnail.arrayBuffer()));
+  await invokeDesktop<void>("save_project_thumbnail", {
+    projectId,
+    bytes,
+    storageDirectory,
+  });
+}
+
+export async function readProjectThumbnail(
+  projectId: string,
+  thumbnail: string,
+  storageDirectory: string | null
+) {
+  if (!isDesktop()) return new ArrayBuffer(0);
+  return invokeDesktop<ArrayBuffer>("read_project_thumbnail", {
+    projectId,
+    thumbnail,
+    storageDirectory,
+  });
 }
 
 function browserProjects() {
@@ -197,10 +296,11 @@ export async function listProjects(storageDirectory: string | null) {
     });
   }
   return browserProjects().map(
-    ({ id, name, duration, createdAt, updatedAt, processing }) => ({
+    ({ id, name, duration, createdAt, updatedAt, processing, ...project }) => ({
       id,
       name,
       duration,
+      sizeBytes: new Blob([JSON.stringify(project)]).size,
       createdAt,
       updatedAt,
       processing,

@@ -11,6 +11,7 @@ export interface UserPreferences {
   onboardingCompleted: boolean;
   storageDirectory: string | null;
   projectViewMode: ProjectViewMode;
+  favoriteProjectIds: string[];
   timelineAutoFollow: boolean;
   defaultWhisperModelId: string;
   defaultDemucsModelId: string;
@@ -22,6 +23,7 @@ export const defaultPreferences: UserPreferences = {
   onboardingCompleted: false,
   storageDirectory: null,
   projectViewMode: "grid",
+  favoriteProjectIds: [],
   timelineAutoFollow: true,
   defaultWhisperModelId: "whisper-base",
   defaultDemucsModelId: "demucs-htdemucs",
@@ -62,6 +64,11 @@ export function loadUserPreferences(): UserPreferences {
       projectViewMode: ["grid", "list"].includes(stored.projectViewMode ?? "")
         ? (stored.projectViewMode as ProjectViewMode)
         : defaultPreferences.projectViewMode,
+      favoriteProjectIds: Array.isArray(stored.favoriteProjectIds)
+        ? stored.favoriteProjectIds.filter(
+            (projectId): projectId is string => typeof projectId === "string"
+          )
+        : defaultPreferences.favoriteProjectIds,
       timelineAutoFollow:
         typeof stored.timelineAutoFollow === "boolean"
           ? stored.timelineAutoFollow

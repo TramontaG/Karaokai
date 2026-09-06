@@ -1,9 +1,12 @@
 import { memo } from "react";
-import { Check, ChevronLeft, Download, MoreVertical } from "lucide-react";
+import { Check, ChevronLeft, Download, Minus, Square, X } from "lucide-react";
 import { useEditorBehavior, useEditorState } from "../EditorState";
 import {
   EditorHeader as Header,
   HeaderActions,
+  HeaderLabel,
+  HeaderWindowAction,
+  HeaderWindowActions,
   ProjectTitle,
   SavedState,
 } from "../../styles";
@@ -29,22 +32,40 @@ function EditorHeaderView() {
         </SavedState>
       </ProjectTitle>
       <HeaderActions>
+        <HeaderLabel>{behavior.zoomLabel}</HeaderLabel>
+        <HeaderLabel>{behavior.aspectLabel}</HeaderLabel>
         <button
           type="button"
-          title={behavior.zoomResetLabel}
-          onClick={behavior.onResetZoom}
+          data-action="export"
+          onClick={behavior.onOpenExport}
         >
-          {behavior.zoomLabel}
-        </button>
-        <button type="button">{behavior.aspectLabel}</button>
-        <button type="button" onClick={behavior.onOpenExport}>
           <Download size={15} />
           {behavior.exportLabel}
         </button>
-        <button type="button" aria-label="More">
-          <MoreVertical size={17} />
-        </button>
       </HeaderActions>
+      <HeaderWindowActions>
+        <HeaderWindowAction
+          type="button"
+          aria-label={behavior.minimizeWindowLabel}
+          onClick={behavior.onMinimizeWindow}
+        >
+          <Minus aria-hidden="true" size={18} />
+        </HeaderWindowAction>
+        <HeaderWindowAction
+          type="button"
+          aria-label={behavior.maximizeWindowLabel}
+          onClick={behavior.onToggleMaximizeWindow}
+        >
+          <Square aria-hidden="true" size={15} />
+        </HeaderWindowAction>
+        <HeaderWindowAction
+          type="button"
+          aria-label={behavior.closeWindowLabel}
+          onClick={behavior.onCloseWindow}
+        >
+          <X aria-hidden="true" size={19} />
+        </HeaderWindowAction>
+      </HeaderWindowActions>
     </Header>
   );
 }

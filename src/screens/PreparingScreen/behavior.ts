@@ -38,7 +38,7 @@ const statusIcon = {
 export function useBehavior(_: Record<string, never>) {
   const { projectId } = useParams({ from: "/projects/$projectId/preparing" });
   const { t } = useTranslation();
-  const [data] = useAppContext();
+  const [data, setAppData] = useAppContext();
   const navigate = useNavigate();
   const [stages, setStages] = useState<ProjectStage[]>([]);
   const [projectName, setProjectName] = useState(projectId);
@@ -52,10 +52,11 @@ export function useBehavior(_: Record<string, never>) {
       if (!project) return;
       setProjectName(project.name);
       setStages(project.processing);
+      setAppData({ currentProject: { id: project.id, name: project.name } });
     } catch {
       setStages((current) => current);
     }
-  }, [data.preferences.storageDirectory, projectId]);
+  }, [data.preferences.storageDirectory, projectId, setAppData]);
 
   useEffect(() => {
     void refresh();

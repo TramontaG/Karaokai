@@ -48,8 +48,8 @@ fn read_project_audio(
     let path = registry
         .get(&source_id)
         .ok_or_else(|| "Audio source is not registered for this project".to_string())?;
-    let bytes = std::fs::read(path)
-        .map_err(|error| format!("Unable to read project audio: {error}"))?;
+    let bytes =
+        std::fs::read(path).map_err(|error| format!("Unable to read project audio: {error}"))?;
     Ok(tauri::ipc::Response::new(bytes))
 }
 
@@ -71,12 +71,70 @@ fn save_project(
 }
 
 #[tauri::command]
+fn rename_project(
+    app: AppHandle,
+    project_id: String,
+    name: String,
+    storage_directory: Option<String>,
+) -> Result<(), String> {
+    projects::rename_project(app, project_id, name, storage_directory)
+}
+
+#[tauri::command]
 fn delete_project(
     app: AppHandle,
     project_id: String,
     storage_directory: Option<String>,
 ) -> Result<(), String> {
     projects::delete_project(app, project_id, storage_directory)
+}
+
+#[tauri::command]
+fn generate_project_thumbnail(
+    app: AppHandle,
+    project_id: String,
+    storage_directory: Option<String>,
+) -> Result<Option<String>, String> {
+    projects::generate_project_thumbnail(app, project_id, storage_directory)
+}
+
+#[tauri::command]
+fn read_project_thumbnail(
+    app: AppHandle,
+    project_id: String,
+    thumbnail: String,
+    storage_directory: Option<String>,
+) -> Result<tauri::ipc::Response, String> {
+    let bytes = projects::read_project_thumbnail(app, project_id, thumbnail, storage_directory)?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[tauri::command]
+fn save_project_thumbnail(
+    app: AppHandle,
+    project_id: String,
+    bytes: Vec<u8>,
+    storage_directory: Option<String>,
+) -> Result<(), String> {
+    projects::save_project_thumbnail(app, project_id, bytes, storage_directory)
+}
+
+#[tauri::command]
+fn duplicate_project(
+    app: AppHandle,
+    project_id: String,
+    storage_directory: Option<String>,
+) -> Result<projects::Project, String> {
+    projects::duplicate_project(app, project_id, storage_directory)
+}
+
+#[tauri::command]
+fn open_project_folder(
+    app: AppHandle,
+    project_id: String,
+    storage_directory: Option<String>,
+) -> Result<(), String> {
+    projects::open_project_folder(app, project_id, storage_directory)
 }
 
 async fn run_blocking<T, F>(operation: F) -> Result<T, String>
@@ -202,7 +260,13 @@ pub fn run() {
             read_project_audio,
             list_projects,
             save_project,
+            rename_project,
             delete_project,
+            generate_project_thumbnail,
+            read_project_thumbnail,
+            save_project_thumbnail,
+            duplicate_project,
+            open_project_folder,
             bootstrap_app,
             list_models,
             start_model_download,

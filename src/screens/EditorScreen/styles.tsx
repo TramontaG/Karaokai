@@ -36,8 +36,6 @@ export const EditorHeader = styled.header`
   user-select: none;
   -webkit-app-region: drag;
 
-  padding-right: 9.5rem;
-
   button {
     -webkit-app-region: no-drag;
   }
@@ -102,16 +100,58 @@ export const HeaderActions = styled.div`
     white-space: nowrap;
     cursor: pointer;
   }
-  & button:last-child {
+  & button[data-action="export"] {
     border-color: transparent;
     color: #261333;
     background: linear-gradient(115deg, #bd65f2, #dc8dff);
     font-weight: 700;
   }
   @media (max-width: 780px) {
-    button:not(:last-child) {
+    > span {
       display: none;
     }
+  }
+`;
+export const HeaderLabel = styled.span`
+  display: flex;
+  height: 2.2rem;
+  padding: 0 0.75rem;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 0.45rem;
+  align-items: center;
+  color: ${({ theme }) => theme.colors.textMuted};
+  background: ${({ theme }) => theme.colors.surface};
+  font-size: 0.72rem;
+  white-space: nowrap;
+  cursor: default;
+`;
+export const HeaderWindowActions = styled.div`
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.35rem;
+  -webkit-app-region: no-drag;
+`;
+export const HeaderWindowAction = styled.button`
+  display: grid;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.4rem;
+  place-items: center;
+  color: ${({ theme }) => theme.colors.textMuted};
+  background: transparent;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text};
+    background: ${({ theme }) => theme.colors.border};
+  }
+
+  &:last-child:hover {
+    color: #fff;
+    background: #d53f50;
   }
 `;
 export const RenderProgress = styled.section`

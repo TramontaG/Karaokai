@@ -13,7 +13,6 @@ export interface SubtitleStyle {
   y?: number;
   positionReferenceWidth?: number;
   positionReferenceHeight?: number;
-  hasCaret?: boolean;
 }
 
 export interface BaseTrack {
@@ -131,9 +130,44 @@ export interface KaraokeProject {
   createdAt: string;
   updatedAt: string;
   duration: number;
+  thumbnail?: string | null;
   tempo?: ProjectTempo;
   tracks: ProjectTrack[];
   processing: ProjectStage[];
+}
+
+function escapeThumbnailText(value: string) {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[character];
+  });
+}
+
+/**
+ * Creates the persisted artwork used in the library. The lyric is resolved at
+ * the exact point where the first subtitle phrase begins, so the card always
+ * represents the first visible karaoke moment instead of arbitrary cover art.
+ */
+export function createProjectThumbnail(project: KaraokeProject) {
+  const firstPhrase = project.tracks
+    .filter((track): track is SubtitleTrack => track.type === "subtitle")
+    .flatMap((track) => track.phrases)
+    .sort((left, right) => left.start - right.start)[0];
+  if (!firstPhrase) return null;
+
+  const title = escapeThumbnailText(project.name);
+  const phrase = escapeThumbnailText(firstPhrase.text.trim() || title);
+  const timestamp = new Date(Math.max(0, firstPhrase.start))
+    .toISOString()
+    .slice(14, 19);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 284"><defs><linearGradient id="background" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#33265d"/><stop offset=".55" stop-color="#15294d"/><stop offset="1" stop-color="#090b16"/></linearGradient><radialGradient id="glow" cx=".5" cy=".2" r=".7"><stop stop-color="#d878ff" stop-opacity=".48"/><stop offset="1" stop-color="#d878ff" stop-opacity="0"/></radialGradient></defs><rect width="640" height="284" fill="url(#background)"/><rect width="640" height="284" fill="url(#glow)"/><text x="32" y="42" fill="#ffffff" fill-opacity=".7" font-family="system-ui, sans-serif" font-size="18">${title}</text><text x="320" y="154" fill="#ffffff" font-family="system-ui, sans-serif" font-size="31" font-weight="700" text-anchor="middle">${phrase}</text><text x="320" y="184" fill="#ff5b83" font-family="system-ui, sans-serif" font-size="13" font-weight="700" text-anchor="middle">${timestamp}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
 export function resolveSubtitleStyle(
@@ -154,7 +188,6 @@ export function resolveSubtitleStyle(
     y: (track.y ?? 0) + (phrase?.y ?? 0) + (word?.y ?? 0),
     positionReferenceWidth: track.positionReferenceWidth ?? 640,
     positionReferenceHeight: track.positionReferenceHeight ?? 360,
-    hasCaret: word?.hasCaret ?? phrase?.hasCaret ?? track.hasCaret ?? false,
   };
 }
 

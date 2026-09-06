@@ -109,6 +109,25 @@ export const Navigation = styled.nav`
   }
 `;
 
+export const EditorTab = styled.div`
+  display: flex;
+  min-height: 3.2rem;
+  padding: 0 0.9rem;
+  border-radius: 0.65rem;
+  align-items: center;
+  gap: 0.9rem;
+  color: ${({ theme }) => theme.colors.textMuted};
+  font-size: 0.88rem;
+  opacity: 0.42;
+  cursor: not-allowed;
+
+  @media (max-width: 900px) {
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+  }
+`;
+
 export const SidebarFooter = styled.footer`
   margin-top: auto;
   padding: 0 0.8rem;
@@ -168,11 +187,7 @@ export const Titlebar = styled.header`
   -webkit-app-region: drag;
 
   &[data-editor="true"] {
-    position: absolute;
-    z-index: 10;
-    top: 0;
-    right: 0;
-    padding: 0.7rem 1rem;
+    display: none;
   }
 `;
 

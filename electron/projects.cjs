@@ -34,6 +34,94 @@ async function saveProject(dataRoot, project) {
   await writeJson(path.join(directory, "project.json"), project);
 }
 
+async function directorySize(directory) {
+  const entries = await fs.promises
+    .readdir(directory, { withFileTypes: true })
+    .catch(() => []);
+  const sizes = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) return directorySize(entryPath);
+      if (!entry.isFile()) return 0;
+      return fs.promises
+        .stat(entryPath)
+        .then((stat) => stat.size)
+        .catch(() => 0);
+    })
+  );
+  return sizes.reduce((total, size) => total + size, 0);
+}
+
+function firstPhraseStart(project) {
+  return project.tracks
+    .filter((track) => track.type === "subtitle")
+    .flatMap((track) => track.phrases ?? [])
+    .map((phrase) => Number(phrase.start))
+    .filter(Number.isFinite)
+    .sort((left, right) => left - right)[0];
+}
+
+function backgroundAsset(project) {
+  const background = project.tracks.find(
+    (track) => track.type === "background"
+  );
+  if (!background) return null;
+  return background.videoAsset ?? background.imageAsset ?? background.asset;
+}
+
+function isVideoAsset(asset) {
+  return [".mp4", ".mov", ".webm", ".mkv"].includes(
+    path.extname(asset).toLowerCase()
+  );
+}
+
+async function generateProjectThumbnail(dataRoot, projectId) {
+  const directory = projectRoot(dataRoot, projectId);
+  const project = await loadProject(dataRoot, projectId);
+  const firstPhraseAt = firstPhraseStart(project);
+  if (firstPhraseAt === undefined) return null;
+  const asset = backgroundAsset(project);
+  if (!asset) return null;
+  const source = path.join(directory, "assets", path.basename(asset));
+  if (!fs.existsSync(source)) return null;
+  const thumbnailDirectory = path.join(directory, "thumbnails");
+  await fs.promises.mkdir(thumbnailDirectory, { recursive: true });
+  let thumbnail;
+  if (isVideoAsset(asset)) {
+    thumbnail = "first-phrase.jpg";
+    await new Promise((resolve, reject) => {
+      const process = spawn(ffmpegBinary(dataRoot), [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-stream_loop",
+        "-1",
+        "-ss",
+        String(firstPhraseAt / 1000),
+        "-i",
+        source,
+        "-frames:v",
+        "1",
+        path.join(thumbnailDirectory, thumbnail),
+      ]);
+      process.once("error", reject);
+      process.once("close", (code) => {
+        if (code === 0) resolve();
+        else reject(new Error("Unable to capture the project background"));
+      });
+    });
+  } else {
+    thumbnail = `first-phrase${path.extname(asset).toLowerCase() || ".jpg"}`;
+    await fs.promises.copyFile(
+      source,
+      path.join(thumbnailDirectory, thumbnail)
+    );
+  }
+  await saveProject(dataRoot, { ...project, thumbnail });
+  return thumbnail;
+}
+
 async function updateStage(directory, stageId, status, progress, message) {
   const file = path.join(directory, "project.json");
   const project = await readJson(file);
@@ -125,7 +213,6 @@ async function applyPipelineResult(directory) {
       scale: 1,
       x: 0,
       y: 30,
-      hasCaret: false,
     },
     curve: "linear",
     animation: {
@@ -332,9 +419,25 @@ async function run(command, args, context) {
         .map(async (entry) => {
           try {
             const project = await loadProject(dataRoot, entry.name);
-            const { id, name, duration, createdAt, updatedAt, processing } =
-              project;
-            return { id, name, duration, createdAt, updatedAt, processing };
+            const {
+              id,
+              name,
+              duration,
+              createdAt,
+              updatedAt,
+              processing,
+              thumbnail,
+            } = project;
+            return {
+              id,
+              name,
+              duration,
+              sizeBytes: await directorySize(path.join(directory, entry.name)),
+              createdAt,
+              updatedAt,
+              processing,
+              thumbnail,
+            };
           } catch {
             return null;
           }
@@ -350,11 +453,43 @@ async function run(command, args, context) {
     await saveProject(dataRoot, args.project);
     return null;
   }
+  if (command === "rename_project") {
+    const name = String(args.name ?? "").trim();
+    if (!name) throw new Error("Project name cannot be empty");
+    const project = await loadProject(dataRoot, args.projectId);
+    await saveProject(dataRoot, {
+      ...project,
+      name,
+      updatedAt: String(Date.now()),
+    });
+    return null;
+  }
   if (command === "delete_project") {
     await fs.promises.rm(projectRoot(dataRoot, args.projectId), {
       recursive: true,
       force: true,
     });
+    return null;
+  }
+  if (command === "duplicate_project") {
+    const source = projectRoot(dataRoot, args.projectId);
+    const duplicateId = `project-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
+    const destination = projectRoot(dataRoot, duplicateId);
+    await fs.promises.cp(source, destination, { recursive: true });
+    const project = await loadProject(dataRoot, duplicateId);
+    const now = String(Date.now());
+    const duplicate = {
+      ...project,
+      id: duplicateId,
+      name: `${project.name} (copy)`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await saveProject(dataRoot, duplicate);
+    return duplicate;
+  }
+  if (command === "open_project_folder") {
+    await context.shell.openPath(projectRoot(dataRoot, args.projectId));
     return null;
   }
   if (command === "project_audio_sources") {
@@ -471,6 +606,28 @@ async function run(command, args, context) {
     return fs.promises.readFile(
       path.join(projectRoot(dataRoot, args.projectId), "assets", asset)
     );
+  }
+  if (command === "generate_project_thumbnail") {
+    return generateProjectThumbnail(dataRoot, args.projectId);
+  }
+  if (command === "read_project_thumbnail") {
+    const thumbnail = path.basename(String(args.thumbnail ?? ""));
+    if (!thumbnail) throw new Error("Invalid project thumbnail");
+    return fs.promises.readFile(
+      path.join(projectRoot(dataRoot, args.projectId), "thumbnails", thumbnail)
+    );
+  }
+  if (command === "save_project_thumbnail") {
+    const directory = projectRoot(dataRoot, args.projectId);
+    const thumbnails = path.join(directory, "thumbnails");
+    await fs.promises.mkdir(thumbnails, { recursive: true });
+    await fs.promises.writeFile(
+      path.join(thumbnails, "preview.jpg"),
+      Buffer.from(args.bytes)
+    );
+    const project = await loadProject(dataRoot, args.projectId);
+    await saveProject(dataRoot, { ...project, thumbnail: "preview.jpg" });
+    return null;
   }
   return undefined;
 }

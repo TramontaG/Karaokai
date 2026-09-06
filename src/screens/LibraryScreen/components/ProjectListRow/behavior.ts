@@ -1,4 +1,4 @@
-import { useCallback, type MouseEvent } from "react";
+import { useCallback, type KeyboardEvent, type MouseEvent } from "react";
 import { useTranslation } from "../../../../hooks/useTranslation";
 import { type ProjectAction, type ProjectItem } from "../../types";
 
@@ -23,9 +23,33 @@ export function useBehavior({
     },
     [onToggleActions, project.id]
   );
+  const onRowClick = useCallback(
+    () => onAction(project.id, "open"),
+    [onAction, project.id]
+  );
+  const onRowKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLElement>) => {
+      if (event.currentTarget !== event.target) return;
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      onRowClick();
+    },
+    [onRowClick]
+  );
+  const onActionsClick = useCallback(
+    (event: MouseEvent<HTMLElement>) => event.stopPropagation(),
+    []
+  );
   const runAction = useCallback(
     (action: ProjectAction) => onAction(project.id, action),
     [onAction, project.id]
+  );
+  const onFavoriteClick = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      runAction("favorite");
+    },
+    [runAction]
   );
   const onOpen = useCallback(() => runAction("open"), [runAction]);
   const onRename = useCallback(() => runAction("rename"), [runAction]);
@@ -39,14 +63,21 @@ export function useBehavior({
   const onDelete = useCallback(() => runAction("delete"), [runAction]);
 
   return {
+    id: project.id,
     title: project.title,
     artist: project.artist,
     duration: project.duration,
+    size: project.size,
+    thumbnail: project.thumbnail,
     updated: project.updated,
     cover: project.cover,
     isFavorite: project.isFavorite,
     favoriteFill: project.isFavorite ? "currentColor" : "none",
     actionsOpen,
+    onRowClick,
+    onRowKeyDown,
+    onActionsClick,
+    onFavoriteClick,
     actionsButtonLabel: t("projects.actions.openMenu", {
       project: project.title,
     }),

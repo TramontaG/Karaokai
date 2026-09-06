@@ -204,14 +204,6 @@ function StyleFields({ scope }: { scope: Scope }) {
           </ColorFieldControl>
         </ColorField>
       </FieldGrid>
-      <Field>
-        <span>{behavior.caretLabel}</span>
-        <input
-          type="checkbox"
-          checked={style.hasCaret}
-          onChange={(event) => onStyleChange("hasCaret", event.target.checked)}
-        />
-      </Field>
       <Render when={showBezier}>
         <CubicBezierEditor
           value={curve}

@@ -7,7 +7,7 @@ export const Row = styled.div`
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   grid-template-columns:
     minmax(17rem, 2fr) minmax(9rem, 1.2fr) minmax(6rem, 0.7fr)
-    minmax(8rem, 1fr) 3.6rem;
+    minmax(5.5rem, 0.65fr) minmax(8rem, 1fr) 3.6rem;
   align-items: center;
   color: ${({ theme }) => theme.colors.textMuted};
   font-size: 0.71rem;
@@ -51,6 +51,10 @@ export const ProjectArtist = styled.span`
 `;
 
 export const ProjectDuration = styled.span`
+  white-space: nowrap;
+`;
+
+export const ProjectSize = styled.span`
   white-space: nowrap;
 `;
 

@@ -28,6 +28,8 @@ export interface ProjectItem {
   title: string;
   artist: string;
   duration: string;
+  size: string;
+  thumbnail: string | null;
   updated: string;
   cover: ProjectCover;
   isFavorite: boolean;

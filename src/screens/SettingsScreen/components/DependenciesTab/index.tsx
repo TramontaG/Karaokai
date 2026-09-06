@@ -1,4 +1,9 @@
-import { CheckCircle2, CircleAlert, RefreshCw } from "lucide-react";
+import {
+  CheckCircle2,
+  CircleAlert,
+  LoaderCircle,
+  RefreshCw,
+} from "lucide-react";
 import { ForEach } from "../../../../components/ForEach";
 import { Render } from "../../../../components/Render";
 import { DetailsModal } from "../DetailsModal";
@@ -13,6 +18,7 @@ import {
   PanelDescription,
   PanelHeader,
   PanelTitle,
+  LoadingState,
   RuntimeList,
 } from "./styles";
 
@@ -46,11 +52,19 @@ export function DependenciesTab() {
         <CheckupResult data-variant="error">{behavior.error}</CheckupResult>
       </Render>
       <RuntimeList>
-        <ForEach
-          data={behavior.components}
-          idCompute={behavior.getComponentId}
-          render={behavior.renderComponent}
-        />
+        <Render when={behavior.loading}>
+          <LoadingState>
+            <LoaderCircle aria-hidden="true" size={22} />
+            {behavior.loadingLabel}
+          </LoadingState>
+        </Render>
+        <Render when={behavior.showComponents}>
+          <ForEach
+            data={behavior.components}
+            idCompute={behavior.getComponentId}
+            render={behavior.renderComponent}
+          />
+        </Render>
       </RuntimeList>
       <Render when={behavior.detailsOpen}>
         <DetailsModal

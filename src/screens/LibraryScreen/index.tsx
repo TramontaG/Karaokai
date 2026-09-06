@@ -12,6 +12,7 @@ import { ForEach } from "../../components/ForEach";
 import { Render } from "../../components/Render";
 import { useBehavior } from "./behavior";
 import { EmptyProjects } from "./components/EmptyProjects";
+import { RenameProjectDialog } from "./components/RenameProjectDialog";
 import {
   CountBadge,
   FilterButton,
@@ -134,6 +135,7 @@ export function LibraryScreen() {
               <span role="columnheader">{behavior.nameColumn}</span>
               <span role="columnheader">{behavior.artistColumn}</span>
               <span role="columnheader">{behavior.durationColumn}</span>
+              <span role="columnheader">{behavior.sizeColumn}</span>
               <span role="columnheader">
                 {behavior.updatedColumn}
                 <ArrowDown aria-hidden="true" size={13} />
@@ -156,6 +158,17 @@ export function LibraryScreen() {
           localLabel={behavior.localLabel}
           privateLabel={behavior.privateLabel}
           unlimitedLabel={behavior.unlimitedLabel}
+        />
+      </Render>
+      <Render when={behavior.renameProject !== null}>
+        <RenameProjectDialog
+          projectName={behavior.renameProject?.title ?? ""}
+          title={behavior.renameTitle}
+          fieldLabel={behavior.renameFieldLabel}
+          cancelLabel={behavior.renameCancelLabel}
+          confirmLabel={behavior.renameConfirmLabel}
+          onCancel={behavior.onCancelRename}
+          onConfirm={behavior.onConfirmRename}
         />
       </Render>
     </Page>

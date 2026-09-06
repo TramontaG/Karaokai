@@ -8,7 +8,7 @@ interface DesktopBridge {
   chooseDirectory(): Promise<string | null>;
   chooseVideoDestination(defaultPath: string): Promise<string | null>;
   filePath(file: File): string;
-  windowAction(action: "minimize" | "maximize" | "close"): void;
+  windowAction(action: "minimize" | "maximize" | "close"): Promise<void>;
 }
 
 declare global {
@@ -57,4 +57,4 @@ export const desktopFilePath = (file: File) =>
   window.karaokaiDesktop?.filePath(file) ?? "";
 
 export const windowAction = (action: "minimize" | "maximize" | "close") =>
-  window.karaokaiDesktop?.windowAction(action);
+  window.karaokaiDesktop?.windowAction(action) ?? Promise.resolve();

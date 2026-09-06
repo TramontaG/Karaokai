@@ -47,6 +47,15 @@ export const Artwork = styled.div<{
     background: linear-gradient(180deg, transparent 45%, rgb(3 4 13 / 42%));
     content: "";
   }
+
+  img {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 `;
 
 export const Duration = styled.span`

@@ -104,7 +104,12 @@ function EditorScreenContent() {
                     ) && behavior.backgroundAssetUrl !== null
                   }
                 >
-                  <img src={behavior.backgroundAssetUrl ?? undefined} alt="" />
+                  <img
+                    ref={behavior.backgroundImage}
+                    src={behavior.backgroundAssetUrl ?? undefined}
+                    alt=""
+                    onLoad={behavior.onBackgroundImageLoaded}
+                  />
                 </Render>
               </PreviewBackground>
               <ForEach

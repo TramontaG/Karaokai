@@ -1,6 +1,5 @@
 use crate::runtime_installer::{
-    project_data_directory, project_ffmpeg_command, project_pipeline_models,
-    project_python_command,
+    project_data_directory, project_ffmpeg_command, project_pipeline_models, project_python_command,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -9,7 +8,7 @@ use std::{
     fs,
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
-    process::Stdio,
+    process::{Command, Stdio},
     sync::{Mutex, OnceLock},
     thread,
     time::{SystemTime, UNIX_EPOCH},
@@ -44,6 +43,7 @@ pub(crate) struct Project {
     created_at: String,
     updated_at: String,
     duration: u64,
+    thumbnail: Option<String>,
     tracks: Vec<Value>,
     processing: Vec<Value>,
 }
@@ -54,9 +54,28 @@ pub(crate) struct ProjectSummary {
     id: String,
     name: String,
     duration: u64,
+    size_bytes: u64,
     created_at: String,
     updated_at: String,
     processing: Vec<Value>,
+    thumbnail: Option<String>,
+}
+
+fn directory_size(path: &Path) -> u64 {
+    fs::read_dir(path)
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .map(|entry| {
+            let path = entry.path();
+            match fs::symlink_metadata(&path) {
+                Ok(metadata) if metadata.is_file() => metadata.len(),
+                Ok(metadata) if metadata.is_dir() => directory_size(&path),
+                _ => 0,
+            }
+        })
+        .sum()
 }
 
 #[derive(Clone, Serialize)]
@@ -127,6 +146,7 @@ pub(crate) fn create_local_project(
         created_at: now.clone(),
         updated_at: now,
         duration: 0,
+        thumbnail: None,
         tracks: vec![
             json!({"id":"background-main","type":"background","name":"Background","visible":true,"locked":false,"zIndex":-10,"source":"solid-color"}),
             json!({"id":"audio-main","type":"audio","name":"Instrumental","visible":true,"locked":false,"zIndex":0,"source":copied_source.file_name().unwrap_or_default().to_string_lossy(),"volume":1.0,"muted":false}),
@@ -234,7 +254,7 @@ fn apply_pipeline_result(directory: &Path) -> Result<(), String> {
     tracks.push(json!({
         "id": "subtitles-main", "type": "subtitle", "name": "Karaoke", "visible": true,
         "locked": false, "zIndex": 20,
-        "style": {"unreadColor": "#FFFFFF", "readColor": "#FF0044", "x": 0, "y": 30, "hasCaret": false},
+        "style": {"unreadColor": "#FFFFFF", "readColor": "#FF0044", "x": 0, "y": 30},
         "phrases": phrases
     }));
     let duration = transcription
@@ -503,9 +523,11 @@ pub(crate) fn list_projects(
                 id: project.id,
                 name: project.name,
                 duration: project.duration,
+                size_bytes: directory_size(&entry.path()),
                 created_at: project.created_at,
                 updated_at: project.updated_at,
                 processing: project.processing,
+                thumbnail: project.thumbnail,
             })
         })
         .collect::<Vec<_>>();
@@ -526,6 +548,28 @@ pub(crate) fn save_project(
     save_to_directory(&directory, &project)
 }
 
+pub(crate) fn rename_project(
+    app: AppHandle,
+    project_id: String,
+    name: String,
+    storage_directory: Option<String>,
+) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("Project name cannot be empty".to_string());
+    }
+    let root = project_data_directory(&app, storage_directory)?;
+    let directory = project_directory(&root, &project_id)?;
+    let mut project: Project = serde_json::from_slice(
+        &fs::read(directory.join("project.json"))
+            .map_err(|error| format!("Unable to read project: {error}"))?,
+    )
+    .map_err(|error| format!("Invalid project file: {error}"))?;
+    project.name = name.to_string();
+    project.updated_at = epoch_millis()?.to_string();
+    save_to_directory(&directory, &project)
+}
+
 pub(crate) fn delete_project(
     app: AppHandle,
     project_id: String,
@@ -537,4 +581,207 @@ pub(crate) fn delete_project(
         return Err("Project does not exist".to_string());
     }
     fs::remove_dir_all(&directory).map_err(|error| format!("Unable to delete project: {error}"))
+}
+
+fn first_phrase_start(project: &Project) -> Option<u64> {
+    project
+        .tracks
+        .iter()
+        .filter(|track| track.get("type").and_then(Value::as_str) == Some("subtitle"))
+        .filter_map(|track| track.get("phrases").and_then(Value::as_array))
+        .flatten()
+        .filter_map(|phrase| phrase.get("start").and_then(Value::as_u64))
+        .min()
+}
+
+fn project_background_asset(project: &Project) -> Option<String> {
+    project
+        .tracks
+        .iter()
+        .find(|track| track.get("type").and_then(Value::as_str) == Some("background"))
+        .and_then(|background| {
+            ["videoAsset", "imageAsset", "asset"]
+                .iter()
+                .find_map(|field| background.get(*field).and_then(Value::as_str))
+        })
+        .map(str::to_string)
+}
+
+fn is_video_asset(asset: &str) -> bool {
+    matches!(
+        Path::new(asset)
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .map(|extension| extension.to_ascii_lowercase())
+            .as_deref(),
+        Some("mp4" | "mov" | "webm" | "mkv")
+    )
+}
+
+pub(crate) fn generate_project_thumbnail(
+    app: AppHandle,
+    project_id: String,
+    storage_directory: Option<String>,
+) -> Result<Option<String>, String> {
+    let root = project_data_directory(&app, storage_directory)?;
+    let directory = project_directory(&root, &project_id)?;
+    let project: Project = serde_json::from_slice(
+        &fs::read(directory.join("project.json"))
+            .map_err(|error| format!("Unable to read project: {error}"))?,
+    )
+    .map_err(|error| format!("Invalid project file: {error}"))?;
+    let Some(first_phrase_at) = first_phrase_start(&project) else {
+        return Ok(None);
+    };
+    let Some(asset) = project_background_asset(&project) else {
+        return Ok(None);
+    };
+    let asset_name = Path::new(&asset)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .ok_or_else(|| "Invalid project background asset".to_string())?;
+    let source = directory.join("assets").join(asset_name);
+    if !source.is_file() {
+        return Ok(None);
+    }
+    let thumbnails = directory.join("thumbnails");
+    fs::create_dir_all(&thumbnails).map_err(|error| error.to_string())?;
+    let thumbnail = if is_video_asset(&asset) {
+        let thumbnail = "first-phrase.jpg".to_string();
+        let status = project_ffmpeg_command(&root)
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-stream_loop",
+                "-1",
+                "-ss",
+            ])
+            .arg(format!("{}", first_phrase_at as f64 / 1000.0))
+            .arg("-i")
+            .arg(&source)
+            .args(["-frames:v", "1"])
+            .arg(thumbnails.join(&thumbnail))
+            .status()
+            .map_err(|error| format!("Unable to capture the project background: {error}"))?;
+        if !status.success() {
+            return Err("Unable to capture the project background".to_string());
+        }
+        thumbnail
+    } else {
+        let extension = Path::new(asset_name)
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or("jpg");
+        let thumbnail = format!("first-phrase.{extension}");
+        fs::copy(&source, thumbnails.join(&thumbnail))
+            .map_err(|error| format!("Unable to save project thumbnail: {error}"))?;
+        thumbnail
+    };
+    let mut updated = project;
+    updated.thumbnail = Some(thumbnail.clone());
+    save_to_directory(&directory, &updated)?;
+    Ok(Some(thumbnail))
+}
+
+pub(crate) fn read_project_thumbnail(
+    app: AppHandle,
+    project_id: String,
+    thumbnail: String,
+    storage_directory: Option<String>,
+) -> Result<Vec<u8>, String> {
+    let root = project_data_directory(&app, storage_directory)?;
+    let directory = project_directory(&root, &project_id)?;
+    let thumbnail = Path::new(&thumbnail)
+        .file_name()
+        .ok_or_else(|| "Invalid project thumbnail".to_string())?;
+    fs::read(directory.join("thumbnails").join(thumbnail))
+        .map_err(|error| format!("Unable to read project thumbnail: {error}"))
+}
+
+pub(crate) fn save_project_thumbnail(
+    app: AppHandle,
+    project_id: String,
+    bytes: Vec<u8>,
+    storage_directory: Option<String>,
+) -> Result<(), String> {
+    let root = project_data_directory(&app, storage_directory)?;
+    let directory = project_directory(&root, &project_id)?;
+    fs::create_dir_all(directory.join("thumbnails")).map_err(|error| error.to_string())?;
+    fs::write(directory.join("thumbnails").join("preview.jpg"), bytes)
+        .map_err(|error| format!("Unable to save project thumbnail: {error}"))?;
+    let mut project: Project = serde_json::from_slice(
+        &fs::read(directory.join("project.json"))
+            .map_err(|error| format!("Unable to read project: {error}"))?,
+    )
+    .map_err(|error| format!("Invalid project file: {error}"))?;
+    project.thumbnail = Some("preview.jpg".to_string());
+    save_to_directory(&directory, &project)
+}
+
+fn copy_directory(source: &Path, destination: &Path) -> Result<(), String> {
+    fs::create_dir_all(destination).map_err(|error| error.to_string())?;
+    for entry in fs::read_dir(source).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let path = entry.path();
+        let target = destination.join(entry.file_name());
+        if path.is_dir() {
+            copy_directory(&path, &target)?;
+        } else {
+            fs::copy(&path, &target).map_err(|error| error.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn duplicate_project(
+    app: AppHandle,
+    project_id: String,
+    storage_directory: Option<String>,
+) -> Result<Project, String> {
+    let root = project_data_directory(&app, storage_directory)?;
+    let source = project_directory(&root, &project_id)?;
+    let timestamp = epoch_millis()?;
+    let id = format!("project-{timestamp}-copy");
+    let destination = project_directory(&root, &id)?;
+    if destination.exists() {
+        return Err("Unable to create duplicate project".to_string());
+    }
+    copy_directory(&source, &destination)?;
+    let mut project: Project = serde_json::from_slice(
+        &fs::read(destination.join("project.json"))
+            .map_err(|error| format!("Unable to read duplicated project: {error}"))?,
+    )
+    .map_err(|error| format!("Invalid duplicated project: {error}"))?;
+    project.id = id;
+    project.name = format!("{} (copy)", project.name);
+    project.created_at = timestamp.to_string();
+    project.updated_at = timestamp.to_string();
+    save_to_directory(&destination, &project)?;
+    Ok(project)
+}
+
+pub(crate) fn open_project_folder(
+    app: AppHandle,
+    project_id: String,
+    storage_directory: Option<String>,
+) -> Result<(), String> {
+    let root = project_data_directory(&app, storage_directory)?;
+    let directory = project_directory(&root, &project_id)?;
+    if !directory.is_dir() {
+        return Err("Project does not exist".to_string());
+    }
+    #[cfg(target_os = "windows")]
+    let mut command = Command::new("explorer");
+    #[cfg(target_os = "macos")]
+    let mut command = Command::new("open");
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    let mut command = Command::new("xdg-open");
+    command
+        .arg(directory)
+        .spawn()
+        .map_err(|error| format!("Unable to open project folder: {error}"))?;
+    Ok(())
 }

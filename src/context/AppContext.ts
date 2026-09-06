@@ -27,12 +27,24 @@ export interface OnboardingData {
   errorCode: string | null;
 }
 
+export interface CurrentProjectData {
+  id: string;
+  name: string;
+}
+
+export interface RequestedEditorAction {
+  projectId: string;
+  action: "export";
+}
+
 export interface AppData extends Record<string, unknown> {
   isLoading: boolean;
   preferencesLoaded: boolean;
   systemTheme: ThemeName;
   preferences: UserPreferences;
   models: ModelStatus[];
+  currentProject: CurrentProjectData | null;
+  requestedEditorAction: RequestedEditorAction | null;
   bootstrap: BootstrapData;
   onboarding: OnboardingData;
 }
@@ -42,6 +54,8 @@ const initialData: AppData = {
   systemTheme: "dark",
   preferences: defaultPreferences,
   models: [],
+  currentProject: null,
+  requestedEditorAction: null,
   bootstrap: {
     status: "waiting",
     dataDirectory: null,

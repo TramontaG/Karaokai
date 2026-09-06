@@ -12,7 +12,11 @@ import { useRecursiveState } from "../../hooks/useRecursiveState";
 import { useTranslation } from "../../hooks/useTranslation";
 import {
   deleteProject,
+  duplicateProject,
+  ensureProjectThumbnail,
   listProjects,
+  openProjectFolder,
+  renameProject,
   type ProjectSummary,
 } from "../../services/projects";
 import { ProjectGridCard } from "./components/ProjectGridCard";
@@ -27,7 +31,7 @@ import {
 interface LibraryState extends Record<string, unknown> {
   activeFilter: ProjectFilter;
   openMenuProjectId: string | null;
-  favoriteIds: string[];
+  renameProjectId: string | null;
 }
 
 const covers: ProjectCover[] = [
@@ -39,6 +43,18 @@ const covers: ProjectCover[] = [
 ];
 const formatDuration = (milliseconds: number) =>
   new Date(milliseconds).toISOString().slice(14, 19);
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  const unitIndex = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)) - 1,
+    units.length - 1
+  );
+  const value = bytes / 1024 ** (unitIndex + 1);
+  return `${new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: value < 10 ? 1 : 0,
+  }).format(value)} ${units[unitIndex]}`;
+};
 const isRecent = (updatedAt: string) =>
   Date.now() - Number(updatedAt) < 7 * 24 * 60 * 60 * 1000;
 
@@ -54,16 +70,26 @@ function filterProjects(projects: ProjectItem[], filter: ProjectFilter) {
 export function useBehavior(_: Record<string, never>) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [data] = useAppContext();
+  const [data, setAppData] = useAppContext();
   const { projectViewMode, setProjectViewMode } = useProjectViewMode();
   const [storedProjects, setStoredProjects] = useState<ProjectSummary[]>([]);
   const [state, setState] = useRecursiveState<LibraryState>({
     activeFilter: "all",
     openMenuProjectId: null,
-    favoriteIds: [],
+    renameProjectId: null,
   });
   const refresh = useCallback(() => {
     void listProjects(data.preferences.storageDirectory)
+      .then((projects) =>
+        Promise.all(
+          projects.map((project) =>
+            ensureProjectThumbnail(
+              project,
+              data.preferences.storageDirectory
+            ).catch(() => project)
+          )
+        )
+      )
       .then(setStoredProjects)
       .catch(() => setStoredProjects([]));
   }, [data.preferences.storageDirectory]);
@@ -77,15 +103,17 @@ export function useBehavior(_: Record<string, never>) {
         title: project.name,
         artist: t("projects.localProject"),
         duration: formatDuration(project.duration),
+        size: formatFileSize(project.sizeBytes),
         updated: Number(project.updatedAt)
           ? new Date(Number(project.updatedAt)).toLocaleString()
           : t("projects.updated.now"),
         cover: covers[index % covers.length],
-        isFavorite: state.favoriteIds.includes(project.id),
+        thumbnail: project.thumbnail ?? null,
+        isFavorite: data.preferences.favoriteProjectIds.includes(project.id),
         isRecent: isRecent(project.updatedAt),
         isMine: true,
       })),
-    [state.favoriteIds, storedProjects, t]
+    [data.preferences.favoriteProjectIds, storedProjects, t]
   );
   const visibleProjects = filterProjects(projects, state.activeFilter);
   const setFilter = useCallback(
@@ -102,19 +130,48 @@ export function useBehavior(_: Record<string, never>) {
   );
   const onAction = useCallback(
     async (projectId: string, action: ProjectAction) => {
-      if (action === "open")
+      const project = projects.find((item) => item.id === projectId);
+      if (action === "open") {
+        if (project)
+          setAppData({
+            currentProject: { id: project.id, name: project.title },
+          });
         void navigate({
           to: "/projects/$projectId/editor",
           params: { projectId },
         });
+      }
+      if (action === "rename" && project)
+        setState({ renameProjectId: projectId });
       if (action === "favorite")
-        setState({
-          favoriteIds: state.favoriteIds.includes(projectId)
-            ? state.favoriteIds.filter((id) => id !== projectId)
-            : [...state.favoriteIds, projectId],
+        setAppData({
+          preferences: {
+            favoriteProjectIds: data.preferences.favoriteProjectIds.includes(
+              projectId
+            )
+              ? data.preferences.favoriteProjectIds.filter(
+                  (id) => id !== projectId
+                )
+              : [...data.preferences.favoriteProjectIds, projectId],
+          },
         });
+      if (action === "duplicate") {
+        await duplicateProject(projectId, data.preferences.storageDirectory);
+        refresh();
+      }
+      if (action === "export" && project) {
+        setAppData({
+          currentProject: { id: project.id, name: project.title },
+          requestedEditorAction: { projectId, action: "export" },
+        });
+        void navigate({
+          to: "/projects/$projectId/editor",
+          params: { projectId },
+        });
+      }
+      if (action === "open-folder")
+        await openProjectFolder(projectId, data.preferences.storageDirectory);
       if (action === "delete") {
-        const project = projects.find((item) => item.id === projectId);
         if (
           project &&
           window.confirm(
@@ -122,6 +179,16 @@ export function useBehavior(_: Record<string, never>) {
           )
         ) {
           await deleteProject(projectId, data.preferences.storageDirectory);
+          if (data.currentProject?.id === projectId)
+            setAppData({ currentProject: null });
+          if (data.preferences.favoriteProjectIds.includes(projectId))
+            setAppData({
+              preferences: {
+                favoriteProjectIds: data.preferences.favoriteProjectIds.filter(
+                  (id) => id !== projectId
+                ),
+              },
+            });
           refresh();
         }
       }
@@ -129,11 +196,13 @@ export function useBehavior(_: Record<string, never>) {
     },
     [
       data.preferences.storageDirectory,
+      data.preferences.favoriteProjectIds,
+      data.currentProject?.id,
       navigate,
       projects,
       refresh,
+      setAppData,
       setState,
-      state.favoriteIds,
       t,
     ]
   );
@@ -161,6 +230,36 @@ export function useBehavior(_: Record<string, never>) {
     () => void navigate({ to: "/" }),
     [navigate]
   );
+  const renameTarget =
+    projects.find((project) => project.id === state.renameProjectId) ?? null;
+  const onCancelRename = useCallback(
+    () => setState({ renameProjectId: null }),
+    [setState]
+  );
+  const onConfirmRename = useCallback(
+    async (name: string) => {
+      if (!renameTarget) return;
+      await renameProject(
+        renameTarget.id,
+        name,
+        data.preferences.storageDirectory
+      );
+      if (data.currentProject?.id === renameTarget.id)
+        setAppData({
+          currentProject: { id: renameTarget.id, name },
+        });
+      setState({ renameProjectId: null });
+      refresh();
+    },
+    [
+      data.currentProject?.id,
+      data.preferences.storageDirectory,
+      refresh,
+      renameTarget,
+      setAppData,
+      setState,
+    ]
+  );
 
   return {
     title: t("projects.title"),
@@ -178,6 +277,7 @@ export function useBehavior(_: Record<string, never>) {
     nameColumn: t("projects.table.name"),
     artistColumn: t("projects.table.artist"),
     durationColumn: t("projects.table.duration"),
+    sizeColumn: t("projects.table.size"),
     updatedColumn: t("projects.table.updated"),
     actionsColumn: t("projects.table.actions"),
     emptyTitlePrefix: t("home.hero.titlePrefix"),
@@ -203,6 +303,13 @@ export function useBehavior(_: Record<string, never>) {
     onShowGrid: () => setProjectViewMode("grid"),
     onShowList: () => setProjectViewMode("list"),
     onNewProject,
+    renameProject: renameTarget,
+    renameTitle: t("projects.rename.title"),
+    renameFieldLabel: t("projects.rename.field"),
+    renameCancelLabel: t("projects.rename.cancel"),
+    renameConfirmLabel: t("projects.rename.confirm"),
+    onCancelRename,
+    onConfirmRename,
     getProjectId: (project: ProjectItem) => project.id,
     renderGridProject,
     renderListProject,

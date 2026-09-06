@@ -19,7 +19,7 @@ import { useTranslation } from "../../hooks/useTranslation";
 export function useBehavior(_: Record<string, never>) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [data] = useAppContext();
+  const [data, setAppData] = useAppContext();
   const [isImporting, setIsImporting] = useState(false);
   const isImportingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +39,9 @@ export function useBehavior(_: Record<string, never>) {
             demucsModelId: data.preferences.defaultDemucsModelId,
           }
         );
+        setAppData({
+          currentProject: { id: project.id, name: project.name },
+        });
         await navigate({
           to: "/projects/$projectId/preparing",
           params: { projectId: project.id },
@@ -55,6 +58,7 @@ export function useBehavior(_: Record<string, never>) {
       data.preferences.defaultWhisperModelId,
       data.preferences.storageDirectory,
       navigate,
+      setAppData,
     ]
   );
   const importFile = useCallback(

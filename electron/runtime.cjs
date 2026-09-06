@@ -104,6 +104,14 @@ function commandWorks(command, args = ["--version"], options = {}) {
   return spawnSync(command, args, { ...options, stdio: "ignore" }).status === 0;
 }
 
+function commandWorksAsync(command, args = ["--version"], options = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { ...options, stdio: "ignore" });
+    child.once("error", () => resolve(false));
+    child.once("close", (code) => resolve(code === 0));
+  });
+}
+
 function runtimeEnvironment(dataRoot) {
   return {
     ...process.env,
@@ -458,25 +466,24 @@ function modelInstalled(dataRoot, model) {
   });
 }
 
-function runtimeComponents(dataRoot) {
+async function runtimeComponents(dataRoot) {
   const python = pythonBinary(dataRoot);
-  const workerReady = commandWorks(
-    python,
-    ["-m", "karaoke_worker", "--healthcheck"],
-    {
+  const [workerReady, ytDlpReady, ffmpegReady] = await Promise.all([
+    commandWorksAsync(python, ["-m", "karaoke_worker", "--healthcheck"], {
       env: runtimeEnvironment(dataRoot),
-    }
-  );
-  const ytDlpReady = commandWorks(python, ["-m", "yt_dlp", "--version"], {
-    env: runtimeEnvironment(dataRoot),
-  });
+    }),
+    commandWorksAsync(python, ["-m", "yt_dlp", "--version"], {
+      env: runtimeEnvironment(dataRoot),
+    }),
+    commandWorksAsync(ffmpegBinary(dataRoot), ["-version"]),
+  ]);
   return [
     [
       "ffmpeg",
       "FFmpeg",
       "7.0.2",
       ffmpegBinary(dataRoot),
-      commandWorks(ffmpegBinary(dataRoot), ["-version"]),
+      ffmpegReady,
       "~78 MB",
     ],
     [
@@ -485,6 +492,55 @@ function runtimeComponents(dataRoot) {
       WORKER_VERSION,
       path.dirname(python),
       workerReady,
+      "~1.2 GB",
+    ],
+    [
+      "yt-dlp",
+      "yt-dlp",
+      "2026.8.19",
+      path.dirname(python),
+      ytDlpReady,
+      "~20 MB",
+    ],
+  ].map(([id, name, version, installPath, verified, sizeLabel]) => ({
+    id,
+    name,
+    installed: verified,
+    installedVersion: verified ? version : null,
+    availableVersion: version,
+    platform: `${process.platform}-${process.arch}`,
+    sizeLabel,
+    installPath,
+    sha256: null,
+    verified,
+    updateAvailable: false,
+  }));
+}
+
+async function runtimeComponentInventory(dataRoot) {
+  const python = pythonBinary(dataRoot);
+  const [ffmpegReady, workerRuntimeReady, ytDlpReady] = await Promise.all([
+    commandWorksAsync(ffmpegBinary(dataRoot), ["-version"]),
+    commandWorksAsync(python, ["--version"]),
+    commandWorksAsync(python, ["-m", "yt_dlp", "--version"], {
+      env: runtimeEnvironment(dataRoot),
+    }),
+  ]);
+  return [
+    [
+      "ffmpeg",
+      "FFmpeg",
+      "7.0.2",
+      ffmpegBinary(dataRoot),
+      ffmpegReady,
+      "~78 MB",
+    ],
+    [
+      "ml-worker",
+      "ML Worker",
+      WORKER_VERSION,
+      path.dirname(python),
+      workerRuntimeReady,
       "~1.2 GB",
     ],
     [
@@ -608,12 +664,9 @@ async function run(command, args, context) {
       );
     return jobId;
   }
-  if (
-    command === "list_runtime_components" ||
-    command === "run_runtime_checkup"
-  ) {
-    return runtimeComponents(dataRoot);
-  }
+  if (command === "list_runtime_components")
+    return runtimeComponentInventory(dataRoot);
+  if (command === "run_runtime_checkup") return runtimeComponents(dataRoot);
   if (command === "install_runtime_component") {
     const model =
       MODELS.find((entry) => modelInstalled(dataRoot, entry)) ?? MODELS[0];

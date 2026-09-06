@@ -83,6 +83,27 @@ export const RuntimeList = styled.div`
   margin-top: 0.9rem;
 `;
 
+export const LoadingState = styled.div`
+  display: flex;
+  min-height: 10rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  color: ${({ theme }) => theme.colors.textMuted};
+  font-size: 0.76rem;
+
+  svg {
+    color: ${({ theme }) => theme.colors.accent};
+    animation: spin 850ms linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+`;
+
 export const DetailsGrid = styled.div`
   display: grid;
 `;

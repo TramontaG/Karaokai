@@ -18,9 +18,17 @@ export function ProjectGridCard(props: ProjectGridCardProps) {
   const behavior = useBehavior(props);
 
   return (
-    <Card>
+    <Card
+      role="button"
+      tabIndex={0}
+      aria-label={behavior.openLabel}
+      onClick={behavior.onCardClick}
+      onKeyDown={behavior.onCardKeyDown}
+    >
       <ProjectArtwork
+        projectId={behavior.id}
         cover={behavior.cover}
+        thumbnail={behavior.thumbnail}
         duration={behavior.duration}
         showDuration
         compact={false}
@@ -28,8 +36,10 @@ export function ProjectGridCard(props: ProjectGridCardProps) {
       <CardBody>
         <ProjectTitle>{behavior.title}</ProjectTitle>
         <ProjectArtist>{behavior.artist}</ProjectArtist>
-        <ProjectUpdated>{behavior.updated}</ProjectUpdated>
-        <Actions data-project-actions>
+        <ProjectUpdated>
+          {behavior.updated} · {behavior.size}
+        </ProjectUpdated>
+        <Actions data-project-actions onClick={behavior.onActionsClick}>
           <MenuButton
             type="button"
             aria-label={behavior.actionsButtonLabel}
@@ -62,7 +72,7 @@ export function ProjectGridCard(props: ProjectGridCardProps) {
           type="button"
           aria-label={behavior.favoriteButtonLabel}
           $active={behavior.isFavorite}
-          onClick={behavior.onToggleFavorite}
+          onClick={behavior.onFavoriteClick}
         >
           <Heart aria-hidden="true" size={17} fill={behavior.favoriteFill} />
         </FavoriteButton>

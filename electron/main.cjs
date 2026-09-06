@@ -10,12 +10,18 @@ const PROJECT_COMMANDS = new Set([
   "load_project",
   "list_projects",
   "save_project",
+  "rename_project",
   "delete_project",
+  "duplicate_project",
+  "open_project_folder",
   "project_audio_sources",
   "read_project_audio",
   "import_background_asset",
   "extract_album_art",
   "read_project_asset",
+  "generate_project_thumbnail",
+  "read_project_thumbnail",
+  "save_project_thumbnail",
   "start_project_render",
   "cancel_project_render",
   "render_job_data",
@@ -729,13 +735,14 @@ ipcMain.handle(
   }
 );
 
-ipcMain.on("karaokai:window", (event, action) => {
+ipcMain.handle("karaokai:window", (event, action) => {
   const window = BrowserWindow.fromWebContents(event.sender);
-  if (!window) return;
+  if (!window) return null;
   if (action === "minimize") window.minimize();
   if (action === "maximize")
     window.isMaximized() ? window.unmaximize() : window.maximize();
   if (action === "close") window.close();
+  return null;
 });
 
 app.whenReady().then(() => {

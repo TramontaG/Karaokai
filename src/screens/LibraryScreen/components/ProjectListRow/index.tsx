@@ -12,6 +12,7 @@ import {
   ProjectArtist,
   ProjectDuration,
   ProjectName,
+  ProjectSize,
   ProjectUpdated,
   Row,
   TitleLine,
@@ -21,10 +22,18 @@ export function ProjectListRow(props: ProjectListRowProps) {
   const behavior = useBehavior(props);
 
   return (
-    <Row role="row">
+    <Row
+      role="row"
+      tabIndex={0}
+      aria-label={behavior.openLabel}
+      onClick={behavior.onRowClick}
+      onKeyDown={behavior.onRowKeyDown}
+    >
       <NameCell role="cell">
         <ProjectArtwork
+          projectId={behavior.id}
           cover={behavior.cover}
+          thumbnail={behavior.thumbnail}
           duration={behavior.duration}
           showDuration={false}
           compact
@@ -35,7 +44,7 @@ export function ProjectListRow(props: ProjectListRowProps) {
             type="button"
             aria-label={behavior.favoriteButtonLabel}
             $active={behavior.isFavorite}
-            onClick={behavior.onToggleFavorite}
+            onClick={behavior.onFavoriteClick}
           >
             <Star aria-hidden="true" size={16} fill={behavior.favoriteFill} />
           </FavoriteIcon>
@@ -43,9 +52,10 @@ export function ProjectListRow(props: ProjectListRowProps) {
       </NameCell>
       <ProjectArtist role="cell">{behavior.artist}</ProjectArtist>
       <ProjectDuration role="cell">{behavior.duration}</ProjectDuration>
+      <ProjectSize role="cell">{behavior.size}</ProjectSize>
       <ProjectUpdated role="cell">{behavior.updated}</ProjectUpdated>
       <ActionsCell role="cell">
-        <Actions data-project-actions>
+        <Actions data-project-actions onClick={behavior.onActionsClick}>
           <MenuButton
             type="button"
             aria-label={behavior.actionsButtonLabel}

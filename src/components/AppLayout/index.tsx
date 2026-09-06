@@ -4,6 +4,7 @@ import {
   Home,
   Minus,
   Moon,
+  PanelsTopLeft,
   Search,
   Settings,
   Square,
@@ -18,6 +19,7 @@ import {
   BrandAccent,
   BrandName,
   Content,
+  EditorTab,
   Navigation,
   SearchBox,
   SearchInput,
@@ -56,6 +58,23 @@ export function AppLayout() {
             <Folder aria-hidden="true" size={22} />
             {behavior.library}
           </Link>
+          <Render when={behavior.editorProjectId !== null}>
+            <Link
+              to="/projects/$projectId/editor"
+              params={{ projectId: behavior.editorProjectId ?? "" }}
+              aria-label={behavior.editorLabel}
+              title={behavior.editorLabel}
+            >
+              <PanelsTopLeft aria-hidden="true" size={22} />
+              {behavior.editor}
+            </Link>
+          </Render>
+          <Render when={behavior.editorProjectId === null}>
+            <EditorTab aria-disabled="true" title={behavior.editorLabel}>
+              <PanelsTopLeft aria-hidden="true" size={22} />
+              {behavior.editor}
+            </EditorTab>
+          </Render>
           <Link to="/settings">
             <Settings aria-hidden="true" size={22} />
             {behavior.settings}
@@ -93,29 +112,31 @@ export function AppLayout() {
               </Render>
             </ThemeButton>
           </Render>
-          <WindowActions>
-            <WindowAction
-              type="button"
-              aria-label={behavior.minimizeLabel}
-              onClick={behavior.onMinimize}
-            >
-              <Minus aria-hidden="true" size={18} />
-            </WindowAction>
-            <WindowAction
-              type="button"
-              aria-label={behavior.maximizeLabel}
-              onClick={behavior.onToggleMaximize}
-            >
-              <Square aria-hidden="true" size={15} />
-            </WindowAction>
-            <WindowAction
-              type="button"
-              aria-label={behavior.closeLabel}
-              onClick={behavior.onClose}
-            >
-              <X aria-hidden="true" size={19} />
-            </WindowAction>
-          </WindowActions>
+          <Render when={!behavior.isEditorRoute}>
+            <WindowActions>
+              <WindowAction
+                type="button"
+                aria-label={behavior.minimizeLabel}
+                onClick={behavior.onMinimize}
+              >
+                <Minus aria-hidden="true" size={18} />
+              </WindowAction>
+              <WindowAction
+                type="button"
+                aria-label={behavior.maximizeLabel}
+                onClick={behavior.onToggleMaximize}
+              >
+                <Square aria-hidden="true" size={15} />
+              </WindowAction>
+              <WindowAction
+                type="button"
+                aria-label={behavior.closeLabel}
+                onClick={behavior.onClose}
+              >
+                <X aria-hidden="true" size={19} />
+              </WindowAction>
+            </WindowActions>
+          </Render>
         </Titlebar>
         <Content data-editor={behavior.isEditorRoute}>
           <Outlet />

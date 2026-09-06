@@ -29,6 +29,7 @@ import {
   type SubtitleTrack,
   type SubtitleWord,
   normalizeSubtitlePhraseOrder,
+  createProjectThumbnail,
   sortSubtitlePhrases,
 } from "../../domain/project";
 import { useAppContext } from "../../hooks/useAppContext";
@@ -39,6 +40,7 @@ import {
   chooseVideoDestination,
   isDesktop,
   listenDesktop,
+  windowAction,
 } from "../../services/desktop";
 import {
   extractAlbumArt,
@@ -49,9 +51,11 @@ import {
   readProjectAsset,
   cancelProjectRender,
   saveProject,
+  saveProjectThumbnail,
   startProjectRender,
   type ProjectRenderProgress,
 } from "../../services/projects";
+import { registerBeforeWindowClose } from "../../services/projectWindowLifecycle";
 import { PhraseClip } from "./components/PhraseClip";
 import {
   useEditorData,
@@ -128,6 +132,52 @@ const formatTime = (milliseconds: number) =>
   new Date(Math.max(0, milliseconds)).toISOString().slice(14, 23);
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
+
+function drawMediaBackground(
+  context: CanvasRenderingContext2D,
+  media: HTMLImageElement | HTMLVideoElement,
+  fit: "cover" | "contain"
+) {
+  const width =
+    media instanceof HTMLVideoElement ? media.videoWidth : media.naturalWidth;
+  const height =
+    media instanceof HTMLVideoElement ? media.videoHeight : media.naturalHeight;
+  if (!width || !height) return;
+  const scale =
+    fit === "contain"
+      ? Math.min(context.canvas.width / width, context.canvas.height / height)
+      : Math.max(context.canvas.width / width, context.canvas.height / height);
+  const renderedWidth = width * scale;
+  const renderedHeight = height * scale;
+  context.drawImage(
+    media,
+    (context.canvas.width - renderedWidth) / 2,
+    (context.canvas.height - renderedHeight) / 2,
+    renderedWidth,
+    renderedHeight
+  );
+}
+
+function waitForVideoSeek(video: HTMLVideoElement, seconds: number) {
+  return new Promise<void>((resolve) => {
+    if (Math.abs(video.currentTime - seconds) < 0.01) {
+      resolve();
+      return;
+    }
+    const finish = () => {
+      video.removeEventListener("seeked", finish);
+      resolve();
+    };
+    video.addEventListener("seeked", finish, { once: true });
+    video.currentTime = seconds;
+  });
+}
+
+function jpegBlob(canvas: HTMLCanvasElement) {
+  return new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", 0.9)
+  );
+}
 
 function optionalStyleScale(
   style: SubtitlePhrase["style"],
@@ -291,11 +341,12 @@ export function useBehavior(_: Record<string, never>) {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { timelineAutoFollow, setTimelineAutoFollow } = useTimelineAutoFollow();
-  const [data] = useAppContext();
+  const [data, setAppData] = useAppContext();
   const [editorData, setEditorData] = useEditorData();
   const [backgroundAssetUrl, setBackgroundAssetUrl] = useState<string | null>(
     null
   );
+  const [backgroundMediaReady, setBackgroundMediaReady] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportResolution, setExportResolution] = useState<
     "480p" | "720p" | "1080p" | "1440p"
@@ -421,6 +472,7 @@ export function useBehavior(_: Record<string, never>) {
   const instrumentalAudio = useRef<HTMLAudioElement>(null);
   const vocalsAudio = useRef<HTMLAudioElement>(null);
   const backgroundVideo = useRef<HTMLVideoElement>(null);
+  const backgroundImage = useRef<HTMLImageElement>(null);
   const previewCanvas = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const timelineLabelsRef = useRef<HTMLDivElement>(null);
@@ -430,12 +482,21 @@ export function useBehavior(_: Record<string, never>) {
   const timelineZoomingUntilRef = useRef(0);
   const lastVocalsHardSyncRef = useRef(Number.NEGATIVE_INFINITY);
   const saveTimerRef = useRef<number | null>(null);
+  const closingWindowRef = useRef(false);
   const phraseClipboardRef = useRef<SubtitlePhrase | null>(null);
   const historyRef = useRef<EditorHistoryEntry[]>([]);
+  const thumbnailCaptureKeyRef = useRef<string | null>(null);
 
   const setLiveProject = useCallback(
     (next: KaraokeProject) => {
-      const normalized = normalizeSubtitlePhraseOrder(next);
+      const normalizedProject = normalizeSubtitlePhraseOrder(next);
+      const thumbnail = isDesktop()
+        ? normalizedProject.thumbnail
+        : createProjectThumbnail(normalizedProject);
+      const normalized =
+        normalizedProject.thumbnail === thumbnail
+          ? normalizedProject
+          : { ...normalizedProject, thumbnail };
       projectRef.current = normalized;
       setProject(normalized);
       return normalized;
@@ -452,7 +513,9 @@ export function useBehavior(_: Record<string, never>) {
   );
   const applyProject = useCallback(
     (next: KaraokeProject, immediate = false) => {
-      const normalized = setLiveProject(next);
+      const normalized = setLiveProject(
+        isDesktop() ? { ...next, thumbnail: null } : next
+      );
       if (saveTimerRef.current !== null) {
         window.clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
@@ -499,11 +562,21 @@ export function useBehavior(_: Record<string, never>) {
         projectId,
         data.preferences.storageDirectory
       );
-      if (loaded) setLiveProject(loaded);
+      if (loaded) {
+        const normalized = setLiveProject(loaded);
+        if (normalized.thumbnail !== loaded.thumbnail)
+          saveProjectNow(normalized);
+        setAppData({ currentProject: { id: loaded.id, name: loaded.name } });
+      }
     } catch (reason) {
       setError(String(reason));
     }
-  }, [data.preferences.storageDirectory, projectId, setLiveProject]);
+  }, [
+    data.preferences.storageDirectory,
+    projectId,
+    setAppData,
+    setLiveProject,
+  ]);
 
   useEffect(() => {
     historyRef.current = [];
@@ -512,16 +585,59 @@ export function useBehavior(_: Record<string, never>) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  useEffect(() => {
+    if (
+      data.requestedEditorAction?.projectId !== projectId ||
+      data.requestedEditorAction.action !== "export" ||
+      !project
+    )
+      return;
+    setExportDialogOpen(true);
+    setAppData({ requestedEditorAction: null });
+  }, [data.requestedEditorAction, project, projectId, setAppData]);
   useEffect(
     () => () => {
       if (saveTimerRef.current !== null) {
         window.clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
-        if (projectRef.current) saveProjectNow(projectRef.current);
       }
+      if (projectRef.current) saveProjectNow(projectRef.current);
     },
     [saveProjectNow]
   );
+  const saveBeforeWindowClose = useCallback(async () => {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    if (!projectRef.current) return;
+    try {
+      await saveProject(projectRef.current, data.preferences.storageDirectory);
+    } catch (reason) {
+      setError(String(reason));
+      throw reason;
+    }
+  }, [data.preferences.storageDirectory]);
+  useEffect(
+    () => registerBeforeWindowClose(saveBeforeWindowClose),
+    [saveBeforeWindowClose]
+  );
+  const onMinimizeWindow = useCallback(() => {
+    void windowAction("minimize");
+  }, []);
+  const onToggleMaximizeWindow = useCallback(() => {
+    void windowAction("maximize");
+  }, []);
+  const onCloseWindow = useCallback(async () => {
+    if (closingWindowRef.current) return;
+    closingWindowRef.current = true;
+    try {
+      await saveBeforeWindowClose();
+      await windowAction("close");
+    } finally {
+      closingWindowRef.current = false;
+    }
+  }, [saveBeforeWindowClose]);
   useEffect(() => {
     let disposed = false;
     const objectUrls: string[] = [];
@@ -608,6 +724,19 @@ export function useBehavior(_: Record<string, never>) {
   const subtitleTracks = useMemo(
     () => project?.tracks.filter(isSubtitleTrack) ?? [],
     [project]
+  );
+  const firstPhraseStart = useMemo(
+    () =>
+      [...subtitleTracks]
+        .flatMap((track) => track.phrases)
+        .reduce<number | null>(
+          (earliest, phrase) =>
+            earliest === null || phrase.start < earliest
+              ? phrase.start
+              : earliest,
+          null
+        ),
+    [subtitleTracks]
   );
   const selectedProjectTrack = useMemo(
     () => project?.tracks.find((track) => track.id === selectedTrackId) ?? null,
@@ -706,10 +835,12 @@ export function useBehavior(_: Record<string, never>) {
       !["album-art", "image", "video"].includes(backgroundPreset)
     ) {
       setBackgroundAssetUrl(null);
+      setBackgroundMediaReady(false);
       return;
     }
     let disposed = false;
     let url: string | null = null;
+    setBackgroundMediaReady(false);
     void readProjectAsset(
       projectId,
       backgroundAsset,
@@ -733,6 +864,133 @@ export function useBehavior(_: Record<string, never>) {
     backgroundPreset,
     data.preferences.storageDirectory,
     projectId,
+  ]);
+  useEffect(() => {
+    if (
+      !isDesktop() ||
+      !project ||
+      firstPhraseStart === null ||
+      (["album-art", "image", "video"].includes(backgroundPreset) &&
+        !backgroundMediaReady)
+    )
+      return;
+    const captureKey = [
+      project.id,
+      project.updatedAt,
+      firstPhraseStart,
+      backgroundAssetUrl,
+    ].join(":");
+    if (thumbnailCaptureKeyRef.current === captureKey) return;
+    let disposed = false;
+    const capture = async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1280;
+      canvas.height = 720;
+      const context = canvas.getContext("2d");
+      if (!context) return;
+
+      if (backgroundPreset === "gradient") {
+        const gradient = context.createLinearGradient(
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        );
+        gradient.addColorStop(
+          0,
+          projectBackgroundTrack?.gradientStart ?? "#273660"
+        );
+        gradient.addColorStop(
+          1,
+          projectBackgroundTrack?.gradientEnd ?? "#0b1732"
+        );
+        context.fillStyle = gradient;
+      } else {
+        context.fillStyle = projectBackgroundTrack?.color ?? "#0b1732";
+      }
+      context.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (backgroundPreset === "video" && backgroundVideo.current) {
+        const video = backgroundVideo.current;
+        const previousTime = video.currentTime;
+        const duration = video.duration;
+        const targetTime =
+          Number.isFinite(duration) && duration > 0
+            ? (firstPhraseStart / 1000) % duration
+            : firstPhraseStart / 1000;
+        await waitForVideoSeek(video, targetTime);
+        if (disposed) return;
+        drawMediaBackground(context, video, backgroundFit);
+        void waitForVideoSeek(video, previousTime);
+      }
+      if (
+        ["album-art", "image"].includes(backgroundPreset) &&
+        backgroundImage.current
+      ) {
+        drawMediaBackground(context, backgroundImage.current, backgroundFit);
+      }
+
+      subtitleTracks
+        .sort((left, right) => left.zIndex - right.zIndex)
+        .forEach((track) => {
+          const preview = subtitlePreviewView(track, firstPhraseStart);
+          const phrase = preview.playingPhrase;
+          if (!preview.visible || !phrase) return;
+          const style = resolveSubtitleStyle(track.style, phrase.style);
+          const x =
+            canvas.width / 2 +
+            (style.x / style.positionReferenceWidth) * canvas.width;
+          const y =
+            canvas.height * 0.38 +
+            (style.y / style.positionReferenceHeight) * canvas.height;
+          context.save();
+          context.textAlign = "center";
+          context.textBaseline = "middle";
+          context.font = `800 ${Math.round(canvas.width * 0.03 * style.scale)}px sans-serif`;
+          context.lineJoin = "round";
+          context.lineWidth = Math.max(2, canvas.width * 0.003);
+          context.strokeStyle = "#000000";
+          context.shadowColor = "#000000";
+          context.shadowBlur = canvas.width * 0.01;
+          context.strokeText(phrase.text, x, y);
+          context.fillStyle = style.unreadColor;
+          context.fillText(phrase.text, x, y);
+          context.restore();
+        });
+
+      const thumbnail = await jpegBlob(canvas);
+      if (!thumbnail || disposed) return;
+      await saveProjectThumbnail(
+        project.id,
+        thumbnail,
+        data.preferences.storageDirectory
+      );
+      thumbnailCaptureKeyRef.current = captureKey;
+      const latestProject = projectRef.current;
+      if (latestProject?.id === project.id) {
+        const withThumbnail = { ...latestProject, thumbnail: "preview.jpg" };
+        projectRef.current = withThumbnail;
+        setProject(withThumbnail);
+      }
+    };
+    void capture().catch((reason) => {
+      if (!disposed) setError(String(reason));
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [
+    backgroundAssetUrl,
+    backgroundFit,
+    backgroundMediaReady,
+    backgroundPreset,
+    data.preferences.storageDirectory,
+    firstPhraseStart,
+    project,
+    projectBackgroundTrack,
+    setProject,
+    setError,
+    subtitleTracks,
   ]);
   const animationTemplate: SubtitleAnimationTemplate =
     subtitleTrack?.animation?.template ?? "template-1";
@@ -950,8 +1208,8 @@ export function useBehavior(_: Record<string, never>) {
   const updateScopedStyle = useCallback(
     (
       scope: SubtitlePropertyScope,
-      property: "unreadColor" | "readColor" | "x" | "y" | "hasCaret",
-      value: string | number | boolean
+      property: "unreadColor" | "readColor" | "x" | "y",
+      value: string | number
     ) => {
       const currentProject = projectRef.current;
       if (!currentProject || !subtitleTrack) return;
@@ -1245,7 +1503,6 @@ export function useBehavior(_: Record<string, never>) {
         scale: 1,
         x: 0,
         y: 30 + subtitleTracks.length * 72,
-        hasCaret: false,
       },
       curve: "linear",
       animation: { template: "template-1" },
@@ -1998,9 +2255,14 @@ export function useBehavior(_: Record<string, never>) {
     setError(null);
   }, []);
   const onBackgroundVideoLoadedMetadata = useCallback(() => {
+    setBackgroundMediaReady(true);
     syncBackgroundVideoTime(currentTimeRef.current / 1000);
     if (isPlaying) void backgroundVideo.current?.play().catch(() => undefined);
   }, [isPlaying, syncBackgroundVideoTime]);
+  const onBackgroundImageLoaded = useCallback(
+    () => setBackgroundMediaReady(true),
+    []
+  );
   const onSkipBack = useCallback(
     () => onSeek(currentTime - 5_000),
     [currentTime, onSeek]
@@ -2314,6 +2576,8 @@ export function useBehavior(_: Record<string, never>) {
     instrumentalAudio,
     vocalsAudio,
     backgroundVideo,
+    backgroundImage,
+    onBackgroundImageLoaded,
     previewCanvas,
     timelineRef,
     timelineLabelsRef,
@@ -2389,6 +2653,9 @@ export function useBehavior(_: Record<string, never>) {
     exportCompletedLabel: t("editor.exportCompleted"),
     exportFailedLabel: t("editor.exportFailed"),
     zoomLabel: `${Math.round(timelineZoom * 100)}%`,
+    minimizeWindowLabel: t("appLayout.window.minimize"),
+    maximizeWindowLabel: t("appLayout.window.maximize"),
+    closeWindowLabel: t("appLayout.window.close"),
     zoomResetLabel: t("editor.zoomReset"),
     zoomHint: t("editor.zoomHint"),
     timelineAutoFollowLabel: t("editor.timelineAutoFollow"),
@@ -2458,7 +2725,6 @@ export function useBehavior(_: Record<string, never>) {
     readLabel: t("editor.readColor"),
     positionXLabel: t("editor.positionX"),
     positionYLabel: t("editor.positionY"),
-    caretLabel: t("editor.caret"),
     trackStyleLabel: t("editor.trackStyle"),
     phraseStyleLabel: t("editor.phraseStyle"),
     wordStyleLabel: t("editor.wordStyle", {
@@ -2529,6 +2795,9 @@ export function useBehavior(_: Record<string, never>) {
     onBackgroundPresetChange,
     onBackgroundAssetImport,
     onBackgroundChange: updateBackground,
+    onMinimizeWindow,
+    onToggleMaximizeWindow,
+    onCloseWindow,
     onBack,
     onTextInput: (event: ChangeEvent<HTMLTextAreaElement>) =>
       onUpdatePhraseText(event.target.value),

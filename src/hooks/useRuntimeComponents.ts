@@ -12,6 +12,7 @@ import { useRecursiveState } from "./useRecursiveState";
 
 interface RuntimeComponentsState extends Record<string, unknown> {
   components: RuntimeComponentStatus[];
+  loading: boolean;
   checking: boolean;
   checkupCompleted: boolean;
   error: string | null;
@@ -22,6 +23,7 @@ export function useRuntimeComponents() {
   const [data] = useAppContext();
   const [state, setState] = useRecursiveState<RuntimeComponentsState>({
     components: [],
+    loading: true,
     checking: false,
     checkupCompleted: false,
     error: null,
@@ -30,11 +32,13 @@ export function useRuntimeComponents() {
   const storageDirectory = data.preferences.storageDirectory;
 
   const refresh = useCallback(async () => {
+    setState({ loading: true, error: null });
     try {
       const components = await getRuntimeComponents(storageDirectory);
-      setState({ components, error: null });
+      setState({ components, error: null, loading: false });
     } catch (error) {
       setState({
+        loading: false,
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -91,6 +95,7 @@ export function useRuntimeComponents() {
 
   return {
     components: state.components,
+    loading: state.loading,
     checking: state.checking,
     checkupCompleted: state.checkupCompleted,
     error: state.error,
