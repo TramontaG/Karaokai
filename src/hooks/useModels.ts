@@ -1,5 +1,4 @@
-import { listen } from "@tauri-apps/api/event";
-import { isTauri } from "@tauri-apps/api/core";
+import { isDesktop, listenDesktop } from "../services/desktop";
 import { useCallback, useEffect, useRef } from "react";
 import {
   downloadModel,
@@ -27,10 +26,10 @@ export function useModels() {
   }, [refresh]);
 
   useEffect(() => {
-    if (!isTauri()) return;
+    if (!isDesktop()) return;
     let disposed = false;
     let unlisten: (() => void) | undefined;
-    void listen<InstallProgress>("runtime-install-progress", (event) => {
+    void listenDesktop<InstallProgress>("runtime-install-progress", (event) => {
       const { componentId, progress, stage } = event.payload;
       const currentModels = modelsRef.current;
       if (!currentModels.some((model) => model.id === componentId)) {

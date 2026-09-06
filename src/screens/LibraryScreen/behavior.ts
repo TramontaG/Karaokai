@@ -1,9 +1,20 @@
 import { useNavigate } from "@tanstack/react-router";
-import { createElement, useCallback, useEffect } from "react";
+import {
+  createElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { useAppContext } from "../../hooks/useAppContext";
 import { useProjectViewMode } from "../../hooks/useProjectViewMode";
 import { useRecursiveState } from "../../hooks/useRecursiveState";
 import { useTranslation } from "../../hooks/useTranslation";
-import { type TranslationKey } from "../../i18n/languagePacks";
+import {
+  deleteProject,
+  listProjects,
+  type ProjectSummary,
+} from "../../services/projects";
 import { ProjectGridCard } from "./components/ProjectGridCard";
 import { ProjectListRow } from "./components/ProjectListRow";
 import {
@@ -13,255 +24,118 @@ import {
   type ProjectItem,
 } from "./types";
 
-interface ProjectDefinition {
-  id: string;
-  titleKey: TranslationKey;
-  artistKey: TranslationKey;
-  updatedKey: TranslationKey;
-  duration: string;
-  cover: ProjectCover;
-  isFavorite: boolean;
-  isRecent: boolean;
-  isMine: boolean;
-}
-
 interface LibraryState extends Record<string, unknown> {
   activeFilter: ProjectFilter;
   openMenuProjectId: string | null;
   favoriteIds: string[];
 }
 
-const projectDefinitions: ProjectDefinition[] = [
-  {
-    id: "bohemian-rhapsody",
-    titleKey: "home.demo.bohemianRhapsody.title",
-    artistKey: "home.demo.bohemianRhapsody.artist",
-    updatedKey: "projects.updated.twoDays",
-    duration: "04:21",
-    cover: "violet-sunset",
-    isFavorite: true,
-    isRecent: true,
-    isMine: true,
-  },
-  {
-    id: "blinding-lights",
-    titleKey: "home.demo.blindingLights.title",
-    artistKey: "home.demo.blindingLights.artist",
-    updatedKey: "projects.updated.fiveDays",
-    duration: "03:36",
-    cover: "neon-city",
-    isFavorite: false,
-    isRecent: true,
-    isMine: true,
-  },
-  {
-    id: "hotel-california",
-    titleKey: "home.demo.hotelCalifornia.title",
-    artistKey: "home.demo.hotelCalifornia.artist",
-    updatedKey: "projects.updated.oneWeek",
-    duration: "05:28",
-    cover: "orange-road",
-    isFavorite: false,
-    isRecent: true,
-    isMine: true,
-  },
-  {
-    id: "sweet-child-o-mine",
-    titleKey: "home.demo.sweetChild.title",
-    artistKey: "home.demo.sweetChild.artist",
-    updatedKey: "projects.updated.oneWeek",
-    duration: "04:15",
-    cover: "misty-forest",
-    isFavorite: false,
-    isRecent: true,
-    isMine: true,
-  },
-  {
-    id: "creep",
-    titleKey: "home.demo.creep.title",
-    artistKey: "home.demo.creep.artist",
-    updatedKey: "projects.updated.twoWeeks",
-    duration: "03:52",
-    cover: "night-sky",
-    isFavorite: false,
-    isRecent: true,
-    isMine: true,
-  },
-  {
-    id: "yellow",
-    titleKey: "projects.demo.yellow.title",
-    artistKey: "projects.demo.yellow.artist",
-    updatedKey: "projects.updated.twoWeeks",
-    duration: "04:03",
-    cover: "blue-jellyfish",
-    isFavorite: false,
-    isRecent: true,
-    isMine: true,
-  },
-  {
-    id: "lose-yourself",
-    titleKey: "projects.demo.loseYourself.title",
-    artistKey: "projects.demo.loseYourself.artist",
-    updatedKey: "projects.updated.threeWeeks",
-    duration: "03:20",
-    cover: "pink-moon",
-    isFavorite: false,
-    isRecent: false,
-    isMine: true,
-  },
-  {
-    id: "back-in-black",
-    titleKey: "projects.demo.backInBlack.title",
-    artistKey: "projects.demo.backInBlack.artist",
-    updatedKey: "projects.updated.threeWeeks",
-    duration: "04:37",
-    cover: "red-silhouette",
-    isFavorite: true,
-    isRecent: false,
-    isMine: true,
-  },
-  {
-    id: "dont-stop-believin",
-    titleKey: "projects.demo.dontStopBelievin.title",
-    artistKey: "projects.demo.dontStopBelievin.artist",
-    updatedKey: "projects.updated.oneMonth",
-    duration: "03:17",
-    cover: "palm-sunset",
-    isFavorite: false,
-    isRecent: false,
-    isMine: true,
-  },
-  {
-    id: "thunderstruck",
-    titleKey: "projects.demo.thunderstruck.title",
-    artistKey: "projects.demo.thunderstruck.artist",
-    updatedKey: "projects.updated.oneMonth",
-    duration: "06:12",
-    cover: "purple-mountain",
-    isFavorite: false,
-    isRecent: false,
-    isMine: true,
-  },
-  {
-    id: "fix-you",
-    titleKey: "projects.demo.fixYou.title",
-    artistKey: "projects.demo.fixYou.artist",
-    updatedKey: "projects.updated.oneMonth",
-    duration: "04:08",
-    cover: "magenta-flower",
-    isFavorite: false,
-    isRecent: false,
-    isMine: true,
-  },
-  {
-    id: "someone-like-you",
-    titleKey: "projects.demo.someoneLikeYou.title",
-    artistKey: "projects.demo.someoneLikeYou.artist",
-    updatedKey: "projects.updated.twoMonths",
-    duration: "04:45",
-    cover: "ocean-dusk",
-    isFavorite: false,
-    isRecent: false,
-    isMine: true,
-  },
+const covers: ProjectCover[] = [
+  "violet-sunset",
+  "neon-city",
+  "orange-road",
+  "misty-forest",
+  "night-sky",
 ];
-
-const initialFavoriteIds = projectDefinitions
-  .filter((project) => project.isFavorite)
-  .map((project) => project.id);
+const formatDuration = (milliseconds: number) =>
+  new Date(milliseconds).toISOString().slice(14, 19);
+const isRecent = (updatedAt: string) =>
+  Date.now() - Number(updatedAt) < 7 * 24 * 60 * 60 * 1000;
 
 function filterProjects(projects: ProjectItem[], filter: ProjectFilter) {
-  switch (filter) {
-    case "recent":
-      return projects.filter((project) => project.isRecent);
-    case "favorites":
-      return projects.filter((project) => project.isFavorite);
-    case "mine":
-      return projects.filter((project) => project.isMine);
-    default:
-      return projects;
-  }
+  if (filter === "recent")
+    return projects.filter((project) => project.isRecent);
+  if (filter === "favorites")
+    return projects.filter((project) => project.isFavorite);
+  if (filter === "mine") return projects.filter((project) => project.isMine);
+  return projects;
 }
 
 export function useBehavior(_: Record<string, never>) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [data] = useAppContext();
   const { projectViewMode, setProjectViewMode } = useProjectViewMode();
+  const [storedProjects, setStoredProjects] = useState<ProjectSummary[]>([]);
   const [state, setState] = useRecursiveState<LibraryState>({
     activeFilter: "all",
     openMenuProjectId: null,
-    favoriteIds: initialFavoriteIds,
+    favoriteIds: [],
   });
-  const projects = projectDefinitions.map<ProjectItem>((project) => ({
-    id: project.id,
-    title: t(project.titleKey),
-    artist: t(project.artistKey),
-    updated: t(project.updatedKey),
-    duration: project.duration,
-    cover: project.cover,
-    isFavorite: state.favoriteIds.includes(project.id),
-    isRecent: project.isRecent,
-    isMine: project.isMine,
-  }));
+  const refresh = useCallback(() => {
+    void listProjects(data.preferences.storageDirectory)
+      .then(setStoredProjects)
+      .catch(() => setStoredProjects([]));
+  }, [data.preferences.storageDirectory]);
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+  const projects = useMemo(
+    () =>
+      storedProjects.map<ProjectItem>((project, index) => ({
+        id: project.id,
+        title: project.name,
+        artist: t("projects.localProject"),
+        duration: formatDuration(project.duration),
+        updated: Number(project.updatedAt)
+          ? new Date(Number(project.updatedAt)).toLocaleString()
+          : t("projects.updated.now"),
+        cover: covers[index % covers.length],
+        isFavorite: state.favoriteIds.includes(project.id),
+        isRecent: isRecent(project.updatedAt),
+        isMine: true,
+      })),
+    [state.favoriteIds, storedProjects, t]
+  );
   const visibleProjects = filterProjects(projects, state.activeFilter);
-
-  const onShowAll = useCallback(
-    () => setState({ activeFilter: "all" }),
+  const setFilter = useCallback(
+    (activeFilter: ProjectFilter) => setState({ activeFilter }),
     [setState]
   );
-  const onShowRecent = useCallback(
-    () => setState({ activeFilter: "recent" }),
-    [setState]
-  );
-  const onShowFavorites = useCallback(
-    () => setState({ activeFilter: "favorites" }),
-    [setState]
-  );
-  const onShowMine = useCallback(
-    () => setState({ activeFilter: "mine" }),
-    [setState]
-  );
-  const onShowGrid = useCallback(
-    () => setProjectViewMode("grid"),
-    [setProjectViewMode]
-  );
-  const onShowList = useCallback(
-    () => setProjectViewMode("list"),
-    [setProjectViewMode]
-  );
-  const onNewProject = useCallback(() => {
-    void navigate({ to: "/" });
-  }, [navigate]);
   const onToggleActions = useCallback(
-    (projectId: string) => {
+    (projectId: string) =>
       setState({
         openMenuProjectId:
           state.openMenuProjectId === projectId ? null : projectId,
-      });
-    },
+      }),
     [setState, state.openMenuProjectId]
   );
   const onAction = useCallback(
-    (projectId: string, action: ProjectAction) => {
-      if (action === "open") {
+    async (projectId: string, action: ProjectAction) => {
+      if (action === "open")
         void navigate({
           to: "/projects/$projectId/editor",
           params: { projectId },
         });
-      }
-
-      if (action === "favorite") {
-        const isFavorite = state.favoriteIds.includes(projectId);
+      if (action === "favorite")
         setState({
-          favoriteIds: isFavorite
+          favoriteIds: state.favoriteIds.includes(projectId)
             ? state.favoriteIds.filter((id) => id !== projectId)
             : [...state.favoriteIds, projectId],
         });
+      if (action === "delete") {
+        const project = projects.find((item) => item.id === projectId);
+        if (
+          project &&
+          window.confirm(
+            t("projects.deleteConfirmation", { project: project.title })
+          )
+        ) {
+          await deleteProject(projectId, data.preferences.storageDirectory);
+          refresh();
+        }
       }
-
       setState({ openMenuProjectId: null });
     },
-    [navigate, setState, state.favoriteIds]
+    [
+      data.preferences.storageDirectory,
+      navigate,
+      projects,
+      refresh,
+      setState,
+      state.favoriteIds,
+      t,
+    ]
   );
   const renderGridProject = useCallback(
     (project: ProjectItem) =>
@@ -283,19 +157,10 @@ export function useBehavior(_: Record<string, never>) {
       }),
     [onAction, onToggleActions, state.openMenuProjectId]
   );
-  const getProjectId = useCallback((project: ProjectItem) => project.id, []);
-
-  useEffect(() => {
-    const closeMenu = (event: PointerEvent) => {
-      const target = event.target as Element | null;
-      if (!target?.closest("[data-project-actions]")) {
-        setState({ openMenuProjectId: null });
-      }
-    };
-
-    document.addEventListener("pointerdown", closeMenu);
-    return () => document.removeEventListener("pointerdown", closeMenu);
-  }, [setState]);
+  const onNewProject = useCallback(
+    () => void navigate({ to: "/" }),
+    [navigate]
+  );
 
   return {
     title: t("projects.title"),
@@ -321,7 +186,7 @@ export function useBehavior(_: Record<string, never>) {
     localLabel: t("projects.empty.local"),
     privateLabel: t("projects.empty.private"),
     unlimitedLabel: t("projects.empty.unlimited"),
-    projectCount: projects.length.toString(),
+    projectCount: String(projects.length),
     visibleProjects,
     hasProjects: projects.length > 0,
     hasNoProjects: projects.length === 0,
@@ -331,14 +196,14 @@ export function useBehavior(_: Record<string, never>) {
     mineActive: state.activeFilter === "mine",
     gridActive: projectViewMode === "grid",
     listActive: projectViewMode === "list",
-    onShowAll,
-    onShowRecent,
-    onShowFavorites,
-    onShowMine,
-    onShowGrid,
-    onShowList,
+    onShowAll: () => setFilter("all"),
+    onShowRecent: () => setFilter("recent"),
+    onShowFavorites: () => setFilter("favorites"),
+    onShowMine: () => setFilter("mine"),
+    onShowGrid: () => setProjectViewMode("grid"),
+    onShowList: () => setProjectViewMode("list"),
     onNewProject,
-    getProjectId,
+    getProjectId: (project: ProjectItem) => project.id,
     renderGridProject,
     renderListProject,
   };

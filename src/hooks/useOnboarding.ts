@@ -1,5 +1,4 @@
-import { listen } from "@tauri-apps/api/event";
-import { isTauri } from "@tauri-apps/api/core";
+import { isDesktop, listenDesktop } from "../services/desktop";
 import { useCallback, useEffect } from "react";
 import { bootstrapApplication } from "../services/bootstrap";
 import { installRuntime, type InstallProgress } from "../services/models";
@@ -14,9 +13,9 @@ export function useOnboarding() {
   const { removeDownloads } = useDownloadedData();
 
   useEffect(() => {
-    if (!isTauri()) return;
+    if (!isDesktop()) return;
     let dispose: (() => void) | undefined;
-    void listen<InstallProgress>("runtime-install-progress", (event) => {
+    void listenDesktop<InstallProgress>("runtime-install-progress", (event) => {
       const progress = event.payload;
       if (progress.jobId !== "runtime-bootstrap") return;
       if (
@@ -138,7 +137,7 @@ export function useOnboarding() {
     });
     try {
       await installRuntime(modelId, data.preferences.storageDirectory);
-      if (!isTauri()) {
+      if (!isDesktop()) {
         setData({
           onboarding: {
             step: "success",

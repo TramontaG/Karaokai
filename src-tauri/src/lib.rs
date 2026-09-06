@@ -1,7 +1,83 @@
+mod projects;
 mod runtime_installer;
 
 use runtime_installer::{BootstrapReport, ModelStatus, RuntimeComponentStatus};
-use tauri::AppHandle;
+use tauri::{AppHandle, State};
+
+#[tauri::command]
+fn create_local_project(
+    app: AppHandle,
+    source_path: String,
+    storage_directory: Option<String>,
+    whisper_model_id: String,
+    demucs_model_id: String,
+) -> Result<projects::Project, String> {
+    projects::create_local_project(
+        app,
+        source_path,
+        storage_directory,
+        whisper_model_id,
+        demucs_model_id,
+    )
+}
+
+#[tauri::command]
+fn load_project(
+    app: AppHandle,
+    project_id: String,
+    storage_directory: Option<String>,
+) -> Result<projects::Project, String> {
+    projects::load_project(app, project_id, storage_directory)
+}
+
+#[tauri::command]
+fn project_audio_sources(
+    app: AppHandle,
+    registry: State<'_, projects::ProjectAudioSourceRegistry>,
+    project_id: String,
+    storage_directory: Option<String>,
+) -> Result<projects::ProjectAudioSources, String> {
+    projects::project_audio_sources(app, registry.inner(), project_id, storage_directory)
+}
+
+#[tauri::command]
+fn read_project_audio(
+    registry: State<'_, projects::ProjectAudioSourceRegistry>,
+    source_id: String,
+) -> Result<tauri::ipc::Response, String> {
+    let path = registry
+        .get(&source_id)
+        .ok_or_else(|| "Audio source is not registered for this project".to_string())?;
+    let bytes = std::fs::read(path)
+        .map_err(|error| format!("Unable to read project audio: {error}"))?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[tauri::command]
+fn list_projects(
+    app: AppHandle,
+    storage_directory: Option<String>,
+) -> Result<Vec<projects::ProjectSummary>, String> {
+    projects::list_projects(app, storage_directory)
+}
+
+#[tauri::command]
+fn save_project(
+    app: AppHandle,
+    project: projects::Project,
+    storage_directory: Option<String>,
+) -> Result<(), String> {
+    projects::save_project(app, project, storage_directory)
+}
+
+#[tauri::command]
+fn delete_project(
+    app: AppHandle,
+    project_id: String,
+    storage_directory: Option<String>,
+) -> Result<(), String> {
+    projects::delete_project(app, project_id, storage_directory)
+}
 
 async fn run_blocking<T, F>(operation: F) -> Result<T, String>
 where
@@ -117,8 +193,16 @@ async fn remove_model(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(projects::ProjectAudioSourceRegistry::default())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            create_local_project,
+            load_project,
+            project_audio_sources,
+            read_project_audio,
+            list_projects,
+            save_project,
+            delete_project,
             bootstrap_app,
             list_models,
             start_model_download,

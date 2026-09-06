@@ -1,4 +1,4 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { invokeDesktop, isDesktop } from "./desktop";
 
 export interface ModelStatus {
   id: string;
@@ -92,32 +92,38 @@ const previewModels: ModelStatus[] = [
   },
 ];
 export const getModels = (storageDirectory: string | null) =>
-  isTauri()
-    ? invoke<ModelStatus[]>("list_models", { storageDirectory })
+  isDesktop()
+    ? invokeDesktop<ModelStatus[]>("list_models", { storageDirectory })
     : Promise.resolve(previewModels);
 export const downloadModel = (
   modelId: string,
   storageDirectory: string | null
 ) =>
-  isTauri()
-    ? invoke<string>("start_model_download", { modelId, storageDirectory })
+  isDesktop()
+    ? invokeDesktop<string>("start_model_download", {
+        modelId,
+        storageDirectory,
+      })
     : Promise.resolve(`preview-${modelId}`);
 export const installRuntime = (
   modelId: string,
   storageDirectory: string | null
 ) =>
-  isTauri()
-    ? invoke<string>("start_runtime_install", { modelId, storageDirectory })
+  isDesktop()
+    ? invokeDesktop<string>("start_runtime_install", {
+        modelId,
+        storageDirectory,
+      })
     : Promise.resolve("preview-runtime-bootstrap");
 export const clearDownloadedData = (storageDirectory: string | null) =>
-  isTauri()
-    ? invoke<void>("clear_downloaded_data", { storageDirectory })
+  isDesktop()
+    ? invokeDesktop<void>("clear_downloaded_data", { storageDirectory })
     : Promise.resolve();
 
 export const removeModel = (
   modelId: string,
   storageDirectory: string | null
 ) =>
-  isTauri()
-    ? invoke<void>("remove_model", { modelId, storageDirectory })
+  isDesktop()
+    ? invokeDesktop<void>("remove_model", { modelId, storageDirectory })
     : Promise.resolve();

@@ -1,65 +1,38 @@
-import { createElement } from "react";
+import { createElement, useEffect, useState } from "react";
+import { useAppContext } from "../../hooks/useAppContext";
 import { useTranslation } from "../../hooks/useTranslation";
-import { type TranslationKey } from "../../i18n/languagePacks";
+import { listProjects, type ProjectSummary } from "../../services/projects";
 import { ProjectCard } from "./components/ProjectCard";
 import { type RecentProject } from "./components/ProjectCard/behavior";
 
-interface ProjectDefinition {
-  id: string;
-  titleKey: TranslationKey;
-  artistKey: TranslationKey;
-  duration: string;
-  cover: RecentProject["cover"];
-}
-
-const projectDefinitions: ProjectDefinition[] = [
-  {
-    id: "bohemian-rhapsody",
-    titleKey: "home.demo.bohemianRhapsody.title",
-    artistKey: "home.demo.bohemianRhapsody.artist",
-    duration: "04:21",
-    cover: "violet-sunset",
-  },
-  {
-    id: "blinding-lights",
-    titleKey: "home.demo.blindingLights.title",
-    artistKey: "home.demo.blindingLights.artist",
-    duration: "03:36",
-    cover: "neon-city",
-  },
-  {
-    id: "hotel-california",
-    titleKey: "home.demo.hotelCalifornia.title",
-    artistKey: "home.demo.hotelCalifornia.artist",
-    duration: "05:28",
-    cover: "orange-road",
-  },
-  {
-    id: "sweet-child-o-mine",
-    titleKey: "home.demo.sweetChild.title",
-    artistKey: "home.demo.sweetChild.artist",
-    duration: "04:15",
-    cover: "misty-forest",
-  },
-  {
-    id: "creep",
-    titleKey: "home.demo.creep.title",
-    artistKey: "home.demo.creep.artist",
-    duration: "03:52",
-    cover: "night-sky",
-  },
+const covers: RecentProject["cover"][] = [
+  "violet-sunset",
+  "neon-city",
+  "orange-road",
+  "misty-forest",
+  "night-sky",
 ];
+const formatDuration = (milliseconds: number) =>
+  new Date(milliseconds).toISOString().slice(14, 19);
 
 export function useBehavior(_: Record<string, never>) {
   const { t } = useTranslation();
-  const recentProjects = projectDefinitions.map((project) => ({
-    id: project.id,
-    title: t(project.titleKey),
-    artist: t(project.artistKey),
-    duration: project.duration,
-    cover: project.cover,
-  }));
-
+  const [data] = useAppContext();
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  useEffect(() => {
+    void listProjects(data.preferences.storageDirectory)
+      .then(setProjects)
+      .catch(() => setProjects([]));
+  }, [data.preferences.storageDirectory]);
+  const recentProjects = projects
+    .slice(0, 5)
+    .map<RecentProject>((project, index) => ({
+      id: project.id,
+      title: project.name,
+      artist: t("projects.localProject"),
+      duration: formatDuration(project.duration),
+      cover: covers[index % covers.length],
+    }));
   return {
     titlePrefix: t("home.hero.titlePrefix"),
     titleHighlight: t("home.hero.titleHighlight"),

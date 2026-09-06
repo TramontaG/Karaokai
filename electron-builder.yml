@@ -1,0 +1,33 @@
+appId: com.karaokai.app
+productName: KaraokAI
+asar: true
+
+directories:
+  output: release
+
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+
+extraResources:
+  - from: worker
+    to: worker
+
+linux:
+  category: AudioVideo
+  icon: src-tauri/icons/icon.png
+  syncDesktopName: true
+  target:
+    - AppImage
+    - deb
+
+mac:
+  icon: src-tauri/icons/icon.icns
+  target: dmg
+
+win:
+  icon: src-tauri/icons/icon.ico
+  target: nsis
+
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}

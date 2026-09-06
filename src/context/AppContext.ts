@@ -13,7 +13,7 @@ export interface BootstrapData {
   dataDirectory: string | null;
   operatingSystem: string | null;
   architecture: string | null;
-  runtimeProfile: "cpu" | null;
+  runtimeProfile: "cpu" | "cuda" | null;
   error: string | null;
 }
 export interface OnboardingData {

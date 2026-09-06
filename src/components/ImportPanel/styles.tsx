@@ -5,7 +5,7 @@ export const ImportShell = styled.section`
   margin: 2rem auto 0;
 `;
 
-export const DropArea = styled.label`
+export const DropArea = styled.section`
   display: flex;
   min-height: 19rem;
   padding: 2rem;
@@ -65,13 +65,19 @@ export const DropTitle = styled.h2`
   font-weight: 650;
 `;
 
+export const ImportError = styled.p`
+  margin: 0.75rem 0 0;
+  color: #ff839a;
+  font-size: 0.78rem;
+`;
+
 export const FormatText = styled.p`
   margin: 0.55rem 0 1.1rem;
   color: ${({ theme }) => theme.colors.textMuted};
   font-size: 0.78rem;
 `;
 
-export const ChooseFile = styled.span`
+export const ChooseFile = styled.button`
   display: inline-flex;
   min-width: 12rem;
   padding: 0.76rem 1rem;
@@ -80,10 +86,12 @@ export const ChooseFile = styled.span`
   justify-content: center;
   gap: 0.65rem;
   color: #21152b;
+  border: 0;
   background: linear-gradient(120deg, #bd65f2 0%, #dc8dff 48%, #c96df5 100%);
   box-shadow: 0 0.45rem 1.25rem rgb(190 91 242 / 18%);
   font-size: 0.78rem;
   font-weight: 650;
+  cursor: pointer;
 `;
 
 export const Separator = styled.div`

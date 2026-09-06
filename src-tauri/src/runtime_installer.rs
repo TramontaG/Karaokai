@@ -23,10 +23,11 @@ const PYTHON_VERSION: &str = "3.11.16";
 const IMAGEIO_FFMPEG_VERSION: &str = "0.6.0";
 const FFMPEG_RUNTIME_VERSION: &str = "7.0.2";
 const YT_DLP_VERSION: &str = "2026.8.19";
-const ML_WORKER_VERSION: &str = "0.1.0";
+const ML_WORKER_VERSION: &str = "0.3.1";
 const TORCH_VERSION: &str = "2.5.1";
 const TORCHAUDIO_VERSION: &str = "2.5.1";
 const PYTORCH_CPU_INDEX: &str = "https://download.pytorch.org/whl/cpu";
+const PYTORCH_CUDA_INDEX: &str = "https://download.pytorch.org/whl/cu124";
 const WHISPER_STANDARD_FILES: [&str; 4] = [
     "config.json",
     "model.bin",
@@ -268,8 +269,47 @@ fn data_directory(app: &AppHandle, storage_directory: Option<String>) -> Result<
     }
 }
 
+pub(crate) fn project_data_directory(
+    app: &AppHandle,
+    storage_directory: Option<String>,
+) -> Result<PathBuf, String> {
+    data_directory(app, storage_directory)
+}
+
 fn model_directory(root: &Path, model_id: &str) -> PathBuf {
     root.join("models").join("whisper").join(model_id)
+}
+
+pub(crate) fn project_pipeline_models(
+    app: &AppHandle,
+    root: &Path,
+    whisper_model_id: &str,
+    demucs_model_id: &str,
+) -> Result<(PathBuf, String), String> {
+    ensure_torch(app, root)?;
+    ensure_worker(app, root)?;
+    let whisper = find_model(whisper_model_id)?;
+    let whisper_directory = model_directory(root, whisper.id);
+    if !model_installed(&whisper_directory, &whisper) {
+        return Err(format!(
+            "The selected Whisper model ({whisper_model_id}) is not installed"
+        ));
+    }
+    let demucs = find_demucs_model(demucs_model_id)?;
+    if !demucs_model_installed(root, &demucs) {
+        return Err(format!(
+            "The selected Demucs model ({demucs_model_id}) is not installed"
+        ));
+    }
+    Ok((whisper_directory, demucs.model_name.to_string()))
+}
+
+pub(crate) fn project_python_command(root: &Path) -> Command {
+    python_command(root)
+}
+
+pub(crate) fn project_ffmpeg_command(root: &Path) -> Command {
+    Command::new(ffmpeg_binary(root))
 }
 
 fn model_installed(directory: &Path, model: &ModelDefinition) -> bool {
@@ -1039,8 +1079,40 @@ fn python_imports_succeed(root: &Path, modules: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn nvidia_gpu_available() -> bool {
+    if !cfg!(any(target_os = "linux", target_os = "windows")) {
+        return false;
+    }
+    Command::new("nvidia-smi")
+        .arg("-L")
+        .output()
+        .map(|output| output.status.success() && !output.stdout.is_empty())
+        .unwrap_or(false)
+}
+
+fn torch_cuda_available(root: &Path) -> bool {
+    let mut command = python_command(root);
+    command
+        .arg("-c")
+        .arg("import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)")
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+fn pytorch_index() -> &'static str {
+    if nvidia_gpu_available() {
+        PYTORCH_CUDA_INDEX
+    } else {
+        PYTORCH_CPU_INDEX
+    }
+}
+
 fn ensure_torch(app: &AppHandle, root: &Path) -> Result<(), String> {
-    if python_imports_succeed(root, "torch, torchaudio") {
+    let cuda_requested = nvidia_gpu_available();
+    if python_imports_succeed(root, "torch, torchaudio")
+        && (!cuda_requested || torch_cuda_available(root))
+    {
         emit_progress(
             app,
             RUNTIME_INSTALL_JOB_ID,
@@ -1059,10 +1131,11 @@ fn ensure_torch(app: &AppHandle, root: &Path) -> Result<(), String> {
         .arg("install")
         .arg("--python")
         .arg(environment_python(root))
+        .arg("--reinstall")
         .arg(format!("torch=={TORCH_VERSION}"))
         .arg(format!("torchaudio=={TORCHAUDIO_VERSION}"));
     if !cfg!(target_os = "macos") {
-        command.arg("--index-url").arg(PYTORCH_CPU_INDEX);
+        command.arg("--index-url").arg(pytorch_index());
     }
     run_logged_command(
         app,
@@ -1338,13 +1411,28 @@ fn prepare_worker_source(app: &AppHandle, root: &Path) -> Result<PathBuf, String
     Ok(destination)
 }
 
-fn worker_healthcheck(root: &Path) -> bool {
+fn worker_healthcheck_error(root: &Path) -> Result<(), String> {
     let mut command = python_command(root);
-    command
+    let output = command
         .args(["-m", "karaoke_worker", "--healthcheck"])
         .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+        .map_err(|error| format!("Unable to start the ML worker healthcheck: {error}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let detail = if stderr.is_empty() { stdout } else { stderr };
+        return Err(format!("ML worker healthcheck failed: {detail}"));
+    }
+    if !String::from_utf8_lossy(&output.stdout).contains(ML_WORKER_VERSION) {
+        return Err(format!(
+            "ML worker healthcheck returned an unexpected version (expected {ML_WORKER_VERSION})"
+        ));
+    }
+    Ok(())
+}
+
+fn worker_healthcheck(root: &Path) -> bool {
+    worker_healthcheck_error(root).is_ok()
 }
 
 fn ensure_worker(app: &AppHandle, root: &Path) -> Result<(), String> {
@@ -1368,11 +1456,12 @@ fn ensure_worker(app: &AppHandle, root: &Path) -> Result<(), String> {
         .arg("install")
         .arg("--python")
         .arg(environment_python(root))
+        .arg("--reinstall")
         .arg(source);
     if !cfg!(target_os = "macos") {
         command
             .arg("--extra-index-url")
-            .arg(PYTORCH_CPU_INDEX)
+            .arg(pytorch_index())
             .arg("--index-strategy")
             .arg("unsafe-best-match");
     }
@@ -1386,9 +1475,7 @@ fn ensure_worker(app: &AppHandle, root: &Path) -> Result<(), String> {
         "KaraokAI ML dependencies installation",
         &mut command,
     )?;
-    if !worker_healthcheck(root) {
-        return Err("The isolated ML worker did not pass its healthcheck".to_string());
-    }
+    worker_healthcheck_error(root)?;
     emit_progress(
         app,
         RUNTIME_INSTALL_JOB_ID,

@@ -1,11 +1,14 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { invokeDesktop, isDesktop } from "./desktop";
 
 export interface BootstrapReport {
   dataDirectory: string;
   directories: string[];
   operatingSystem: string;
   architecture: string;
-  runtimeProfile: "cpu";
+  runtimeProfile: "cpu" | "cuda";
+  runtimeReady: boolean;
+  installedWhisperModelIds: string[];
+  installedDemucsModelIds: string[];
 }
 
 const browserPreviewReport: BootstrapReport = {
@@ -14,12 +17,15 @@ const browserPreviewReport: BootstrapReport = {
   operatingSystem: "browser",
   architecture: "unknown",
   runtimeProfile: "cpu",
+  runtimeReady: false,
+  installedWhisperModelIds: [],
+  installedDemucsModelIds: [],
 };
 
 export async function bootstrapApplication(
   storageDirectory: string | null
 ): Promise<BootstrapReport> {
-  return isTauri()
-    ? invoke<BootstrapReport>("bootstrap_app", { storageDirectory })
+  return isDesktop()
+    ? invokeDesktop<BootstrapReport>("bootstrap_app", { storageDirectory })
     : browserPreviewReport;
 }

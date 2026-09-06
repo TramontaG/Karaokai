@@ -1,4 +1,4 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { invokeDesktop, isDesktop } from "./desktop";
 
 export interface RuntimeComponentStatus {
   id: "ffmpeg" | "ml-worker" | "yt-dlp";
@@ -57,15 +57,15 @@ const previewComponents: RuntimeComponentStatus[] = [
 ];
 
 export const getRuntimeComponents = (storageDirectory: string | null) =>
-  isTauri()
-    ? invoke<RuntimeComponentStatus[]>("list_runtime_components", {
+  isDesktop()
+    ? invokeDesktop<RuntimeComponentStatus[]>("list_runtime_components", {
         storageDirectory,
       })
     : Promise.resolve(previewComponents);
 
 export const runRuntimeCheckup = (storageDirectory: string | null) =>
-  isTauri()
-    ? invoke<RuntimeComponentStatus[]>("run_runtime_checkup", {
+  isDesktop()
+    ? invokeDesktop<RuntimeComponentStatus[]>("run_runtime_checkup", {
         storageDirectory,
       })
     : Promise.resolve(previewComponents);
@@ -74,8 +74,8 @@ export const installRuntimeComponent = (
   componentId: string,
   storageDirectory: string | null
 ) =>
-  isTauri()
-    ? invoke<void>("install_runtime_component", {
+  isDesktop()
+    ? invokeDesktop<void>("install_runtime_component", {
         componentId,
         storageDirectory,
       })
@@ -86,8 +86,8 @@ export const openManagedLocation = (
   targetId: string,
   storageDirectory: string | null
 ) =>
-  isTauri()
-    ? invoke<void>("open_managed_location", {
+  isDesktop()
+    ? invokeDesktop<void>("open_managed_location", {
         targetKind,
         targetId,
         storageDirectory,
@@ -98,8 +98,8 @@ export const removeRuntimeComponent = (
   componentId: string,
   storageDirectory: string | null
 ) =>
-  isTauri()
-    ? invoke<void>("remove_runtime_component", {
+  isDesktop()
+    ? invokeDesktop<void>("remove_runtime_component", {
         componentId,
         storageDirectory,
       })

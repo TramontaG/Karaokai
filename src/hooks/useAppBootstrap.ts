@@ -25,6 +25,23 @@ export function useAppBootstrap() {
 
         setData({
           isLoading: false,
+          preferences: report.runtimeReady
+            ? {
+                onboardingCompleted: true,
+                defaultWhisperModelId: report.installedWhisperModelIds.includes(
+                  data.preferences.defaultWhisperModelId
+                )
+                  ? data.preferences.defaultWhisperModelId
+                  : (report.installedWhisperModelIds.at(-1) ??
+                    data.preferences.defaultWhisperModelId),
+                defaultDemucsModelId: report.installedDemucsModelIds.includes(
+                  data.preferences.defaultDemucsModelId
+                )
+                  ? data.preferences.defaultDemucsModelId
+                  : (report.installedDemucsModelIds[0] ??
+                    data.preferences.defaultDemucsModelId),
+              }
+            : {},
           bootstrap: {
             status: "ready",
             dataDirectory: report.dataDirectory,
@@ -47,6 +64,8 @@ export function useAppBootstrap() {
     void bootstrap();
   }, [
     data.bootstrap.status,
+    data.preferences.defaultDemucsModelId,
+    data.preferences.defaultWhisperModelId,
     data.preferences.storageDirectory,
     data.preferencesLoaded,
     setData,

@@ -1,18 +1,8 @@
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useRouterState } from "@tanstack/react-router";
-import { useCallback, type MouseEvent } from "react";
+import { useCallback } from "react";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "../../hooks/useTranslation";
-
-type WindowResizeDirection =
-  | "East"
-  | "North"
-  | "NorthEast"
-  | "NorthWest"
-  | "South"
-  | "SouthEast"
-  | "SouthWest"
-  | "West";
+import { windowAction } from "../../services/desktop";
 
 export function useBehavior(_: Record<string, never>) {
   const { t } = useTranslation();
@@ -24,40 +14,13 @@ export function useBehavior(_: Record<string, never>) {
     setThemePreference(theme.name === "dark" ? "light" : "dark");
   }, [setThemePreference, theme.name]);
   const onMinimize = useCallback(() => {
-    void getCurrentWindow()
-      .minimize()
-      .catch(() => undefined);
+    windowAction("minimize");
   }, []);
   const onToggleMaximize = useCallback(() => {
-    void getCurrentWindow()
-      .toggleMaximize()
-      .catch(() => undefined);
+    windowAction("maximize");
   }, []);
   const onClose = useCallback(() => {
-    void getCurrentWindow()
-      .close()
-      .catch(() => undefined);
-  }, []);
-  const onStartDragging = useCallback((event: MouseEvent<HTMLElement>) => {
-    if (event.button !== 0 || event.target !== event.currentTarget) {
-      return;
-    }
-
-    void getCurrentWindow()
-      .startDragging()
-      .catch(() => undefined);
-  }, []);
-  const onStartResize = useCallback((event: MouseEvent<HTMLElement>) => {
-    const direction = event.currentTarget.dataset.direction as
-      WindowResizeDirection | undefined;
-    if (event.button !== 0 || !direction) {
-      return;
-    }
-
-    event.preventDefault();
-    void getCurrentWindow()
-      .startResizeDragging(direction)
-      .catch(() => undefined);
+    windowAction("close");
   }, []);
 
   return {
@@ -85,7 +48,5 @@ export function useBehavior(_: Record<string, never>) {
     onMinimize,
     onToggleMaximize,
     onClose,
-    onStartDragging,
-    onStartResize,
   };
 }

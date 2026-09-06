@@ -22,77 +22,6 @@ export const Shell = styled.div`
   }
 `;
 
-export const ResizeHandle = styled.div`
-  position: fixed;
-  z-index: 1000;
-  touch-action: none;
-  user-select: none;
-
-  &[data-direction="North"] {
-    top: 0;
-    right: 0.75rem;
-    left: 0.75rem;
-    height: 0.375rem;
-    cursor: n-resize;
-  }
-
-  &[data-direction="NorthEast"] {
-    top: 0;
-    right: 0;
-    width: 0.75rem;
-    height: 0.75rem;
-    cursor: nesw-resize;
-  }
-
-  &[data-direction="East"] {
-    top: 0.75rem;
-    right: 0;
-    bottom: 0.75rem;
-    width: 0.375rem;
-    cursor: e-resize;
-  }
-
-  &[data-direction="SouthEast"] {
-    right: 0;
-    bottom: 0;
-    width: 0.75rem;
-    height: 0.75rem;
-    cursor: nwse-resize;
-  }
-
-  &[data-direction="South"] {
-    right: 0.75rem;
-    bottom: 0;
-    left: 0.75rem;
-    height: 0.375rem;
-    cursor: s-resize;
-  }
-
-  &[data-direction="SouthWest"] {
-    bottom: 0;
-    left: 0;
-    width: 0.75rem;
-    height: 0.75rem;
-    cursor: nesw-resize;
-  }
-
-  &[data-direction="West"] {
-    top: 0.75rem;
-    bottom: 0.75rem;
-    left: 0;
-    width: 0.375rem;
-    cursor: w-resize;
-  }
-
-  &[data-direction="NorthWest"] {
-    top: 0;
-    left: 0;
-    width: 0.75rem;
-    height: 0.75rem;
-    cursor: nwse-resize;
-  }
-`;
-
 export const Sidebar = styled.aside`
   display: flex;
   min-height: 0;
@@ -232,6 +161,7 @@ export const Titlebar = styled.header`
   justify-content: flex-end;
   gap: 1rem;
   user-select: none;
+  -webkit-app-region: drag;
 `;
 
 export const SearchBox = styled.label`
@@ -249,6 +179,7 @@ export const SearchBox = styled.label`
     ${({ theme }) => theme.colors.surface} 70%,
     transparent
   );
+  -webkit-app-region: no-drag;
 
   &:focus-within {
     border-color: color-mix(
@@ -293,6 +224,7 @@ export const ThemeButton = styled.button`
     transparent
   );
   cursor: pointer;
+  -webkit-app-region: no-drag;
 
   &:hover {
     border-color: ${({ theme }) => theme.colors.border};
@@ -303,6 +235,7 @@ export const WindowActions = styled.div`
   display: flex;
   align-items: center;
   gap: 0.35rem;
+  -webkit-app-region: no-drag;
 `;
 
 export const WindowAction = styled.button`

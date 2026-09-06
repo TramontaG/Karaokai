@@ -19,7 +19,6 @@ import {
   BrandName,
   Content,
   Navigation,
-  ResizeHandle,
   SearchBox,
   SearchInput,
   Shell,
@@ -40,46 +39,6 @@ export function AppLayout() {
 
   return (
     <Shell>
-      <ResizeHandle
-        aria-hidden="true"
-        data-direction="North"
-        onMouseDown={behavior.onStartResize}
-      />
-      <ResizeHandle
-        aria-hidden="true"
-        data-direction="NorthEast"
-        onMouseDown={behavior.onStartResize}
-      />
-      <ResizeHandle
-        aria-hidden="true"
-        data-direction="East"
-        onMouseDown={behavior.onStartResize}
-      />
-      <ResizeHandle
-        aria-hidden="true"
-        data-direction="SouthEast"
-        onMouseDown={behavior.onStartResize}
-      />
-      <ResizeHandle
-        aria-hidden="true"
-        data-direction="South"
-        onMouseDown={behavior.onStartResize}
-      />
-      <ResizeHandle
-        aria-hidden="true"
-        data-direction="SouthWest"
-        onMouseDown={behavior.onStartResize}
-      />
-      <ResizeHandle
-        aria-hidden="true"
-        data-direction="West"
-        onMouseDown={behavior.onStartResize}
-      />
-      <ResizeHandle
-        aria-hidden="true"
-        data-direction="NorthWest"
-        onMouseDown={behavior.onStartResize}
-      />
       <Sidebar>
         <Brand>
           <BrandMark size={40} />
@@ -109,7 +68,7 @@ export function AppLayout() {
         </SidebarFooter>
       </Sidebar>
       <Workspace>
-        <Titlebar onMouseDown={behavior.onStartDragging}>
+        <Titlebar>
           <SearchBox>
             <Search aria-hidden="true" size={18} />
             <SearchInput

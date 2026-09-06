@@ -1,11 +1,9 @@
-import { open } from "@tauri-apps/plugin-dialog";
-import { isTauri } from "@tauri-apps/api/core";
+import { chooseDirectory, isDesktop } from "./desktop";
 
 export async function selectStorageDirectory() {
-  if (!isTauri()) {
+  if (!isDesktop()) {
     return null;
   }
 
-  const selected = await open({ directory: true, multiple: false });
-  return typeof selected === "string" ? selected : null;
+  return chooseDirectory();
 }
