@@ -28,6 +28,22 @@ mac:
 
 win:
   icon: src-tauri/icons/icon.ico
-  target: nsis
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: appx
+      arch:
+        - x64
+
+# Before submitting to Microsoft Store, replace identityName with the exact
+# Package/Identity name reserved for KaraokAI in Partner Center.
+appx:
+  identityName: com.karaokai.app
+  applicationId: KaraokAI
+  displayName: KaraokAI
+  languages:
+    - pt-BR
+    - en-US
 
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}

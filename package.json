@@ -18,6 +18,8 @@
     "start": "electron .",
     "build": "tsc -b && vite build",
     "build:desktop": "npm run build && electron-builder",
+    "build:windows": "npm run build && electron-builder --win nsis --x64",
+    "build:windows:store": "npm run build && electron-builder --win appx --x64",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "preview": "vite preview"
