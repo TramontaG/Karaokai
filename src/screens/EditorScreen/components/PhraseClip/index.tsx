@@ -13,12 +13,21 @@ function PhraseClipView(props: PhraseClipProps) {
     <Clip
       type="button"
       $selected={behavior.selected}
+      $splitting={behavior.splitting}
+      data-splitting={behavior.splitting}
       style={{ left: behavior.left, width: behavior.width }}
       onClick={behavior.onSelect}
       onDoubleClick={behavior.onDoubleClick}
       onPointerDown={behavior.onMoveStart}
+      onPointerEnter={behavior.onPointerEnter}
+      onPointerMove={behavior.onPointerMove}
+      onPointerLeave={behavior.onPointerLeave}
     >
-      <ClipEdge $side="start" onPointerDown={behavior.onStartResize} />
+      <ClipEdge
+        $side="start"
+        $splitting={behavior.splitting}
+        onPointerDown={behavior.onStartResize}
+      />
       <Words>
         <ForEach
           data={behavior.words}
@@ -26,7 +35,11 @@ function PhraseClipView(props: PhraseClipProps) {
           render={behavior.renderWord}
         />
       </Words>
-      <ClipEdge $side="end" onPointerDown={behavior.onEndResize} />
+      <ClipEdge
+        $side="end"
+        $splitting={behavior.splitting}
+        onPointerDown={behavior.onEndResize}
+      />
     </Clip>
   );
 }

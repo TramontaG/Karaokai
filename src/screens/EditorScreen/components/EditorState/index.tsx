@@ -12,6 +12,7 @@ import type { KaraokeProject } from "../../../../domain/project";
 import type { DeepPartial } from "../../../../util/dataManipulation";
 
 export type EditorInspectorTab = "properties" | "mixer";
+export type TimelineTool = "pointer" | "split";
 
 export interface EditorData extends Record<string, unknown> {
   project: KaraokeProject | null;
@@ -24,6 +25,7 @@ export interface EditorData extends Record<string, unknown> {
   trackPendingDeletionId: string | null;
   inspectorTab: EditorInspectorTab;
   timelineZoom: number;
+  timelineTool: TimelineTool;
   bpmInputValue: string;
   trackScaleInputValue: string;
   phraseScaleInputValue: string;
@@ -43,6 +45,7 @@ const initialEditorData: EditorData = {
   trackPendingDeletionId: null,
   inspectorTab: "properties",
   timelineZoom: 1,
+  timelineTool: "pointer",
   bpmInputValue: "120",
   trackScaleInputValue: "100",
   phraseScaleInputValue: "",

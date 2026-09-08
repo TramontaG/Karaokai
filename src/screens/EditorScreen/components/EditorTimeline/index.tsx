@@ -1,14 +1,14 @@
 import { memo } from "react";
-import { Plus } from "lucide-react";
+import { MousePointer2, Plus, Scissors } from "lucide-react";
 import { ForEach } from "../../../../components/ForEach";
 import { useEditorBehavior, useEditorState } from "../EditorState";
+import { TrackLabel } from "../TrackLabel";
 import {
   Time,
   Timeline,
   TimelineBeatGrid,
   TimelineContent,
   TimelineFollowToggle,
-  TimelineHint,
   TimelineLabels,
   TimelinePanel,
   TimelinePlayhead,
@@ -16,6 +16,8 @@ import {
   TimelineToolbar,
   TimelineToolbarMain,
   TimelineToolbarOptions,
+  TimelineToolButton,
+  TimelineToolGroup,
   TimelineTrackHeader,
   TimelineViewport,
 } from "../../styles";
@@ -39,7 +41,28 @@ function EditorTimelineView() {
         </TimelineTrackHeader>
         <TimelineToolbarMain>
           <TimelineToolbarOptions>
-            <TimelineHint>{behavior.zoomHint}</TimelineHint>
+            <TimelineToolGroup aria-label={behavior.timelineToolsLabel}>
+              <TimelineToolButton
+                type="button"
+                $active={!behavior.splitToolActive}
+                aria-pressed={!behavior.splitToolActive}
+                title={behavior.pointerToolLabel}
+                onClick={behavior.onSelectPointerTool}
+              >
+                <MousePointer2 size={14} />
+                <span>{behavior.pointerToolLabel}</span>
+              </TimelineToolButton>
+              <TimelineToolButton
+                type="button"
+                $active={behavior.splitToolActive}
+                aria-pressed={behavior.splitToolActive}
+                title={behavior.splitToolLabel}
+                onClick={behavior.onToggleSplitTool}
+              >
+                <Scissors size={14} />
+                <span>{behavior.splitToolLabel}</span>
+              </TimelineToolButton>
+            </TimelineToolGroup>
             <TimelineFollowToggle>
               <input
                 type="checkbox"
@@ -81,7 +104,14 @@ function EditorTimelineView() {
           <ForEach
             data={behavior.timelineRows}
             idCompute={behavior.getTimelineRowId}
-            render={behavior.renderTimelineLabel}
+            render={(row) => (
+              <TrackLabel
+                id={row.id}
+                label={row.label}
+                Icon={row.Icon}
+                selected={row.id === behavior.selectedTrackId}
+              />
+            )}
           />
         </TimelineLabels>
         <TimelineViewport
@@ -91,6 +121,7 @@ function EditorTimelineView() {
           <TimelineContent
             ref={behavior.timelineContentRef}
             style={behavior.timelineContentStyle}
+            $splitting={behavior.splitToolActive}
             onClick={behavior.onTimelineClick}
           >
             <TimelineBeatGrid style={behavior.timelineGridStyle} />

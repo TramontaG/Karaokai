@@ -5,6 +5,7 @@ import {
   createElement,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -18,6 +19,7 @@ import {
   parseCubicBezier,
   resolveSubtitleStyle,
   resolveTimingCurve,
+  subtitleFontStack,
   wordReadProgress,
   type AudioTrack,
   type BackgroundPreset,
@@ -25,6 +27,7 @@ import {
   type KaraokeProject,
   type ProjectTrack,
   type SubtitleAnimationTemplate,
+  type SubtitleStyle,
   type SubtitlePhrase,
   type SubtitleTrack,
   type SubtitleWord,
@@ -55,21 +58,34 @@ import {
   startProjectRender,
   type ProjectRenderProgress,
 } from "../../services/projects";
-import { registerBeforeWindowClose } from "../../services/projectWindowLifecycle";
+import {
+  registerBeforeWindowClose,
+  saveProjectBeforeWindowClose,
+} from "../../services/projectWindowLifecycle";
+import {
+  subtitleFontOptions,
+  type SubtitleFontOption,
+} from "../../services/subtitleFonts";
 import { PhraseClip } from "./components/PhraseClip";
 import {
   useEditorData,
   type EditorData,
   type EditorInspectorTab,
+  type TimelineTool,
 } from "./components/EditorState";
 import {
   createPhraseAt,
   duplicatePhraseAt,
+  insertGapAfterWord,
   movePhrase,
+  moveWordWithinPhrase,
   phraseEntryCueProgress,
   resizePhraseEnd,
   resizePhraseStart,
   resizeWordBoundary,
+  replacePhraseWordText,
+  removePhraseWord,
+  splitPhraseAtClosestWordBoundary,
   subtitlePreviewAt,
   timeAtTimelinePosition,
   timelineFollowScrollLeft,
@@ -191,10 +207,18 @@ function optionalStyleScale(
 
 function withoutStyleProperty(
   style: SubtitlePhrase["style"],
-  property: "unreadColor" | "readColor"
+  property: keyof SubtitleStyle | "typography"
 ) {
   const next = { ...style };
-  delete next[property];
+  if (property === "typography") {
+    delete next.fontFamily;
+    delete next.fontWeight;
+    delete next.fontStyle;
+    delete next.textDecoration;
+    delete next.verticalAlign;
+  } else {
+    delete next[property];
+  }
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
@@ -232,6 +256,44 @@ function replacePhrase(
   };
 }
 
+function movePhraseToSubtitleTrack(
+  project: KaraokeProject,
+  sourceTrackId: string,
+  targetTrackId: string,
+  phraseId: string,
+  nextPhrase: SubtitlePhrase
+) {
+  return {
+    ...project,
+    updatedAt: String(Date.now()),
+    tracks: project.tracks.map((track) => {
+      if (track.type !== "subtitle") return track;
+      if (track.id === sourceTrackId)
+        return {
+          ...track,
+          phrases: track.phrases.filter((phrase) => phrase.id !== phraseId),
+        };
+      if (track.id === targetTrackId)
+        return {
+          ...track,
+          phrases: sortSubtitlePhrases([...track.phrases, nextPhrase]),
+        };
+      return track;
+    }),
+  };
+}
+
+function subtitleTrackIdAtPosition(clientY: number) {
+  const lanes = document.querySelectorAll<HTMLElement>(
+    "[data-subtitle-track-id]"
+  );
+  const target = [...lanes].find((lane) => {
+    const bounds = lane.getBoundingClientRect();
+    return clientY >= bounds.top && clientY <= bounds.bottom;
+  });
+  return target?.dataset.subtitleTrackId ?? null;
+}
+
 function subtitlePreviewView(track: SubtitleTrack, currentTime: number) {
   const timing = subtitlePreviewAt(
     track.phrases,
@@ -253,71 +315,123 @@ function subtitlePreviewView(track: SubtitleTrack, currentTime: number) {
   );
   const positionReferenceWidth = track.style.positionReferenceWidth ?? 640;
   const positionReferenceHeight = track.style.positionReferenceHeight ?? 360;
-  const words = (timing.primaryPhrase?.words ?? []).map((word) => {
-    const style = resolveSubtitleStyle(
-      track.style,
-      timing.primaryPhrase?.style,
-      word.style
-    );
-    return {
-      ...word,
-      progress: timing.primaryFullyRead
-        ? 1
-        : wordReadProgress(
-            word,
-            currentTime,
-            resolveTimingCurve(
-              track.curve,
-              timing.primaryPhrase?.curve,
-              word.curve
-            )
-          ),
-      readColor: style.readColor,
-      unreadColor: style.unreadColor,
-      scale: style.scale,
-    };
-  });
-  const secondaryWords = (timing.secondaryPhrase?.words ?? []).map((word) => {
-    const style = resolveSubtitleStyle(
-      track.style,
-      timing.secondaryPhrase?.style,
-      word.style
-    );
-    return {
-      ...word,
-      progress: 0,
-      readColor: style.readColor,
-      unreadColor: style.unreadColor,
-      scale: style.scale,
-    };
-  });
+  const words = (timing.primaryPhrase?.words ?? [])
+    .filter((word) => word.type !== "gap")
+    .map((word) => {
+      const style = resolveSubtitleStyle(
+        track.style,
+        timing.primaryPhrase?.style,
+        word.style
+      );
+      return {
+        ...word,
+        progress: timing.primaryFullyRead
+          ? 1
+          : wordReadProgress(
+              word,
+              currentTime,
+              resolveTimingCurve(
+                track.curve,
+                timing.primaryPhrase?.curve,
+                word.curve
+              )
+            ),
+        readColor: style.readColor,
+        unreadColor: style.unreadColor,
+        scale: style.scale,
+        fontFamily: style.fontFamily,
+        fontWeight: style.fontWeight,
+        fontStyle: style.fontStyle,
+        textDecoration: style.textDecoration,
+        verticalAlign: style.verticalAlign,
+        unreadColorSource: subtitleColorSource(
+          "unreadColor",
+          track.style,
+          timing.primaryPhrase?.style,
+          word.style
+        ),
+        readColorSource: subtitleColorSource(
+          "readColor",
+          track.style,
+          timing.primaryPhrase?.style,
+          word.style
+        ),
+      };
+    });
+  const secondaryWords = (timing.secondaryPhrase?.words ?? [])
+    .filter((word) => word.type !== "gap")
+    .map((word) => {
+      const style = resolveSubtitleStyle(
+        track.style,
+        timing.secondaryPhrase?.style,
+        word.style
+      );
+      return {
+        ...word,
+        progress: 0,
+        readColor: style.readColor,
+        unreadColor: style.unreadColor,
+        scale: style.scale,
+        fontFamily: style.fontFamily,
+        fontWeight: style.fontWeight,
+        fontStyle: style.fontStyle,
+        textDecoration: style.textDecoration,
+        verticalAlign: style.verticalAlign,
+        unreadColorSource: subtitleColorSource(
+          "unreadColor",
+          track.style,
+          timing.secondaryPhrase?.style,
+          word.style
+        ),
+        readColorSource: subtitleColorSource(
+          "readColor",
+          track.style,
+          timing.secondaryPhrase?.style,
+          word.style
+        ),
+      };
+    });
 
   return {
     id: track.id,
     timing,
     playingPhrase,
+    entryCuePhrase,
     words,
     secondaryWords,
     visible:
       track.visible && (words.length > 0 || timing.secondaryPhrase !== null),
     containerStyle: {
       left: `calc(50% + ${((track.style.x ?? 0) / positionReferenceWidth) * 100}%)`,
-      top: `calc(38% + ${((track.style.y ?? 0) / positionReferenceHeight) * 100}%)`,
+      top: `calc(50% + ${((track.style.y ?? 0) / positionReferenceHeight) * 100}%)`,
       zIndex: track.zIndex,
     } as CSSProperties,
     currentStyle: { opacity: timing.primaryOpacity },
     nextPhraseStyle: {
       opacity: timing.secondaryOpacity,
-      top: `${timing.secondaryOffset * 100}%`,
-      transform: `translate(-50%, ${timing.secondaryOffset * 0.75}rem) scale(${timing.secondaryScale})`,
+      top: `${timing.secondaryOffset * 50}%`,
+      transform: `translate(-50%, calc(${(timing.secondaryOffset - 1) * 50}% + ${timing.secondaryOffset * 0.75}rem)) scale(${timing.secondaryScale})`,
     } as CSSProperties,
     entryCueStyle: {
       "--entry-cue-progress": entryCueProgress ?? 0,
       "--entry-cue-empty-color": entryCueColors.unreadColor,
       "--entry-cue-fill-color": entryCueColors.readColor,
+      "--entry-cue-scale": entryCueColors.scale,
     } as CSSProperties,
     showEntryCue: entryCueProgress !== null && !timing.suppressEntryCue,
   };
+}
+
+function subtitleColorSource(
+  property: "unreadColor" | "readColor",
+  trackStyle: SubtitleStyle,
+  phraseStyle?: SubtitleStyle,
+  wordStyle?: SubtitleStyle
+): "track" | "phrase" | "word" | "default" {
+  if (wordStyle?.[property] !== undefined) return "word";
+  if (phraseStyle?.[property] !== undefined) return "phrase";
+  if (trackStyle[property] !== undefined) return "track";
+  return "default";
 }
 
 const backgroundMimeType = (asset: string) => {
@@ -347,6 +461,9 @@ export function useBehavior(_: Record<string, never>) {
     null
   );
   const [backgroundMediaReady, setBackgroundMediaReady] = useState(false);
+  const [timelineDropTargetTrackId, setTimelineDropTargetTrackId] = useState<
+    string | null
+  >(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportResolution, setExportResolution] = useState<
     "480p" | "720p" | "1080p" | "1440p"
@@ -384,6 +501,7 @@ export function useBehavior(_: Record<string, never>) {
     trackPendingDeletionId,
     inspectorTab,
     timelineZoom,
+    timelineTool,
     bpmInputValue,
     trackScaleInputValue,
     phraseScaleInputValue,
@@ -428,8 +546,22 @@ export function useBehavior(_: Record<string, never>) {
     (inspectorTab: InspectorTab) => setEditorData({ inspectorTab }),
     [setEditorData]
   );
-  const setTimelineZoom = useCallback(
-    (timelineZoom: number) => setEditorData({ timelineZoom }),
+  const onSelectTrack = useCallback(
+    (trackId: string) => {
+      setSelectedTrackId(trackId);
+      setSelectedPhraseId(null);
+      setSelectedWordId(null);
+      setInspectorTab("properties");
+    },
+    [
+      setInspectorTab,
+      setSelectedPhraseId,
+      setSelectedTrackId,
+      setSelectedWordId,
+    ]
+  );
+  const setTimelineTool = useCallback(
+    (timelineTool: TimelineTool) => setEditorData({ timelineTool }),
     [setEditorData]
   );
   const setBpmInputValue = useCallback(
@@ -480,12 +612,19 @@ export function useBehavior(_: Record<string, never>) {
   const timelinePlayheadRef = useRef<HTMLDivElement>(null);
   const timelineZoomRef = useRef(timelineZoom);
   const timelineZoomingUntilRef = useRef(0);
+  const hoveredPhraseRef = useRef<{
+    trackId: string;
+    phraseId: string;
+    clientX: number;
+  } | null>(null);
   const lastVocalsHardSyncRef = useRef(Number.NEGATIVE_INFINITY);
   const saveTimerRef = useRef<number | null>(null);
   const closingWindowRef = useRef(false);
   const phraseClipboardRef = useRef<SubtitlePhrase | null>(null);
   const historyRef = useRef<EditorHistoryEntry[]>([]);
   const thumbnailCaptureKeyRef = useRef<string | null>(null);
+  const thumbnailCaptureRef = useRef<(() => Promise<void>) | null>(null);
+  const liveColorElementsRef = useRef<HTMLElement[]>([]);
 
   const setLiveProject = useCallback(
     (next: KaraokeProject) => {
@@ -556,6 +695,22 @@ export function useBehavior(_: Record<string, never>) {
     },
     [applyProject]
   );
+  const onRenameTrack = useCallback(
+    (trackId: string, name: string) => {
+      const currentProject = projectRef.current;
+      if (!currentProject) return;
+      const track = currentProject.tracks.find((item) => item.id === trackId);
+      if (!track || track.name === name) return;
+      persistProject({
+        ...currentProject,
+        updatedAt: String(Date.now()),
+        tracks: currentProject.tracks.map((item) =>
+          item.id === trackId ? { ...item, name } : item
+        ),
+      });
+    },
+    [persistProject]
+  );
   const refresh = useCallback(async () => {
     try {
       const loaded = await loadProject(
@@ -564,7 +719,10 @@ export function useBehavior(_: Record<string, never>) {
       );
       if (loaded) {
         const normalized = setLiveProject(loaded);
-        if (normalized.thumbnail !== loaded.thumbnail)
+        if (
+          normalized.thumbnail !== loaded.thumbnail ||
+          JSON.stringify(normalized.tracks) !== JSON.stringify(loaded.tracks)
+        )
           saveProjectNow(normalized);
         setAppData({ currentProject: { id: loaded.id, name: loaded.name } });
       }
@@ -610,6 +768,7 @@ export function useBehavior(_: Record<string, never>) {
       window.clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
+    await thumbnailCaptureRef.current?.();
     if (!projectRef.current) return;
     try {
       await saveProject(projectRef.current, data.preferences.storageDirectory);
@@ -679,10 +838,18 @@ export function useBehavior(_: Record<string, never>) {
       )
     )
       return;
-    void navigate({
-      to: "/projects/$projectId/preparing",
-      params: { projectId },
-    });
+    let disposed = false;
+    void (async () => {
+      await saveProjectBeforeWindowClose();
+      if (disposed) return;
+      await navigate({
+        to: "/projects/$projectId/preparing",
+        params: { projectId },
+      });
+    })();
+    return () => {
+      disposed = true;
+    };
   }, [navigate, project, projectId]);
   useEffect(() => {
     if (!isDesktop()) return;
@@ -872,8 +1039,10 @@ export function useBehavior(_: Record<string, never>) {
       firstPhraseStart === null ||
       (["album-art", "image", "video"].includes(backgroundPreset) &&
         !backgroundMediaReady)
-    )
+    ) {
+      thumbnailCaptureRef.current = null;
       return;
+    }
     const captureKey = [
       project.id,
       project.updatedAt,
@@ -882,7 +1051,7 @@ export function useBehavior(_: Record<string, never>) {
     ].join(":");
     if (thumbnailCaptureKeyRef.current === captureKey) return;
     let disposed = false;
-    const capture = async () => {
+    const capture = async (allowAfterDispose = false) => {
       const canvas = document.createElement("canvas");
       canvas.width = 1280;
       canvas.height = 720;
@@ -919,7 +1088,7 @@ export function useBehavior(_: Record<string, never>) {
             ? (firstPhraseStart / 1000) % duration
             : firstPhraseStart / 1000;
         await waitForVideoSeek(video, targetTime);
-        if (disposed) return;
+        if (disposed && !allowAfterDispose) return;
         drawMediaBackground(context, video, backgroundFit);
         void waitForVideoSeek(video, previousTime);
       }
@@ -941,12 +1110,12 @@ export function useBehavior(_: Record<string, never>) {
             canvas.width / 2 +
             (style.x / style.positionReferenceWidth) * canvas.width;
           const y =
-            canvas.height * 0.38 +
+            canvas.height * 0.5 +
             (style.y / style.positionReferenceHeight) * canvas.height;
           context.save();
           context.textAlign = "center";
           context.textBaseline = "middle";
-          context.font = `800 ${Math.round(canvas.width * 0.03 * style.scale)}px sans-serif`;
+          context.font = `${style.fontStyle} ${style.fontWeight} ${Math.round(canvas.width * 0.03 * style.scale)}px ${subtitleFontStack(style.fontFamily)}`;
           context.lineJoin = "round";
           context.lineWidth = Math.max(2, canvas.width * 0.003);
           context.strokeStyle = "#000000";
@@ -959,7 +1128,7 @@ export function useBehavior(_: Record<string, never>) {
         });
 
       const thumbnail = await jpegBlob(canvas);
-      if (!thumbnail || disposed) return;
+      if (!thumbnail || (disposed && !allowAfterDispose)) return;
       await saveProjectThumbnail(
         project.id,
         thumbnail,
@@ -970,12 +1139,15 @@ export function useBehavior(_: Record<string, never>) {
       if (latestProject?.id === project.id) {
         const withThumbnail = { ...latestProject, thumbnail: "preview.jpg" };
         projectRef.current = withThumbnail;
-        setProject(withThumbnail);
       }
     };
-    void capture().catch((reason) => {
-      if (!disposed) setError(String(reason));
-    });
+    thumbnailCaptureRef.current = async () => {
+      try {
+        await capture(true);
+      } catch (reason) {
+        if (!disposed) setError(String(reason));
+      }
+    };
     return () => {
       disposed = true;
     };
@@ -988,10 +1160,15 @@ export function useBehavior(_: Record<string, never>) {
     firstPhraseStart,
     project,
     projectBackgroundTrack,
-    setProject,
     setError,
     subtitleTracks,
   ]);
+  useLayoutEffect(
+    () => () => {
+      void thumbnailCaptureRef.current?.();
+    },
+    []
+  );
   const animationTemplate: SubtitleAnimationTemplate =
     subtitleTrack?.animation?.template ?? "template-1";
   const tempoBpm = clamp(
@@ -1205,11 +1382,66 @@ export function useBehavior(_: Record<string, never>) {
     },
     [activePhrase, persistProject, subtitleTrack]
   );
+  const clearColorPreview = useCallback(() => {
+    liveColorElementsRef.current.forEach((element) => {
+      element.style.removeProperty("color");
+    });
+    liveColorElementsRef.current = [];
+  }, []);
+  const onPreviewScopedColor = useCallback(
+    (
+      scope: SubtitlePropertyScope,
+      property: "unreadColor" | "readColor",
+      value: string
+    ) => {
+      if (!subtitleTrack) return;
+      if (scope !== "track" && !activePhrase) return;
+      if (scope === "word" && !selectedWord) return;
+
+      clearColorPreview();
+      const elements = previewCanvas.current?.querySelectorAll<HTMLElement>(
+        "[data-subtitle-color]"
+      );
+      if (!elements) return;
+
+      elements.forEach((element) => {
+        if (
+          element.dataset.subtitleColor !== property ||
+          element.dataset.subtitleTrackId !== subtitleTrack.id
+        ) {
+          return;
+        }
+        const matchesScope =
+          scope === "track"
+            ? element.dataset.subtitleColorSource === "track"
+            : scope === "phrase"
+              ? element.dataset.subtitlePhraseId === activePhrase?.id &&
+                element.dataset.subtitleColorSource === "phrase"
+              : element.dataset.subtitlePhraseId === activePhrase?.id &&
+                element.dataset.subtitleWordId === selectedWord?.id;
+        if (!matchesScope) return;
+        element.style.color = value;
+        liveColorElementsRef.current.push(element);
+      });
+    },
+    [activePhrase, clearColorPreview, selectedWord, subtitleTrack]
+  );
   const updateScopedStyle = useCallback(
     (
       scope: SubtitlePropertyScope,
-      property: "unreadColor" | "readColor" | "x" | "y",
-      value: string | number
+      property: keyof Pick<
+        SubtitleStyle,
+        | "unreadColor"
+        | "readColor"
+        | "x"
+        | "y"
+        | "fontFamily"
+        | "fontWeight"
+        | "fontStyle"
+        | "textDecoration"
+        | "verticalAlign"
+      >,
+      value: NonNullable<SubtitleStyle[typeof property]>
     ) => {
       const currentProject = projectRef.current;
       if (!currentProject || !subtitleTrack) return;
@@ -1267,7 +1499,7 @@ export function useBehavior(_: Record<string, never>) {
   const resetScopedColor = useCallback(
     (
       scope: Exclude<SubtitlePropertyScope, "track">,
-      property: "unreadColor" | "readColor"
+      property: keyof SubtitleStyle | "typography"
     ) => {
       const currentProject = projectRef.current;
       if (!currentProject || !subtitleTrack || !activePhrase) return;
@@ -1483,6 +1715,51 @@ export function useBehavior(_: Record<string, never>) {
       );
     },
     [activePhrase, persistProject, subtitleTrack, timelineDuration]
+  );
+  const onUpdateInspectorWordText = useCallback(
+    (wordId: string, text: string) => {
+      const currentProject = projectRef.current;
+      if (!currentProject || !subtitleTrack || !activePhrase) return;
+      const phrase = replacePhraseWordText(activePhrase, wordId, text);
+      persistProject(
+        replacePhrase(currentProject, subtitleTrack.id, activePhrase.id, phrase)
+      );
+    },
+    [activePhrase, persistProject, subtitleTrack]
+  );
+  const onInsertInspectorGap = useCallback(
+    (wordId: string) => {
+      const currentProject = projectRef.current;
+      if (!currentProject || !subtitleTrack || !activePhrase) return;
+      const phrase = insertGapAfterWord(activePhrase, wordId, timelineDuration);
+      if (phrase === activePhrase) return;
+      const previousIds = new Set(activePhrase.words.map((word) => word.id));
+      const gap = phrase.words.find(
+        (word) => word.type === "gap" && !previousIds.has(word.id)
+      );
+      setSelectedWordId(gap?.id ?? null);
+      persistProject(
+        replacePhrase(currentProject, subtitleTrack.id, activePhrase.id, phrase)
+      );
+    },
+    [activePhrase, persistProject, subtitleTrack, timelineDuration]
+  );
+  const onDeleteInspectorWord = useCallback(
+    (wordId: string) => {
+      const currentProject = projectRef.current;
+      if (!currentProject || !subtitleTrack || !activePhrase) return;
+      const phrase = removePhraseWord(activePhrase, wordId);
+      const nextSelectedWord = phrase.words.find((word) => word.type !== "gap");
+      setSelectedWordId(
+        selectedWordId === wordId
+          ? (nextSelectedWord?.id ?? null)
+          : selectedWordId
+      );
+      persistProject(
+        replacePhrase(currentProject, subtitleTrack.id, activePhrase.id, phrase)
+      );
+    },
+    [activePhrase, persistProject, selectedWordId, subtitleTrack]
   );
   const onAddSubtitleTrack = useCallback(() => {
     const currentProject = projectRef.current;
@@ -1819,7 +2096,7 @@ export function useBehavior(_: Record<string, never>) {
       phrase: SubtitlePhrase,
       gesture: PhraseGesture,
       word?: SubtitleWord,
-      wordEdge?: "start" | "end"
+      wordEdge?: "start" | "end" | "move"
     ) => {
       event.preventDefault();
       event.stopPropagation();
@@ -1837,14 +2114,25 @@ export function useBehavior(_: Record<string, never>) {
           ((moveEvent.clientX - initialX) / contentWidth) * timelineDuration
         );
         let nextPhrase = phrase;
+        const targetTrackId =
+          gesture === "move" && !word
+            ? (subtitleTrackIdAtPosition(moveEvent.clientY) ?? track.id)
+            : track.id;
+        setTimelineDropTargetTrackId(
+          targetTrackId === track.id ? null : targetTrackId
+        );
+        if (gesture === "move" && !word) setSelectedTrackId(targetTrackId);
         if (word && wordEdge) {
-          nextPhrase = resizeWordBoundary(
-            phrase,
-            word.id,
-            wordEdge,
-            (wordEdge === "start" ? word.start : word.end) + delta,
-            timelineDuration
-          );
+          nextPhrase =
+            wordEdge === "move"
+              ? moveWordWithinPhrase(phrase, word.id, delta, timelineDuration)
+              : resizeWordBoundary(
+                  phrase,
+                  word.id,
+                  wordEdge,
+                  (wordEdge === "start" ? word.start : word.end) + delta,
+                  timelineDuration
+                );
         } else if (gesture === "move") {
           nextPhrase = movePhrase(phrase, delta, timelineDuration);
         } else if (gesture === "start") {
@@ -1857,13 +2145,22 @@ export function useBehavior(_: Record<string, never>) {
           );
         }
         setLiveProject(
-          replacePhrase(sourceProject, track.id, phrase.id, nextPhrase)
+          targetTrackId === track.id
+            ? replacePhrase(sourceProject, track.id, phrase.id, nextPhrase)
+            : movePhraseToSubtitleTrack(
+                sourceProject,
+                track.id,
+                targetTrackId,
+                phrase.id,
+                nextPhrase
+              )
         );
       };
       const onFinish = () => {
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onFinish);
         window.removeEventListener("pointercancel", onFinish);
+        setTimelineDropTargetTrackId(null);
         const changedProject = projectRef.current;
         if (changedProject) persistProject(changedProject, true, sourceProject);
       };
@@ -1890,10 +2187,75 @@ export function useBehavior(_: Record<string, never>) {
       track: SubtitleTrack,
       phrase: SubtitlePhrase,
       word: SubtitleWord,
-      edge: "start" | "end"
+      edge: "start" | "end" | "move"
     ) => startGesture(event, track, phrase, "move", word, edge),
     [startGesture]
   );
+
+  const onSplitPhrase = useCallback(
+    (track: SubtitleTrack, phrase: SubtitlePhrase, clientX: number) => {
+      const currentProject = projectRef.current;
+      const bounds = timelineContentRef.current?.getBoundingClientRect();
+      if (!currentProject || !bounds) return;
+      const currentTrack = currentProject.tracks.find(
+        (item): item is SubtitleTrack =>
+          item.type === "subtitle" && item.id === track.id
+      );
+      const currentPhrase = currentTrack?.phrases.find(
+        (item) => item.id === phrase.id
+      );
+      if (!currentTrack || !currentPhrase) return;
+      const split = splitPhraseAtClosestWordBoundary(
+        currentPhrase,
+        timeAtTimelinePosition(
+          clientX,
+          bounds.left,
+          bounds.width,
+          timelineDuration
+        )
+      );
+      if (!split) return;
+      const [firstPhrase, secondPhrase] = split;
+      const next: KaraokeProject = {
+        ...currentProject,
+        updatedAt: String(Date.now()),
+        tracks: currentProject.tracks.map((item) =>
+          item.type === "subtitle" && item.id === currentTrack.id
+            ? {
+                ...item,
+                phrases: sortSubtitlePhrases(
+                  item.phrases.flatMap((itemPhrase) =>
+                    itemPhrase.id === currentPhrase.id
+                      ? [firstPhrase, secondPhrase]
+                      : itemPhrase
+                  )
+                ),
+              }
+            : item
+        ),
+      };
+      setSelectedTrackId(currentTrack.id);
+      setSelectedPhraseId(secondPhrase.id);
+      setSelectedWordId(secondPhrase.words[0]?.id ?? null);
+      onSeek(secondPhrase.start);
+      persistProject(next, true);
+    },
+    [onSeek, persistProject, timelineDuration]
+  );
+  const onHoverPhrase = useCallback(
+    (track: SubtitleTrack, phrase: SubtitlePhrase, clientX: number) => {
+      hoveredPhraseRef.current = {
+        trackId: track.id,
+        phraseId: phrase.id,
+        clientX,
+      };
+    },
+    []
+  );
+  const onLeavePhrase = useCallback((phrase: SubtitlePhrase) => {
+    if (hoveredPhraseRef.current?.phraseId === phrase.id)
+      hoveredPhraseRef.current = null;
+  }, []);
 
   const onInsertPhrase = useCallback(
     (event: MouseEvent<HTMLDivElement>, subtitleTarget: SubtitleTrack) => {
@@ -2093,6 +2455,28 @@ export function useBehavior(_: Record<string, never>) {
         return;
       }
       if (
+        event.key.toLowerCase() === "s" &&
+        !commandKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        !event.repeat
+      ) {
+        const hoveredPhrase = hoveredPhraseRef.current;
+        const currentProject = projectRef.current;
+        const track = currentProject?.tracks.find(
+          (item): item is SubtitleTrack =>
+            item.type === "subtitle" && item.id === hoveredPhrase?.trackId
+        );
+        const phrase = track?.phrases.find(
+          (item) => item.id === hoveredPhrase?.phraseId
+        );
+        if (track && phrase && hoveredPhrase) {
+          event.preventDefault();
+          onSplitPhrase(track, phrase, hoveredPhrase.clientX);
+        }
+        return;
+      }
+      if (
         (event.key === "Delete" || event.key === "Backspace") &&
         selectedPhraseId !== null
       ) {
@@ -2106,6 +2490,7 @@ export function useBehavior(_: Record<string, never>) {
     onCopyPhrase,
     onDeletePhrase,
     onPastePhrase,
+    onSplitPhrase,
     onTogglePlayback,
     onUndo,
     selectedPhraseId,
@@ -2140,7 +2525,7 @@ export function useBehavior(_: Record<string, never>) {
       );
       timelineZoomRef.current = nextZoom;
       timelineZoomingUntilRef.current = performance.now() + 150;
-      flushSync(() => setTimelineZoom(nextZoom));
+      flushSync(() => setEditorData({ timelineZoom: nextZoom }));
       const maximumScrollLeft = Math.max(
         0,
         viewport.scrollWidth - viewport.clientWidth
@@ -2153,7 +2538,7 @@ export function useBehavior(_: Record<string, never>) {
         maximumScrollLeft
       );
     },
-    [setTimelineZoom]
+    [setEditorData]
   );
 
   useEffect(() => {
@@ -2272,11 +2657,26 @@ export function useBehavior(_: Record<string, never>) {
     [currentTime, onSeek]
   );
   const onBack = useCallback(
-    () => void navigate({ to: "/library" }),
+    () =>
+      void (async () => {
+        await thumbnailCaptureRef.current?.();
+        await navigate({ to: "/library" });
+      })(),
     [navigate]
   );
 
   const trackStyle = resolveSubtitleStyle(subtitleTrack?.style ?? {});
+  const availableFontOptions = subtitleFontOptions(
+    data.preferences.customFonts
+  );
+  const fontOptions = availableFontOptions.some(
+    (font) => font.id === trackStyle.fontFamily
+  )
+    ? availableFontOptions
+    : [
+        ...availableFontOptions,
+        { id: trackStyle.fontFamily, name: trackStyle.fontFamily },
+      ];
   const phraseStyle = resolveSubtitleStyle(
     subtitleTrack?.style ?? {},
     activePhrase?.style
@@ -2324,6 +2724,18 @@ export function useBehavior(_: Record<string, never>) {
   const renderSubtitlePreview = useCallback(
     (preview: (typeof subtitlePreviews)[number]) => {
       if (!preview.visible) return null;
+      const renderEntryCue = (phraseId: string | undefined) =>
+        preview.showEntryCue && preview.entryCuePhrase?.id === phraseId
+          ? createElement(
+              EntryCue,
+              { style: preview.entryCueStyle },
+              createElement(
+                EntryCueBar,
+                undefined,
+                createElement(EntryCueBarFill)
+              )
+            )
+          : null;
       return createElement(
         SubtitlePreview,
         { style: preview.containerStyle },
@@ -2338,6 +2750,17 @@ export function useBehavior(_: Record<string, never>) {
                     key: word.id,
                     $unreadColor: word.unreadColor,
                     $scale: word.scale,
+                    $fontFamily: word.fontFamily,
+                    $fontWeight: word.fontWeight,
+                    $fontStyle: word.fontStyle,
+                    $textDecoration: word.textDecoration,
+                    $verticalAlign: word.verticalAlign,
+                    "data-subtitle-track-id": preview.id,
+                    "data-subtitle-phrase-id":
+                      preview.timing.primaryPhrase?.id ?? "",
+                    "data-subtitle-word-id": word.id,
+                    "data-subtitle-color": "unreadColor",
+                    "data-subtitle-color-source": word.unreadColorSource,
                   },
                   word.text,
                   createElement(
@@ -2345,22 +2768,18 @@ export function useBehavior(_: Record<string, never>) {
                     {
                       $progress: word.progress,
                       $readColor: word.readColor,
+                      "data-subtitle-track-id": preview.id,
+                      "data-subtitle-phrase-id":
+                        preview.timing.primaryPhrase?.id ?? "",
+                      "data-subtitle-word-id": word.id,
+                      "data-subtitle-color": "readColor",
+                      "data-subtitle-color-source": word.readColorSource,
                     },
                     word.text
                   )
                 )
-              )
-            )
-          : null,
-        preview.showEntryCue
-          ? createElement(
-              EntryCue,
-              { style: preview.entryCueStyle },
-              createElement(
-                EntryCueBar,
-                undefined,
-                createElement(EntryCueBarFill)
-              )
+              ),
+              renderEntryCue(preview.timing.primaryPhrase?.id)
             )
           : null,
         preview.timing.secondaryPhrase
@@ -2368,26 +2787,49 @@ export function useBehavior(_: Record<string, never>) {
               NextPhrase,
               { style: preview.nextPhraseStyle },
               ...(preview.secondaryWords.length > 0
-                ? preview.secondaryWords.map((word) =>
-                    createElement(
-                      PreviewWord,
-                      {
-                        key: word.id,
-                        $unreadColor: word.unreadColor,
-                        $scale: word.scale,
-                      },
-                      word.text,
+                ? [
+                    ...preview.secondaryWords.map((word) =>
                       createElement(
-                        PreviewWordFill,
+                        PreviewWord,
                         {
-                          $progress: word.progress,
-                          $readColor: word.readColor,
+                          key: word.id,
+                          $unreadColor: word.unreadColor,
+                          $scale: word.scale,
+                          $fontFamily: word.fontFamily,
+                          $fontWeight: word.fontWeight,
+                          $fontStyle: word.fontStyle,
+                          $textDecoration: word.textDecoration,
+                          $verticalAlign: word.verticalAlign,
+                          "data-subtitle-track-id": preview.id,
+                          "data-subtitle-phrase-id":
+                            preview.timing.secondaryPhrase?.id ?? "",
+                          "data-subtitle-word-id": word.id,
+                          "data-subtitle-color": "unreadColor",
+                          "data-subtitle-color-source": word.unreadColorSource,
                         },
-                        word.text
+                        word.text,
+                        createElement(
+                          PreviewWordFill,
+                          {
+                            $progress: word.progress,
+                            $readColor: word.readColor,
+                            "data-subtitle-track-id": preview.id,
+                            "data-subtitle-phrase-id":
+                              preview.timing.secondaryPhrase?.id ?? "",
+                            "data-subtitle-word-id": word.id,
+                            "data-subtitle-color": "readColor",
+                            "data-subtitle-color-source": word.readColorSource,
+                          },
+                          word.text
+                        )
                       )
-                    )
-                  )
-                : [preview.timing.secondaryPhrase.text])
+                    ),
+                    renderEntryCue(preview.timing.secondaryPhrase.id),
+                  ]
+                : [
+                    preview.timing.secondaryPhrase.text,
+                    renderEntryCue(preview.timing.secondaryPhrase.id),
+                  ])
             )
           : null
       );
@@ -2416,7 +2858,16 @@ export function useBehavior(_: Record<string, never>) {
   );
   const timelineInteractionKey = useMemo(
     () => ({}),
-    [onSelectPhrase, onSelectWord, onStartPhraseGesture, onStartWordGesture]
+    [
+      onHoverPhrase,
+      onLeavePhrase,
+      onSelectPhrase,
+      onSelectWord,
+      onSplitPhrase,
+      onStartPhraseGesture,
+      onStartWordGesture,
+      timelineTool,
+    ]
   );
   const renderTimelineRow = useCallback(
     (row: TimelineRow) => {
@@ -2425,7 +2876,10 @@ export function useBehavior(_: Record<string, never>) {
         const preview = subtitlePreviews.find((item) => item.id === track.id);
         const trackPlaybackWordId =
           preview?.playingPhrase?.words.find(
-            (word) => currentTime >= word.start && currentTime <= word.end
+            (word) =>
+              word.type !== "gap" &&
+              currentTime >= word.start &&
+              currentTime <= word.end
           )?.id ?? null;
         const selectedPhraseForTrack =
           track.id === selectedTrackId
@@ -2435,6 +2889,9 @@ export function useBehavior(_: Record<string, never>) {
         return createElement(
           TimelineLane,
           {
+            $splitting: timelineTool === "split",
+            $dropTarget: track.id === timelineDropTargetTrackId,
+            "data-subtitle-track-id": track.id,
             onDoubleClick: (event: MouseEvent<HTMLDivElement>) =>
               onInsertPhrase(event, track),
           },
@@ -2446,6 +2903,7 @@ export function useBehavior(_: Record<string, never>) {
               left: `${(phrase.start / timelineDuration) * 100}%`,
               width: `${Math.max(0.12, (phraseDuration / timelineDuration) * 100)}%`,
               selected: phrase.id === selectedPhraseForTrack?.id,
+              splitting: timelineTool === "split",
               interactionKey: timelineInteractionKey,
               words: phrase.words.map((word) => ({
                 ...word,
@@ -2460,6 +2918,11 @@ export function useBehavior(_: Record<string, never>) {
                 onSelectPhrase(track.id, selectedPhrase),
               onSelectWord: (selectedPhrase, word) =>
                 onSelectWord(track.id, selectedPhrase, word),
+              onHoverPhrase: (hoveredPhrase, clientX) =>
+                onHoverPhrase(track, hoveredPhrase, clientX),
+              onLeavePhrase,
+              onSplitPhrase: (selectedPhrase, clientX) =>
+                onSplitPhrase(track, selectedPhrase, clientX),
               onStartPhraseGesture: (event, selectedPhrase, gesture) =>
                 onStartPhraseGesture(event, track, selectedPhrase, gesture),
               onStartWordGesture: (event, selectedPhrase, word, edge) =>
@@ -2471,7 +2934,7 @@ export function useBehavior(_: Record<string, never>) {
 
       return createElement(
         TimelineLane,
-        undefined,
+        { $splitting: timelineTool === "split", $dropTarget: false },
         createElement(
           TimelineClip,
           {
@@ -2496,11 +2959,16 @@ export function useBehavior(_: Record<string, never>) {
       onSelectWord,
       onStartPhraseGesture,
       onStartWordGesture,
+      onHoverPhrase,
+      onLeavePhrase,
+      onSplitPhrase,
       selectedPhraseId,
       selectedTrackId,
       selectedWordId,
       subtitlePreviews,
+      timelineDropTargetTrackId,
       timelineInteractionKey,
+      timelineTool,
       timelineDuration,
     ]
   );
@@ -2542,6 +3010,7 @@ export function useBehavior(_: Record<string, never>) {
       selectedWordId,
       t,
       timelineAutoFollow,
+      timelineTool,
       timelineZoom,
     ]
   );
@@ -2586,6 +3055,7 @@ export function useBehavior(_: Record<string, never>) {
     timelineContentStyle: { width: `${timelineZoom * 100}%` },
     timelineGridStyle,
     timelineAutoFollow,
+    splitToolActive: timelineTool === "split",
     bpmInputValue,
     tempoOffsetSeconds: tempoOffset / 1000,
     maximumTempoOffsetSeconds: timelineDuration / 1000,
@@ -2593,6 +3063,7 @@ export function useBehavior(_: Record<string, never>) {
     vocalsVolume,
     activePhrase,
     selectedWord,
+    selectedTrackId,
     animationTemplate,
     selectedSubtitleTrack: subtitleTrack,
     trackDeleteDialogOpen: trackPendingDeletion !== null,
@@ -2616,6 +3087,7 @@ export function useBehavior(_: Record<string, never>) {
     inspectorWords: activePhrase?.words ?? [],
     timelineRows,
     trackStyle,
+    fontOptions,
     phraseStyle,
     wordStyle,
     phrasePositionX: activePhrase?.style?.x ?? 0,
@@ -2657,7 +3129,9 @@ export function useBehavior(_: Record<string, never>) {
     maximizeWindowLabel: t("appLayout.window.maximize"),
     closeWindowLabel: t("appLayout.window.close"),
     zoomResetLabel: t("editor.zoomReset"),
-    zoomHint: t("editor.zoomHint"),
+    timelineToolsLabel: t("editor.timelineTools"),
+    pointerToolLabel: t("editor.pointerTool"),
+    splitToolLabel: t("editor.splitTool"),
     timelineAutoFollowLabel: t("editor.timelineAutoFollow"),
     bpmLabel: t("editor.bpm"),
     beatOffsetLabel: t("editor.beatOffset"),
@@ -2731,6 +3205,13 @@ export function useBehavior(_: Record<string, never>) {
       word: selectedWord?.text ?? "",
     }),
     scaleLabel: t("editor.scale"),
+    fontFamilyLabel: t("editor.fontFamily"),
+    fontStyleLabel: t("editor.fontStyle"),
+    boldLabel: t("editor.bold"),
+    italicLabel: t("editor.italic"),
+    underlineLabel: t("editor.underline"),
+    superscriptLabel: t("editor.superscript"),
+    subscriptLabel: t("editor.subscript"),
     readAnimationLabel: t("editor.readAnimation"),
     inheritScaleLabel: t("editor.inheritScale"),
     inheritLabel: t("editor.inherit"),
@@ -2744,6 +3225,10 @@ export function useBehavior(_: Record<string, never>) {
     wordsLabel: t("editor.words", {
       count: String(activePhrase?.words.length ?? 0),
     }),
+    wordTextLabel: t("editor.wordText"),
+    gapLabel: t("editor.gap"),
+    insertGapLabel: t("editor.insertGap"),
+    deleteWordLabel: t("editor.deleteWord"),
     mixerDescription: t("editor.mixerDescription"),
     backgroundClipLabel: t("editor.track.background"),
     titleClipLabel: t("editor.track.text"),
@@ -2767,6 +3252,7 @@ export function useBehavior(_: Record<string, never>) {
       preview.id,
     getTimelineRowId: (row: TimelineRow) => row.id,
     getCurveOptionId: (option: CurveOption) => option.id,
+    getFontOptionId: (option: SubtitleFontOption) => option.id,
     onTogglePlayback,
     onOpenExport,
     onStartExport,
@@ -2799,13 +3285,18 @@ export function useBehavior(_: Record<string, never>) {
     onToggleMaximizeWindow,
     onCloseWindow,
     onBack,
-    onTextInput: (event: ChangeEvent<HTMLTextAreaElement>) =>
-      onUpdatePhraseText(event.target.value),
+    onPhraseTextCommit: onUpdatePhraseText,
     onTrackStyleChange: updateScopedStyle.bind(null, "track"),
     onPhraseStyleChange: updateScopedStyle.bind(null, "phrase"),
     onWordStyleChange: updateScopedStyle.bind(null, "word"),
+    onTrackColorPreview: onPreviewScopedColor.bind(null, "track"),
+    onPhraseColorPreview: onPreviewScopedColor.bind(null, "phrase"),
+    onWordColorPreview: onPreviewScopedColor.bind(null, "word"),
+    onColorPreviewEnd: clearColorPreview,
     onPhraseColorInherit: resetScopedColor.bind(null, "phrase"),
     onWordColorInherit: resetScopedColor.bind(null, "word"),
+    onPhraseStyleInherit: resetScopedColor.bind(null, "phrase"),
+    onWordStyleInherit: resetScopedColor.bind(null, "word"),
     onTrackScaleInput: setTrackScaleInputValue,
     onPhraseScaleInput: setPhraseScaleInputValue,
     onWordScaleInput: setWordScaleInputValue,
@@ -2856,7 +3347,12 @@ export function useBehavior(_: Record<string, never>) {
       updateInspectorWordTime(wordId, "start", Number(value) * 1000),
     onInspectorWordEndInput: (wordId: string, value: string) =>
       updateInspectorWordTime(wordId, "end", Number(value) * 1000),
+    onInspectorWordTextInput: onUpdateInspectorWordText,
+    onInsertInspectorGap,
+    onDeleteInspectorWord,
     onAnimationTemplateChange,
+    onSelectTrack,
+    onRenameTrack,
     onInsertPhrase,
     onDeletePhrase,
     onRequestDeleteTrack,
@@ -2867,16 +3363,15 @@ export function useBehavior(_: Record<string, never>) {
     onTimelineScroll,
     onTimelineAutoFollowChange: (event: ChangeEvent<HTMLInputElement>) =>
       setTimelineAutoFollow(event.target.checked),
+    onSelectPointerTool: () => setTimelineTool("pointer"),
+    onToggleSplitTool: () =>
+      setTimelineTool(timelineTool === "split" ? "pointer" : "split"),
     onBpmInput: (event: ChangeEvent<HTMLInputElement>) =>
       setBpmInputValue(event.target.value),
     onBpmBlur: commitBpmInput,
     onBpmKeyDown,
     onBeatOffsetInput: (event: ChangeEvent<HTMLInputElement>) =>
       updateTempo("offset", Number(event.target.value) * 1000),
-    onResetZoom: () => {
-      timelineZoomRef.current = 1;
-      setTimelineZoom(1);
-    },
     onShowProperties: () => setInspectorTab("properties"),
     onShowMixer: () => setInspectorTab("mixer"),
   };

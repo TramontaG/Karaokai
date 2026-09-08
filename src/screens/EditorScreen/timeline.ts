@@ -50,6 +50,7 @@ export function timelineFollowScrollLeft(
 
 const identifier = (kind: "phrase" | "word") =>
   `${kind}-${Date.now()}-${crypto.randomUUID()}`;
+const DEFAULT_GAP_DURATION = 150;
 
 function templateOneSubtitlePreviewAt(
   phrases: SubtitlePhrase[],
@@ -257,6 +258,72 @@ export function wordsForText(phrase: SubtitlePhrase, text: string) {
   });
 }
 
+/**
+ * Replaces a single token's text. Multiple whitespace-delimited terms become
+ * consecutive words that retain the source token's time span, apportioned by
+ * their character counts.
+ */
+export function replacePhraseWordText(
+  phrase: SubtitlePhrase,
+  wordId: string,
+  text: string
+) {
+  const index = phrase.words.findIndex((word) => word.id === wordId);
+  if (index < 0) return phrase;
+
+  const tokens = text.match(/\S+/g) ?? [];
+  const source = phrase.words[index];
+  const replacement: SubtitleWord[] = [];
+
+  if (tokens.length === 0) {
+    replacement.push({ ...source, text: "", type: "gap" });
+  } else if (tokens.length === 1) {
+    replacement.push({ ...source, text: tokens[0], type: "word" });
+  } else {
+    const weights = tokens.map((token) =>
+      Math.max(1, Array.from(token).length)
+    );
+    const totalWeight = weights.reduce((total, weight) => total + weight, 0);
+    const duration = source.end - source.start;
+    let consumedWeight = 0;
+    let cursor = source.start;
+
+    tokens.forEach((token, tokenIndex) => {
+      consumedWeight += weights[tokenIndex];
+      const remainingTokens = tokens.length - tokenIndex - 1;
+      const proportionalEnd =
+        source.start + Math.round((consumedWeight / totalWeight) * duration);
+      const end =
+        tokenIndex === tokens.length - 1
+          ? source.end
+          : clamp(proportionalEnd, cursor + 1, source.end - remainingTokens);
+      replacement.push({
+        ...source,
+        id: tokenIndex === 0 ? source.id : identifier("word"),
+        text: token,
+        type: "word",
+        start: cursor,
+        end,
+      });
+      cursor = end;
+    });
+  }
+
+  const words = [
+    ...phrase.words.slice(0, index),
+    ...replacement,
+    ...phrase.words.slice(index + 1),
+  ];
+  return {
+    ...phrase,
+    text: words
+      .filter((word) => word.type !== "gap")
+      .map((word) => word.text)
+      .join(" "),
+    words,
+  };
+}
+
 export function movePhrase(
   phrase: SubtitlePhrase,
   requestedDelta: number,
@@ -295,6 +362,53 @@ export function duplicatePhraseAt(
       style: word.style ? { ...word.style } : undefined,
     })),
   };
+}
+
+export function splitPhraseAtClosestWordBoundary(
+  phrase: SubtitlePhrase,
+  requestedTime: number
+) {
+  const words = [...phrase.words].sort(
+    (left, right) => left.start - right.start || left.end - right.end
+  );
+  if (words.length < 2) return null;
+
+  const boundaries = words.slice(1).flatMap((word, index) => [
+    { time: words[index].end, wordIndex: index + 1 },
+    { time: word.start, wordIndex: index + 1 },
+  ]);
+  const boundary = boundaries.reduce((closest, candidate) =>
+    Math.abs(candidate.time - requestedTime) <
+    Math.abs(closest.time - requestedTime)
+      ? candidate
+      : closest
+  );
+  const firstWords = words.slice(0, boundary.wordIndex);
+  const secondWords = words.slice(boundary.wordIndex);
+
+  return [
+    {
+      ...phrase,
+      text: firstWords
+        .filter((word) => word.type !== "gap")
+        .map((word) => word.text)
+        .join(" "),
+      start: firstWords[0].start,
+      end: firstWords[firstWords.length - 1].end,
+      words: firstWords,
+    },
+    {
+      ...phrase,
+      id: identifier("phrase"),
+      text: secondWords
+        .filter((word) => word.type !== "gap")
+        .map((word) => word.text)
+        .join(" "),
+      start: secondWords[0].start,
+      end: secondWords[secondWords.length - 1].end,
+      words: secondWords,
+    },
+  ] as const;
 }
 
 export function resizePhraseStart(
@@ -380,6 +494,103 @@ export function resizeWordBoundary(
     next.start = boundary;
   }
   return { ...phrase, words };
+}
+
+export function moveWordWithinPhrase(
+  phrase: SubtitlePhrase,
+  wordId: string,
+  requestedDelta: number,
+  duration: number
+) {
+  const index = phrase.words.findIndex((word) => word.id === wordId);
+  if (index < 0) return phrase;
+  if (phrase.words.length === 1)
+    return movePhrase(phrase, requestedDelta, duration);
+
+  const words = phrase.words.map((word) => ({ ...word }));
+  const current = words[index];
+  const previous = words[index - 1];
+  const next = words[index + 1];
+  const minimumDelta = previous
+    ? previous.start + MIN_WORD_DURATION - current.start
+    : -phrase.start;
+  const maximumDelta = next
+    ? next.end - MIN_WORD_DURATION - current.end
+    : duration - phrase.end;
+  const delta = clamp(requestedDelta, minimumDelta, maximumDelta);
+
+  current.start += delta;
+  current.end += delta;
+  if (previous) previous.end = current.start;
+  if (next) next.start = current.end;
+
+  return {
+    ...phrase,
+    start: index === 0 ? current.start : phrase.start,
+    end: index === words.length - 1 ? current.end : phrase.end,
+    words,
+  };
+}
+
+export function insertGapAfterWord(
+  phrase: SubtitlePhrase,
+  wordId: string,
+  duration: number
+) {
+  const index = phrase.words.findIndex((word) => word.id === wordId);
+  if (index < 0) return phrase;
+  const source = phrase.words[index];
+  const gapDuration = Math.min(
+    DEFAULT_GAP_DURATION,
+    Math.max(0, duration - phrase.end)
+  );
+  if (gapDuration === 0) return phrase;
+
+  const gap: SubtitleWord = {
+    id: identifier("word"),
+    type: "gap",
+    text: "",
+    start: source.end,
+    end: source.end + gapDuration,
+  };
+  const words = phrase.words.flatMap((word, wordIndex) => {
+    if (wordIndex < index) return word;
+    if (wordIndex === index) return [word, gap];
+    return {
+      ...word,
+      start: word.start + gapDuration,
+      end: word.end + gapDuration,
+    };
+  });
+  return {
+    ...phrase,
+    end: phrase.end + gapDuration,
+    words,
+  };
+}
+
+export function removePhraseWord(phrase: SubtitlePhrase, wordId: string) {
+  const index = phrase.words.findIndex((word) => word.id === wordId);
+  if (index < 0) return phrase;
+  const removed = phrase.words[index];
+  const words = phrase.words
+    .filter((word) => word.id !== wordId)
+    .map((word) => ({ ...word }));
+  const next = words[index];
+  const previous = words[index - 1];
+  if (next) next.start = removed.start;
+  else if (previous) previous.end = removed.end;
+
+  return {
+    ...phrase,
+    text: words
+      .filter((word) => word.type !== "gap")
+      .map((word) => word.text)
+      .join(" "),
+    start: words[0]?.start ?? phrase.start,
+    end: words.at(-1)?.end ?? phrase.end,
+    words,
+  };
 }
 
 export function createPhraseAt(

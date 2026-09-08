@@ -1,6 +1,6 @@
 import styled from "@emotion/styled";
 
-export const Clip = styled.button<{ $selected: boolean }>`
+export const Clip = styled.button<{ $selected: boolean; $splitting: boolean }>`
   position: absolute;
   top: 0.12rem;
   height: 2.08rem;
@@ -15,10 +15,10 @@ export const Clip = styled.button<{ $selected: boolean }>`
   box-shadow: ${({ $selected, theme }) =>
     $selected ? `0 0 0 1px ${theme.colors.accent}` : "none"};
   font: inherit;
-  cursor: grab;
+  cursor: ${({ $splitting }) => ($splitting ? "crosshair" : "grab")};
   touch-action: none;
 
-  &:active {
+  &:active:not([data-splitting="true"]) {
     cursor: grabbing;
   }
 `;
@@ -31,6 +31,8 @@ export const Words = styled.span`
 export const WordSegment = styled.span<{
   $active: boolean;
   $selected: boolean;
+  $splitting?: boolean;
+  $gap: boolean;
 }>`
   position: absolute;
   top: 0;
@@ -42,13 +44,15 @@ export const WordSegment = styled.span<{
   align-items: center;
   justify-content: center;
   color: ${({ $active }) => ($active ? "#fff" : "rgb(255 255 255 / 78%)")};
-  background: ${({ $active, $selected, theme }) =>
-    $selected
-      ? `color-mix(in srgb, ${theme.colors.accent} 42%, transparent)`
-      : $active
-        ? "rgb(255 255 255 / 14%)"
-        : "transparent"};
-  cursor: pointer;
+  background: ${({ $active, $selected, $gap, theme }) =>
+    $gap
+      ? "repeating-linear-gradient(135deg, rgb(255 255 255 / 18%) 0 2px, transparent 2px 5px)"
+      : $selected
+        ? `color-mix(in srgb, ${theme.colors.accent} 42%, transparent)`
+        : $active
+          ? "rgb(255 255 255 / 14%)"
+          : "transparent"};
+  cursor: ${({ $splitting }) => ($splitting ? "crosshair" : "pointer")};
   pointer-events: auto;
 `;
 
@@ -61,7 +65,10 @@ export const WordLabel = styled.span`
   pointer-events: none;
 `;
 
-export const ClipEdge = styled.span<{ $side: "start" | "end" }>`
+export const ClipEdge = styled.span<{
+  $side: "start" | "end";
+  $splitting: boolean;
+}>`
   position: absolute;
   z-index: 6;
   top: 0;
@@ -69,7 +76,7 @@ export const ClipEdge = styled.span<{ $side: "start" | "end" }>`
   width: 0.45rem;
   height: 100%;
   background: rgb(255 255 255 / 12%);
-  cursor: ew-resize;
+  cursor: ${({ $splitting }) => ($splitting ? "crosshair" : "ew-resize")};
   touch-action: none;
 
   &::after {
@@ -86,6 +93,7 @@ export const ClipEdge = styled.span<{ $side: "start" | "end" }>`
 export const WordEdge = styled.span<{
   $side: "start" | "end";
   $visible: boolean;
+  $splitting: boolean;
 }>`
   position: absolute;
   z-index: 8;
@@ -96,6 +104,6 @@ export const WordEdge = styled.span<{
   width: 0.48rem;
   border-inline: 2px solid ${({ theme }) => theme.colors.accent};
   background: rgb(18 12 29 / 65%);
-  cursor: ew-resize;
+  cursor: ${({ $splitting }) => ($splitting ? "crosshair" : "ew-resize")};
   touch-action: none;
 `;

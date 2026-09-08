@@ -1,4 +1,8 @@
 import styled from "@emotion/styled";
+import {
+  subtitleFontStack,
+  type SubtitleFontFamily,
+} from "../../domain/project";
 
 export const EditorPage = styled.main`
   display: grid;
@@ -90,6 +94,10 @@ export const HeaderActions = styled.div`
   gap: 0.55rem;
   button {
     height: 2.2rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
     border: 1px solid ${({ theme }) => theme.colors.border};
     border-radius: 0.45rem;
     padding: 0 0.75rem;
@@ -117,10 +125,9 @@ export const HeaderLabel = styled.span`
   height: 2.2rem;
   padding: 0 0.75rem;
   border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: 0.45rem;
+  border-width: 0px 0px 1px 0px;
   align-items: center;
   color: ${({ theme }) => theme.colors.textMuted};
-  background: ${({ theme }) => theme.colors.surface};
   font-size: 0.72rem;
   white-space: nowrap;
   cursor: default;
@@ -293,7 +300,7 @@ export const PreviewBackground = styled.div`
 export const SubtitlePreview = styled.div`
   position: absolute;
   z-index: 1;
-  top: 38%;
+  top: 50%;
   left: 50%;
   width: 88%;
   transform: translateX(-50%);
@@ -306,23 +313,49 @@ export const SubtitlePreview = styled.div`
   line-height: 1.3;
 `;
 export const CurrentPhrase = styled.p`
+  position: relative;
   margin: 0;
-  will-change: opacity;
+  transform: translateY(calc(-50% + 0.18em));
+  transform-origin: center;
+  will-change: opacity, transform;
 `;
-export const PreviewWord = styled.span<{
-  $unreadColor: string;
-  $scale: number;
-}>`
+type SubtitlePreviewDataAttributes = {
+  "data-subtitle-track-id"?: string;
+  "data-subtitle-phrase-id"?: string;
+  "data-subtitle-word-id"?: string;
+  "data-subtitle-color"?: "unreadColor" | "readColor";
+  "data-subtitle-color-source"?: "track" | "phrase" | "word" | "default";
+};
+
+export const PreviewWord = styled.span<
+  {
+    $unreadColor: string;
+    $scale: number;
+    $fontFamily: SubtitleFontFamily;
+    $fontWeight: "normal" | "bold";
+    $fontStyle: "normal" | "italic";
+    $textDecoration: "none" | "underline";
+    $verticalAlign: "baseline" | "super" | "sub";
+  } & SubtitlePreviewDataAttributes
+>`
   position: relative;
   display: inline-block;
   margin-right: 0.25em;
   color: ${({ $unreadColor }) => $unreadColor};
-  font-size: ${({ $scale }) => `${$scale}em`};
+  font-family: ${({ $fontFamily }) => subtitleFontStack($fontFamily)};
+  font-size: ${({ $scale, $verticalAlign }) =>
+    `${$scale * ($verticalAlign === "baseline" ? 1 : 0.75)}em`};
+  font-weight: ${({ $fontWeight }) => $fontWeight};
+  font-style: ${({ $fontStyle }) => $fontStyle};
+  text-decoration: ${({ $textDecoration }) => $textDecoration};
+  vertical-align: ${({ $verticalAlign }) => $verticalAlign};
 `;
-export const PreviewWordFill = styled.span<{
-  $progress: number;
-  $readColor: string;
-}>`
+export const PreviewWordFill = styled.span<
+  {
+    $progress: number;
+    $readColor: string;
+  } & SubtitlePreviewDataAttributes
+>`
   position: absolute;
   top: 0;
   bottom: 0;
@@ -339,7 +372,8 @@ export const EntryCue = styled.div`
   position: absolute;
   top: calc(100% + 0.98cqw);
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) scale(var(--entry-cue-scale, 1));
+  transform-origin: center top;
 `;
 export const EntryCueBar = styled.div`
   width: 12cqw;
@@ -513,11 +547,38 @@ export const TimelineToolbarOptions = styled.div`
     display: none;
   }
 `;
-export const TimelineHint = styled.span`
-  color: ${({ theme }) => theme.colors.textMuted};
-  font-size: 0.64rem;
-  @media (max-width: 780px) {
-    display: none;
+export const TimelineToolGroup = styled.div`
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.2rem;
+  padding-right: 0.7rem;
+  border-right: 1px solid ${({ theme }) => theme.colors.border};
+`;
+export const TimelineToolButton = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  height: 1.7rem;
+  padding: 0 0.48rem;
+  border: 1px solid
+    ${({ $active, theme }) => ($active ? theme.colors.accent : "transparent")} !important;
+  border-radius: 0.3rem;
+  align-items: center;
+  gap: 0.32rem;
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.text : theme.colors.textMuted} !important;
+  background: ${({ $active, theme }) =>
+    $active
+      ? `color-mix(in srgb, ${theme.colors.accent} 22%, transparent)`
+      : "transparent"} !important;
+  font: inherit;
+  font-size: 0.62rem;
+  white-space: nowrap;
+
+  &:hover {
+    background: color-mix(
+      in srgb,
+      ${({ theme }) => theme.colors.accent} 12%,
+      transparent
+    ) !important;
   }
 `;
 export const TimelineFollowToggle = styled.label`
@@ -575,12 +636,13 @@ export const TimelineViewport = styled.div`
   overflow: auto;
   padding: 0.5rem 0.8rem 0.8rem 0;
 `;
-export const TimelineContent = styled.div`
+export const TimelineContent = styled.div<{ $splitting: boolean }>`
   position: relative;
   display: grid;
   box-sizing: border-box;
   min-width: max(34rem, 100%);
   gap: 0.45rem;
+  cursor: ${({ $splitting }) => ($splitting ? "crosshair" : "default")};
 `;
 export const TimelineBeatGrid = styled.div`
   position: absolute;
@@ -643,13 +705,23 @@ export const TimelineLabel = styled.button<{ $selected: boolean }>`
     color: ${({ theme }) => theme.colors.accent};
   }
 `;
-export const TimelineLane = styled.div`
+export const TimelineLane = styled.div<{
+  $splitting?: boolean;
+  $dropTarget: boolean;
+  "data-subtitle-track-id"?: string;
+}>`
   position: relative;
   min-width: 0;
   height: 2.3rem;
   border-radius: 0.25rem;
-  background: rgb(255 255 255 / 3%);
+  background: ${({ $dropTarget, theme }) =>
+    $dropTarget
+      ? `color-mix(in srgb, ${theme.colors.accent} 20%, transparent)`
+      : "rgb(255 255 255 / 3%)"};
+  box-shadow: ${({ $dropTarget, theme }) =>
+    $dropTarget ? `inset 0 0 0 1px ${theme.colors.accent}` : "none"};
   user-select: none;
+  cursor: ${({ $splitting }) => ($splitting ? "crosshair" : "default")};
 `;
 export const TimelinePlayhead = styled.div`
   position: absolute;
@@ -968,6 +1040,9 @@ export const FieldGrid = styled.div`
 export const ColorField = styled(Field)`
   grid-column: 1 / -1;
 `;
+export const FullWidthField = styled(Field)`
+  grid-column: 1 / -1;
+`;
 export const ColorFieldControl = styled.div`
   display: flex;
   align-items: center;
@@ -989,6 +1064,47 @@ export const ColorFieldControl = styled.div`
   button:hover {
     color: ${({ theme }) => theme.colors.text};
     border-color: ${({ theme }) => theme.colors.accent};
+  }
+`;
+export const FontStyleControls = styled.div<{ $withInheritance: boolean }>`
+  display: grid;
+  grid-template-columns: repeat(
+    ${({ $withInheritance }) => ($withInheritance ? 6 : 5)},
+    minmax(0, 1fr)
+  );
+  gap: 0.35rem;
+
+  button {
+    width: 100%;
+    height: 2.15rem;
+    min-width: 0;
+    padding: 0 0.2rem;
+    border: 1px solid ${({ theme }) => theme.colors.border};
+    border-radius: 0.35rem;
+    color: ${({ theme }) => theme.colors.textMuted};
+    background: transparent;
+    font: inherit;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition:
+      border-color 150ms ease,
+      background 150ms ease,
+      color 150ms ease;
+  }
+
+  button:hover {
+    border-color: ${({ theme }) => theme.colors.accent};
+    color: ${({ theme }) => theme.colors.text};
+  }
+
+  button[data-active="true"] {
+    border-color: ${({ theme }) => theme.colors.accent};
+    color: ${({ theme }) => theme.colors.text};
+    background: color-mix(
+      in srgb,
+      ${({ theme }) => theme.colors.accent} 18%,
+      transparent
+    );
   }
 `;
 export const ColorInputValue = styled.div`
@@ -1062,9 +1178,9 @@ export const WordTimingRow = styled.div<{ $active: boolean }>`
   display: grid;
   padding: 0.48rem 0.6rem;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  grid-template-columns: minmax(0, 1fr) 4.2rem 4.2rem;
+  grid-template-columns: minmax(0, 1fr) 3.55rem 3.55rem 1.35rem 1.35rem;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.3rem;
   color: ${({ theme }) => theme.colors.textMuted};
   background: ${({ $active, theme }) =>
     $active
@@ -1104,6 +1220,36 @@ export const WordTimingRow = styled.div<{ $active: boolean }>`
 
   input[data-draggable-number="true"]:focus {
     cursor: text;
+  }
+
+  input:not([data-draggable-number="true"]) {
+    padding: 0.42rem 0.25rem;
+    border: 0;
+    background: transparent;
+  }
+
+  input:disabled {
+    color: ${({ theme }) => theme.colors.textMuted};
+    cursor: default;
+  }
+
+  button[data-word-action] {
+    display: grid;
+    width: 1.35rem;
+    height: 1.35rem;
+    overflow: visible;
+    border-radius: 0.25rem;
+    place-items: center;
+    color: ${({ theme }) => theme.colors.textMuted};
+  }
+
+  button[data-word-action]:hover {
+    color: ${({ theme }) => theme.colors.text};
+    background: rgb(255 255 255 / 8%);
+  }
+
+  button[data-word-action="delete"]:hover {
+    color: #ff8ca2;
   }
 `;
 export const PhraseActions = styled.div`

@@ -46,6 +46,29 @@ def milliseconds(seconds: float) -> int:
     return round(seconds * 1000)
 
 
+def add_gap_tokens(words: list[dict]) -> None:
+    normalized: list[dict] = []
+    for word in words:
+        current = dict(word)
+        if normalized:
+            previous = normalized[-1]
+            if current["start"] > previous["end"]:
+                normalized.append(
+                    {
+                        "id": f"gap-{previous['id']}-{current['id']}",
+                        "type": "gap",
+                        "text": "",
+                        "start": previous["end"],
+                        "end": current["start"],
+                    }
+                )
+            elif current["start"] < previous["end"]:
+                boundary = round((previous["end"] + current["start"]) / 2)
+                previous["end"] = boundary
+                current["start"] = boundary
+        normalized.append(current)
+    words[:] = normalized
+
 def separate(source: Path, project_directory: Path, demucs_model: str) -> None:
     device = (
         "cuda"
@@ -120,10 +143,16 @@ def transcribe(project_directory: Path, whisper_model_path: Path) -> None:
         for word_index, word in enumerate(segment.words or []):
             if word.start is None or word.end is None:
                 continue
-            words.append({"id": f"word-{index + 1}-{word_index + 1}", "text": word.word.strip(), "start": milliseconds(word.start), "end": milliseconds(word.end)})
+            text = word.word.strip()
+            start = milliseconds(word.start)
+            end = milliseconds(word.end)
+            if not text or end <= start:
+                continue
+            words.append({"id": f"word-{index + 1}-{word_index + 1}", "text": text, "start": start, "end": end})
         if not words:
             continue
-        phrases.append({"id": f"phrase-{index + 1}", "text": " ".join(word["text"] for word in words), "start": words[0]["start"], "end": words[-1]["end"], "words": words})
+        add_gap_tokens(words)
+        phrases.append({"id": f"phrase-{index + 1}", "text": " ".join(word["text"] for word in words if word.get("type") != "gap"), "start": words[0]["start"], "end": words[-1]["end"], "words": words})
         emit_progress("transcription", min(95.0, 10.0 + (index / (index + 8)) * 85.0), f"Transcrevendo frase {index + 1}")
     instrumental = project_directory / "audio" / "instrumental.wav"
     metadata = torchaudio.info(str(instrumental))

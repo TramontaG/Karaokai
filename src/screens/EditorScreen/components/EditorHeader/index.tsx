@@ -18,13 +18,6 @@ function EditorHeaderView() {
   return (
     <Header>
       <ProjectTitle>
-        <button
-          type="button"
-          aria-label={behavior.backLabel}
-          onClick={behavior.onBack}
-        >
-          <ChevronLeft size={18} />
-        </button>
         <h1>{behavior.projectName}</h1>
         <SavedState>
           <Check size={13} />

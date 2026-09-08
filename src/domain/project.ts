@@ -1,5 +1,22 @@
 export type TrackType = "audio" | "background" | "subtitle" | "image" | "text";
 
+export type SubtitleFontFamily = string;
+
+export const DEFAULT_SUBTITLE_FONT = "KaraokAI Sans";
+
+export function subtitleFontStack(fontFamily: SubtitleFontFamily) {
+  const legacyFamilies: Record<string, string> = {
+    "system-ui": "KaraokAI Sans",
+    Arial: "KaraokAI Sans",
+    Georgia: "KaraokAI Serif",
+    "Trebuchet MS": "KaraokAI Sans",
+    "Courier New": "KaraokAI Mono",
+    Impact: "KaraokAI Condensed",
+  };
+  const family = legacyFamilies[fontFamily] ?? fontFamily;
+  return `"${family.replace(/["\\]/g, "\\$&")}", sans-serif`;
+}
+
 export interface TimedElement {
   start: number;
   end: number;
@@ -9,6 +26,11 @@ export interface SubtitleStyle {
   unreadColor?: string;
   readColor?: string;
   scale?: number;
+  fontFamily?: SubtitleFontFamily;
+  fontWeight?: "normal" | "bold";
+  fontStyle?: "normal" | "italic";
+  textDecoration?: "none" | "underline";
+  verticalAlign?: "baseline" | "super" | "sub";
   x?: number;
   y?: number;
   positionReferenceWidth?: number;
@@ -56,8 +78,13 @@ export interface BackgroundTrack extends BaseTrack {
 export interface SubtitleWord extends TimedElement {
   id: string;
   text: string;
+  type?: "word" | "gap";
   curve?: string;
   style?: SubtitleStyle;
+}
+
+export function isSubtitleGap(word: SubtitleWord) {
+  return word.type === "gap";
 }
 
 export interface SubtitlePhrase extends TimedElement {
@@ -82,10 +109,63 @@ export interface SubtitleTrack extends BaseTrack {
   phrases: SubtitlePhrase[];
 }
 
+function normalizeSubtitlePhraseTiming(phrase: SubtitlePhrase) {
+  const sourceWords = phrase.words
+    .map((word) => ({
+      ...word,
+      text: isSubtitleGap(word) ? "" : word.text.trim(),
+    }))
+    .filter(
+      (word) =>
+        (isSubtitleGap(word) || word.text.length > 0) &&
+        Number.isFinite(word.start) &&
+        Number.isFinite(word.end) &&
+        word.end > word.start
+    )
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+  if (sourceWords.length === 0) return { ...phrase, words: sourceWords };
+
+  const words: SubtitleWord[] = [];
+  sourceWords.forEach((word) => {
+    const current = { ...word };
+    const previous = words.at(-1);
+    if (previous) {
+      if (current.start > previous.end) {
+        if (isSubtitleGap(previous)) previous.end = current.start;
+        else if (isSubtitleGap(current)) current.start = previous.end;
+        else
+          words.push({
+            id: `gap-${previous.id}-${current.id}`,
+            type: "gap",
+            text: "",
+            start: previous.end,
+            end: current.start,
+          });
+      } else if (current.start < previous.end) {
+        const boundary = Math.round((previous.end + current.start) / 2);
+        previous.end = boundary;
+        current.start = boundary;
+      }
+    }
+    words.push(current);
+  });
+
+  return {
+    ...phrase,
+    text: words
+      .filter((word) => !isSubtitleGap(word))
+      .map((word) => word.text)
+      .join(" "),
+    start: words[0].start,
+    end: words[words.length - 1].end,
+    words,
+  };
+}
+
 /**
- * Subtitle tracks store phrases in ascending start/end order. Keep this
- * invariant whenever timing or membership changes so playback can consume the
- * collection without sorting during a frame.
+ * Subtitle tracks store phrases in ascending timing order. Valid words define
+ * each phrase's visual bounds, which prevents broken alignments from creating
+ * a long, empty clip after the final word.
  */
 export function sortSubtitlePhrases(phrases: SubtitlePhrase[]) {
   return [...phrases].sort(
@@ -98,7 +178,12 @@ export function normalizeSubtitlePhraseOrder(project: KaraokeProject) {
     ...project,
     tracks: project.tracks.map((track) =>
       track.type === "subtitle"
-        ? { ...track, phrases: sortSubtitlePhrases(track.phrases) }
+        ? {
+            ...track,
+            phrases: sortSubtitlePhrases(
+              track.phrases.map(normalizeSubtitlePhraseTiming)
+            ),
+          }
         : track
     ),
   };
@@ -184,6 +269,25 @@ export function resolveSubtitleStyle(
     readColor:
       word?.readColor ?? phrase?.readColor ?? track.readColor ?? "#FF0044",
     scale: word?.scale ?? phrase?.scale ?? track.scale ?? 1,
+    fontFamily:
+      word?.fontFamily ??
+      phrase?.fontFamily ??
+      track.fontFamily ??
+      DEFAULT_SUBTITLE_FONT,
+    fontWeight:
+      word?.fontWeight ?? phrase?.fontWeight ?? track.fontWeight ?? "bold",
+    fontStyle:
+      word?.fontStyle ?? phrase?.fontStyle ?? track.fontStyle ?? "normal",
+    textDecoration:
+      word?.textDecoration ??
+      phrase?.textDecoration ??
+      track.textDecoration ??
+      "none",
+    verticalAlign:
+      word?.verticalAlign ??
+      phrase?.verticalAlign ??
+      track.verticalAlign ??
+      "baseline",
     x: (track.x ?? 0) + (phrase?.x ?? 0) + (word?.x ?? 0),
     y: (track.y ?? 0) + (phrase?.y ?? 0) + (word?.y ?? 0),
     positionReferenceWidth: track.positionReferenceWidth ?? 640,
