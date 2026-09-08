@@ -28,6 +28,10 @@ export const Dialog = styled.section`
     ${({ theme }) => theme.colors.surface};
   box-shadow: 0 1.4rem 4rem rgb(0 0 0 / 48%);
 
+  &[data-progress] {
+    width: min(32rem, 100%);
+  }
+
   @media (max-width: 640px) {
     padding: 1.25rem;
     border-radius: 1rem;
@@ -51,6 +55,16 @@ export const DialogIcon = styled.span`
     rgb(190 101 242 / 18%),
     rgb(154 76 232 / 8%)
   );
+
+  &[data-rendering="true"] svg {
+    animation: export-dialog-spin 0.9s linear infinite;
+  }
+
+  @keyframes export-dialog-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 `;
 export const HeaderCopy = styled.div`
   min-width: 0;
@@ -229,6 +243,11 @@ export const CancelButton = styled(Button)`
   border: 1px solid ${({ theme }) => theme.colors.border};
   color: ${({ theme }) => theme.colors.text};
   background: transparent;
+
+  &:disabled {
+    cursor: wait;
+    opacity: 0.6;
+  }
 `;
 export const PrimaryButton = styled(Button)`
   border: 0;

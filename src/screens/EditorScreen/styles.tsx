@@ -161,66 +161,6 @@ export const HeaderWindowAction = styled.button`
     background: #d53f50;
   }
 `;
-export const RenderProgress = styled.section`
-  position: absolute;
-  z-index: 20;
-  top: 4.5rem;
-  right: 1rem;
-  display: grid;
-  width: min(19rem, calc(100vw - 2rem));
-  padding: 0.75rem;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: 0.55rem;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 0.45rem 0.7rem;
-  color: ${({ theme }) => theme.colors.text};
-  background: color-mix(
-    in srgb,
-    ${({ theme }) => theme.colors.surface} 94%,
-    transparent
-  );
-  box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 25%);
-  font-size: 0.7rem;
-
-  span {
-    color: ${({ theme }) => theme.colors.textMuted};
-    font-variant-numeric: tabular-nums;
-  }
-  small {
-    grid-column: 1;
-    color: #ff9caf;
-    font-size: 0.62rem;
-    line-height: 1.35;
-  }
-  button {
-    grid-column: 2;
-    min-height: 1.8rem;
-    padding: 0 0.55rem;
-    border: 1px solid ${({ theme }) => theme.colors.border};
-    border-radius: 0.3rem;
-    color: ${({ theme }) => theme.colors.text};
-    background: transparent;
-    font: inherit;
-    cursor: pointer;
-  }
-`;
-export const RenderProgressBar = styled.div<{ $progress: number }>`
-  grid-column: 1 / -1;
-  height: 0.32rem;
-  overflow: hidden;
-  border-radius: 999px;
-  background: ${({ theme }) => theme.colors.border};
-  &::before {
-    display: block;
-    width: ${({ $progress }) => `${Math.max(0, Math.min(100, $progress))}%`};
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, #bd65f2, #dc8dff);
-    content: "";
-    transition: width 100ms linear;
-  }
-`;
 export const PreviewArea = styled.section`
   display: grid;
   min-height: 0;

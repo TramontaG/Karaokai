@@ -3,6 +3,7 @@ import { Render } from "../../components/Render";
 import { useBehavior } from "./behavior";
 import { DeleteTrackDialog } from "./components/DeleteTrackDialog";
 import { ExportDialog } from "./components/ExportDialog";
+import { ExportProgressDialog } from "./components/ExportProgressDialog";
 import { EditorHeader } from "./components/EditorHeader";
 import { EditorSidebar } from "./components/EditorSidebar";
 import {
@@ -14,8 +15,6 @@ import { PlayerControls } from "./components/PlayerControls";
 import {
   EditorPage,
   PlayerError,
-  RenderProgress,
-  RenderProgressBar,
   PreviewArea,
   PreviewBackground,
   PreviewCanvas,
@@ -37,32 +36,17 @@ function EditorScreenContent() {
       <EditorPage>
         <EditorHeader />
         <Render when={behavior.renderProgress !== null}>
-          <RenderProgress>
-            <strong>
-              {behavior.renderProgress?.status === "completed"
-                ? behavior.exportCompletedLabel
-                : behavior.renderProgress?.status === "failed"
-                  ? behavior.exportFailedLabel
-                  : behavior.exportRenderingLabel}
-            </strong>
-            <span>{behavior.renderProgress?.progress ?? 0}%</span>
-            <RenderProgressBar
-              $progress={behavior.renderProgress?.progress ?? 0}
-            />
-            <Render when={behavior.renderProgress?.status === "rendering"}>
-              <button type="button" onClick={behavior.onCancelExport}>
-                {behavior.exportCancelLabel}
-              </button>
-            </Render>
-            <Render when={behavior.renderProgress?.status !== "rendering"}>
-              <Render when={behavior.renderProgress?.error !== undefined}>
-                <small>{behavior.renderProgress?.error}</small>
-              </Render>
-              <button type="button" onClick={behavior.onCancelExport}>
-                {behavior.exportCloseLabel}
-              </button>
-            </Render>
-          </RenderProgress>
+          <ExportProgressDialog
+            Icon={behavior.renderProgressIcon}
+            status={behavior.renderProgress?.status ?? "rendering"}
+            title={behavior.renderProgressTitle}
+            progress={behavior.renderProgress?.progress ?? 0}
+            error={behavior.renderProgress?.error}
+            cancelling={behavior.isCancellingExport}
+            cancelLabel={behavior.exportCancelLabel}
+            closeLabel={behavior.exportCloseLabel}
+            onCancel={() => void behavior.onCancelExport()}
+          />
         </Render>
         <Workspace>
           <audio

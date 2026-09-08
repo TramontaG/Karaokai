@@ -1,5 +1,13 @@
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { Image, Music2, Subtitles, Type } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Image,
+  LoaderCircle,
+  Music2,
+  Subtitles,
+  Type,
+} from "lucide-react";
 import { flushSync } from "react-dom";
 import {
   createElement,
@@ -625,9 +633,13 @@ export function useBehavior(_: Record<string, never>) {
   const thumbnailCaptureKeyRef = useRef<string | null>(null);
   const thumbnailCaptureRef = useRef<(() => Promise<void>) | null>(null);
   const liveColorElementsRef = useRef<HTMLElement[]>([]);
+  const exportLockRef = useRef(false);
+  const renderJobIdRef = useRef<string | null>(null);
+  const [isCancellingExport, setIsCancellingExport] = useState(false);
 
   const setLiveProject = useCallback(
     (next: KaraokeProject) => {
+      if (exportLockRef.current) return projectRef.current ?? next;
       const normalizedProject = normalizeSubtitlePhraseOrder(next);
       const thumbnail = isDesktop()
         ? normalizedProject.thumbnail
@@ -652,6 +664,7 @@ export function useBehavior(_: Record<string, never>) {
   );
   const applyProject = useCallback(
     (next: KaraokeProject, immediate = false) => {
+      if (exportLockRef.current) return;
       const normalized = setLiveProject(
         isDesktop() ? { ...next, thumbnail: null } : next
       );
@@ -676,6 +689,7 @@ export function useBehavior(_: Record<string, never>) {
       immediate = false,
       historySource = projectRef.current
     ) => {
+      if (exportLockRef.current) return;
       if (historySource && historySource !== next) {
         const selection = selectionRef.current;
         historyRef.current.push({
@@ -759,7 +773,8 @@ export function useBehavior(_: Record<string, never>) {
         window.clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
-      if (projectRef.current) saveProjectNow(projectRef.current);
+      if (projectRef.current && !exportLockRef.current)
+        saveProjectNow(projectRef.current);
     },
     [saveProjectNow]
   );
@@ -870,6 +885,12 @@ export function useBehavior(_: Record<string, never>) {
     void listenDesktop<ProjectRenderProgress>(
       "project-render-progress",
       (event) => {
+        if (event.payload.jobId !== renderJobIdRef.current) return;
+        if (event.payload.status !== "rendering") {
+          exportLockRef.current = false;
+          renderJobIdRef.current = null;
+          setIsCancellingExport(false);
+        }
         setRenderProgress((current) =>
           current?.jobId === event.payload.jobId
             ? {
@@ -1815,6 +1836,7 @@ export function useBehavior(_: Record<string, never>) {
     [persistProject]
   );
   const onOpenExport = useCallback(() => {
+    if (exportLockRef.current) return;
     const audio = projectRef.current?.tracks.find(isAudioTrack);
     const instrumental = audio?.volume ?? 1;
     const vocals = audio?.vocalsVolume ?? 0;
@@ -1845,6 +1867,10 @@ export function useBehavior(_: Record<string, never>) {
     const vocalsVolume =
       exportAudioMode === "instrumental" ? 0 : exportVocalsVolume;
     try {
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
       await saveProject(currentProject, data.preferences.storageDirectory);
       const jobId = await startProjectRender({
         projectId,
@@ -1857,6 +1883,8 @@ export function useBehavior(_: Record<string, never>) {
         vocalsVolume,
         encodingPreset: exportEncodingPreset,
       });
+      exportLockRef.current = true;
+      renderJobIdRef.current = jobId;
       setExportDialogOpen(false);
       setRenderProgress({ jobId, status: "rendering", progress: 0 });
     } catch (reason) {
@@ -1872,11 +1900,33 @@ export function useBehavior(_: Record<string, never>) {
     exportEncodingPreset,
     projectId,
   ]);
-  const onCancelExport = useCallback(() => {
-    if (renderProgress?.status === "rendering")
-      void cancelProjectRender(renderProgress.jobId);
-    setRenderProgress(null);
-  }, [renderProgress]);
+  const onCancelExport = useCallback(async () => {
+    if (!renderProgress) return;
+    if (renderProgress.status !== "rendering") {
+      exportLockRef.current = false;
+      renderJobIdRef.current = null;
+      setRenderProgress(null);
+      return;
+    }
+    if (isCancellingExport) return;
+
+    setIsCancellingExport(true);
+    try {
+      await cancelProjectRender(renderProgress.jobId);
+      exportLockRef.current = false;
+      renderJobIdRef.current = null;
+      setRenderProgress(null);
+    } catch (reason) {
+      setError(String(reason));
+      setRenderProgress((current) =>
+        current?.jobId === renderProgress.jobId
+          ? { ...current, error: String(reason) }
+          : current
+      );
+    } finally {
+      setIsCancellingExport(false);
+    }
+  }, [isCancellingExport, renderProgress, setError]);
   const updateBackground = useCallback(
     (patch: Partial<BackgroundTrack>) => {
       const currentProject = projectRef.current;
@@ -2433,6 +2483,10 @@ export function useBehavior(_: Record<string, never>) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (exportLockRef.current) {
+        event.preventDefault();
+        return;
+      }
       if (trackPendingDeletionId !== null) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, select, [contenteditable='true']"))
@@ -3031,6 +3085,18 @@ export function useBehavior(_: Record<string, never>) {
     ]
   );
   const headerRenderKey = useMemo(() => ({}), [project?.name, t]);
+  const renderProgressTitle =
+    renderProgress?.status === "completed"
+      ? t("editor.exportCompleted")
+      : renderProgress?.status === "failed"
+        ? t("editor.exportFailed")
+        : t("editor.exportRendering");
+  const renderProgressIcon =
+    renderProgress?.status === "completed"
+      ? CheckCircle2
+      : renderProgress?.status === "failed"
+        ? AlertTriangle
+        : LoaderCircle;
 
   return {
     projectName: project?.name ?? t("editor.project", { projectId }),
@@ -3107,6 +3173,9 @@ export function useBehavior(_: Record<string, never>) {
     exportVocalsVolume,
     exportEncodingPreset,
     renderProgress,
+    isCancellingExport,
+    renderProgressTitle,
+    renderProgressIcon,
     exportTitle: t("editor.exportTitle"),
     exportDescription: t("editor.exportDescription"),
     exportAdvancedOptionsLabel: t("editor.exportAdvancedOptions"),
