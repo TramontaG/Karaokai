@@ -1,90 +1,96 @@
 # KaraokAI
 
-Aplicação desktop local-first para transformar músicas em projetos de karaokê com separação de vocais, transcrição sincronizada, edição visual e exportação de vídeo.
+Aplicação desktop local-first para transformar músicas em projetos de karaokê: separa vocais e instrumental, transcreve letras com timestamps por palavra, permite editar a timeline visualmente e exporta o resultado em vídeo.
 
-> [!IMPORTANT]
-> O KaraokAI está em desenvolvimento ativo. O shell da aplicação, o onboarding, o gerenciador de runtime e o design inicial das telas estão implementados; o pipeline completo de criação e edição de karaokês ainda está em construção.
+> [!NOTE]
+> Versão atual: `0.1.0` — release candidate. O fluxo principal está funcional; os instaladores públicos para Windows e macOS ainda dependem das respectivas etapas de distribuição e assinatura.
 
-## Visão geral
-
-O objetivo do KaraokAI é oferecer um fluxo simples:
+## O que o KaraokAI faz
 
 ```text
-Selecionar uma música
-        ↓
-Separar vocais e instrumental
-        ↓
-Transcrever e sincronizar a letra
-        ↓
-Editar e personalizar
-        ↓
-Visualizar e exportar
+Importar música ou vídeo do YouTube
+             ↓
+Separar vocais e instrumental localmente
+             ↓
+Transcrever e criar legendas sincronizadas
+             ↓
+Editar letra, timings, visual e background
+             ↓
+Exportar vídeo de karaokê
 ```
 
-O processamento principal acontece localmente. A música não precisa ser enviada para APIs externas, e o aplicativo funciona offline depois que as dependências e os modelos escolhidos forem baixados.
+O processamento de áudio e de vídeo ocorre no computador do usuário. Internet só é necessária para baixar o runtime/modelos no primeiro uso e, naturalmente, para importar um vídeo do YouTube.
 
-## Estado atual
+## Funcionalidades
 
-Já disponível:
+### Criação e processamento de projetos
 
-- aplicação desktop Electron com interface React e TypeScript;
-- onboarding visual com escolha do diretório de armazenamento;
-- instalação isolada de Python, FFmpeg, yt-dlp e ML Worker;
-- download e gerenciamento de modelos Whisper e Demucs;
-- progresso visual para instalações e downloads;
-- checkup das dependências e gerenciamento dos arquivos locais;
-- telas iniciais de Início, Projetos e Configurações;
-- biblioteca de projetos em grade e lista;
-- temas claro, escuro e automático pelo sistema;
-- interface em português e inglês;
-- preferências persistidas localmente.
+- importação de arquivos locais (`.mp3`, `.wav`, `.flac`, `.m4a`, `.aac` e `.ogg`);
+- importação de vídeos do YouTube, preservando o vídeo como background do projeto;
+- suporte opcional a cookies do YouTube para casos em que a plataforma exige autenticação;
+- separação local de vocais e instrumental com Demucs;
+- transcrição de vocais com timestamps por palavra;
+- tokens explícitos de pausa entre palavras, preservados no projeto e na timeline;
+- acompanhamento de cada etapa do processamento: importação, separação, transcrição e geração de legendas.
 
-Em desenvolvimento:
+### Editor de karaokê
 
-- importação e análise real de áudio;
-- separação de stems e transcrição integradas à interface;
-- alinhamento das palavras;
-- editor de letra e timeline;
-- preview do karaokê;
-- renderização e exportação de vídeo.
+- múltiplas tracks de legendas, além de tracks de áudio e background;
+- edição de texto da frase e de cada palavra diretamente no painel lateral;
+- inserção, remoção e edição de palavras e pausas;
+- ao digitar múltiplas palavras em um item, divisão automática do intervalo de tempo proporcionalmente ao tamanho de cada palavra;
+- split de frases por atalho (`S`) ou pela ferramenta de corte, usando o limite de palavra mais próximo do cursor;
+- arraste de frases horizontalmente e entre tracks;
+- arraste de palavras com `Ctrl` para redistribuir o timing sem criar espaços vazios na frase;
+- zoom da timeline com `Ctrl` + scroll, grade de BPM/offset e acompanhamento opcional da reprodução;
+- desfazer/refazer com histórico das edições;
+- estilos por track, frase ou palavra: fonte, peso, itálico, sublinhado, sobrescrito/subscrito, escala, posição e cores de leitura;
+- curvas de animação e transição entre frases;
+- backgrounds de vídeo, imagem, capa do álbum, cor sólida ou gradiente, com modos `cover` e `contain`;
+- fontes próprias importadas pelo usuário;
+- miniaturas de projeto geradas a partir da prévia do editor.
 
-## Stack
+### Biblioteca e exportação
 
-| Camada       | Tecnologias                      |
-| ------------ | -------------------------------- |
-| Desktop      | Electron, Node.js                |
-| Interface    | React 19, TypeScript, Vite       |
-| Estilos      | Emotion Styled                   |
-| Navegação    | TanStack Router                  |
-| Ícones       | Lucide React                     |
-| Worker local | Python 3.11, PyTorch             |
-| IA           | Demucs, faster-whisper, WhisperX |
-| Mídia        | FFmpeg, yt-dlp                   |
+- biblioteca de projetos em grade ou lista;
+- renomear, duplicar, excluir, abrir a pasta e reabrir projetos;
+- persistência de projeto e assets no diretório de dados escolhido;
+- exportação de vídeo com resoluções de 480p a 1440p, 30 ou 60 FPS, modos de áudio instrumental/vocais/mix e presets H.264;
+- progresso de renderização, cancelamento seguro e bloqueio de edição enquanto o vídeo é gerado.
+
+## Tecnologia
+
+| Camada        | Tecnologias                                  |
+| ------------- | -------------------------------------------- |
+| Desktop       | Electron, Node.js                            |
+| Interface     | React 19, TypeScript, Vite                   |
+| Estilos       | Emotion Styled                               |
+| Navegação     | TanStack Router                              |
+| Processamento | Python 3.11, PyTorch, Demucs, faster-whisper |
+| Mídia         | FFmpeg, yt-dlp                               |
 
 ## Runtime local
 
-O instalador do KaraokAI não inclui Python, modelos ou binários pesados. No primeiro acesso, o Runtime Manager baixa somente o necessário para a plataforma e mantém tudo dentro do diretório privado da aplicação.
+O bundle do aplicativo não inclui Python, modelos ou binários pesados. No primeiro uso, o Runtime Manager instala tudo no diretório de dados escolhido, sem modificar o Python do sistema, `PATH` ou registro do Windows.
 
 | Componente | Origem                                          |
 | ---------- | ----------------------------------------------- |
 | `uv`       | Release oficial da Astral, com SHA-256 validado |
-| Python     | Distribuição gerenciada pelo `uv`               |
+| Python     | Instalação privada gerenciada pelo `uv`         |
 | ML Worker  | PyPI e índice oficial de wheels do PyTorch      |
-| FFmpeg     | Wheel do `imageio-ffmpeg` no PyPI               |
+| FFmpeg     | Wheel `imageio-ffmpeg` no PyPI                  |
 | yt-dlp     | PyPI                                            |
 | Whisper    | Revisões fixadas no Hugging Face                |
 | Demucs     | Repositório de modelos da Meta                  |
 
-O runtime não utiliza o Python do sistema, não altera o `PATH` e pode ser removido integralmente pela tela de Configurações.
-
-Mais detalhes estão em [docs/runtime-installation.md](docs/runtime-installation.md).
+Modelos, runtime e cache podem ser verificados, removidos ou reinstalados pelas configurações. Veja [docs/runtime-installation.md](docs/runtime-installation.md) para detalhes.
 
 ## Desenvolvimento
 
 ### Pré-requisitos
 
 - Node.js 22 LTS;
-- npm;
+- npm.
 
 ### Instalação
 
@@ -94,64 +100,62 @@ cd Karaokai
 npm install
 ```
 
-### Executar o aplicativo
+### Executar em desenvolvimento
 
 ```bash
 npm run dev
 ```
 
-O script inicia o Vite e abre a janela Electron do KaraokAI.
+O comando inicia o Vite e a janela Electron.
 
-### Comandos úteis
+### Comandos
 
-| Comando                 | Descrição                                       |
-| ----------------------- | ----------------------------------------------- |
-| `npm run dev`           | Executa o aplicativo desktop em desenvolvimento |
-| `npm run dev:web`       | Executa somente o frontend Vite                 |
-| `npm run build`         | Valida o TypeScript e gera o bundle web         |
-| `npm run build:desktop` | Gera os instaladores do aplicativo desktop      |
-| `npm run format`        | Formata o projeto com Prettier                  |
-| `npm run format:check`  | Verifica a formatação sem alterar arquivos      |
+| Comando                       | Descrição                                                |
+| ----------------------------- | -------------------------------------------------------- |
+| `npm run dev`                 | Executa o Electron com Vite em desenvolvimento           |
+| `npm run dev:web`             | Executa somente o frontend Vite                          |
+| `npm run build`               | Valida TypeScript e gera o bundle web                    |
+| `npm run build:desktop`       | Empacota os targets da plataforma atual                  |
+| `npm run build:windows`       | Gera o instalador NSIS Windows x64                       |
+| `npm run build:windows:store` | Gera o pacote AppX para Microsoft Store em Windows 10/11 |
+| `npm run format`              | Formata o repositório com Prettier                       |
+| `npm run format:check`        | Verifica a formatação sem alterar arquivos               |
+
+Os artefatos são gravados em `release/`.
+
+## Distribuição
+
+| Plataforma      | Target atual      | Situação                                                                                   |
+| --------------- | ----------------- | ------------------------------------------------------------------------------------------ |
+| Linux           | AppImage e `.deb` | Empacotamento validado                                                                     |
+| Windows x64     | NSIS `.exe`       | Empacotamento validado; não assinado para RC fechado                                       |
+| Microsoft Store | AppX              | Configurado; requer conta/identidade reservada no Partner Center                           |
+| macOS           | DMG               | Configurado; requer build em macOS, assinatura e notarização antes da distribuição pública |
+
+Para enviar à Microsoft Store, reserve primeiro o nome do app no Partner Center e substitua `appx.identityName` em `electron-builder.yml` pelo valor exato fornecido pela Microsoft. O target `appx` é o formato de pacote da Store suportado pelo electron-builder; a Microsoft assina o pacote publicado.
+
+## Privacidade
+
+- áudio, stems, projetos e renders permanecem no dispositivo;
+- não há telemetria, anúncios ou upload obrigatório de músicas;
+- downloads de runtime/modelos vão apenas para o diretório escolhido;
+- importações do YouTube usam rede para consultar e baixar o vídeo;
+- todos os dados gerenciados podem ser removidos pelas configurações.
 
 ## Estrutura do repositório
 
 ```text
 Karaokai/
-├── src/                  # Interface React
-│   ├── components/       # Componentes compartilhados
-│   ├── context/          # Contexto global de dados
-│   ├── hooks/            # Operações e comportamentos compartilhados
-│   ├── i18n/             # Language packs
-│   ├── screens/          # Telas e componentes locais
-│   ├── services/         # Integração com o processo principal Electron
-│   └── theme/            # Temas da aplicação
-├── electron/             # Core desktop, preload seguro e Runtime Manager
+├── src/                  # Interface React, editor e serviços do renderer
+├── electron/             # Processo principal, IPC, renderização e runtime
+├── worker/               # Worker Python de separação e transcrição
+├── docs/                 # Documentação técnica
 ├── src-tauri/            # Implementação anterior, mantida temporariamente
-├── worker/               # Protocolo do ML Worker local
-├── docs/                 # Documentação técnica complementar
+├── electron-builder.yml  # Targets e configuração de empacotamento
 └── projectDefinition.md  # Especificação técnica e de produto
 ```
 
-## Convenções React
+## Documentação adicional
 
-Os componentes são organizados por responsabilidade:
-
-- `index.tsx`: template declarativo;
-- `behavior.ts`: hook com estado, cálculos e callbacks do componente;
-- `styles.tsx`: styled components.
-
-O contexto global armazena apenas dados. Renderizações condicionais e coleções utilizam os componentes declarativos `Render` e `ForEach`, e todos os textos visíveis vêm dos language packs JSON.
-
-## Privacidade
-
-- processamento local por padrão;
-- nenhuma dependência global obrigatória, tudo contido dentro do proprio ambiente;
-- nenhum upload de músicas para serviços externos;
-- nenhum anúncio;
-- nenhuma telemetria;
-- modelos, runtimes e caches ficam no diretório escolhido pelo usuário;
-- todos os dados baixados podem ser removidos pelo aplicativo.
-
-## Especificação
-
-A visão completa do produto, os estágios do pipeline e as decisões arquiteturais estão documentados em [projectDefinition.md](projectDefinition.md).
+- [Instalação do runtime](docs/runtime-installation.md)
+- [Especificação técnica e de produto](projectDefinition.md)
