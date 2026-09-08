@@ -5,6 +5,67 @@ export const ImportShell = styled.section`
   margin: 2rem auto 0;
 `;
 
+export const YoutubeDownloadOverlay = styled.div`
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgb(10 9 18 / 76%);
+  backdrop-filter: blur(0.35rem);
+`;
+
+export const YoutubeDownloadDialog = styled.div`
+  display: grid;
+  width: min(100%, 25rem);
+  min-height: 11rem;
+  padding: 1.75rem;
+  border: 1px solid
+    color-mix(in srgb, ${({ theme }) => theme.colors.accent} 42%, transparent);
+  border-radius: 0.85rem;
+  place-items: center;
+  gap: 1rem;
+  color: ${({ theme }) => theme.colors.text};
+  background: ${({ theme }) => theme.colors.surface};
+  box-shadow: 0 1.25rem 4rem rgb(0 0 0 / 38%);
+  text-align: center;
+
+  strong {
+    font-size: 1rem;
+  }
+`;
+
+export const YoutubeDownloadSpinner = styled.span`
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 0.22rem solid
+    color-mix(in srgb, ${({ theme }) => theme.colors.accent} 24%, transparent);
+  border-top-color: ${({ theme }) => theme.colors.accent};
+  border-radius: 50%;
+  animation: youtube-download-spin 850ms linear infinite;
+
+  @keyframes youtube-download-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+`;
+
+export const CloseYoutubeDialog = styled.button`
+  min-width: 7rem;
+  min-height: 2.4rem;
+  padding: 0 0.85rem;
+  border: 0;
+  border-radius: 0.5rem;
+  color: #21152b;
+  background: ${({ theme }) => theme.colors.accent};
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+`;
+
 export const DropArea = styled.section`
   display: flex;
   min-height: 19rem;
@@ -170,6 +231,12 @@ export const YoutubeButton = styled.button`
 
   &:hover {
     filter: brightness(1.06);
+  }
+
+  &:disabled {
+    cursor: wait;
+    filter: saturate(0.6);
+    opacity: 0.72;
   }
 
   &:focus-visible {

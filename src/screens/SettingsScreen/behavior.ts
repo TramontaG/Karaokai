@@ -7,6 +7,11 @@ import { useSound } from "../../hooks/useSound";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "../../hooks/useTranslation";
 import { useDownloadedData } from "../../hooks/useDownloadedData";
+import {
+  chooseFontFile,
+  importFontFile,
+  removeFontFile,
+} from "../../services/desktop";
 
 type SettingsTab =
   "dependencies" | "models" | "general" | "appearance" | "storage" | "about";
@@ -16,7 +21,7 @@ interface SettingsState extends Record<string, unknown> {
 }
 
 export function useBehavior(_: Record<string, never>) {
-  const [appData] = useAppContext();
+  const [appData, setAppData] = useAppContext();
   const { language, setLanguage, t } = useTranslation();
   const { themePreference, setThemePreference } = useTheme();
   const { soundEnabled, setSoundEnabled } = useSound();
@@ -43,6 +48,53 @@ export function useBehavior(_: Record<string, never>) {
     (event: ChangeEvent<HTMLInputElement>) =>
       setSoundEnabled(event.target.checked),
     [setSoundEnabled]
+  );
+  const onAddCustomFont = useCallback(async () => {
+    const sourcePath = await chooseFontFile();
+    if (!sourcePath) return;
+    const name =
+      sourcePath
+        .split(/[\\/]/)
+        .pop()
+        ?.replace(/\.[^.]+$/, "") ?? sourcePath;
+    const path = await importFontFile(
+      sourcePath,
+      appData.preferences.storageDirectory
+    );
+    setAppData({
+      preferences: {
+        customFonts: [
+          ...appData.preferences.customFonts,
+          { id: `KaraokAI Custom ${crypto.randomUUID()}`, name, path },
+        ],
+      },
+    });
+  }, [
+    appData.preferences.customFonts,
+    appData.preferences.storageDirectory,
+    setAppData,
+  ]);
+  const onRemoveCustomFont = useCallback(
+    async (id: string) => {
+      const font = appData.preferences.customFonts.find(
+        (item) => item.id === id
+      );
+      if (font) {
+        await removeFontFile(font.path, appData.preferences.storageDirectory);
+      }
+      setAppData({
+        preferences: {
+          customFonts: appData.preferences.customFonts.filter(
+            (font) => font.id !== id
+          ),
+        },
+      });
+    },
+    [
+      appData.preferences.customFonts,
+      appData.preferences.storageDirectory,
+      setAppData,
+    ]
   );
   const onShowDependencies = useCallback(
     () => setState({ activeTab: "dependencies" }),
@@ -94,6 +146,11 @@ export function useBehavior(_: Record<string, never>) {
     generalDescription: t("settings.general.description"),
     appearanceTitle: t("settings.appearance.title"),
     appearanceDescription: t("settings.appearance.description"),
+    fontsTitle: t("settings.fonts.title"),
+    fontsDescription: t("settings.fonts.description"),
+    addFontLabel: t("settings.fonts.add"),
+    removeFontLabel: t("settings.fonts.remove"),
+    customFonts: appData.preferences.customFonts,
     storageTitle: t("settings.storage.title"),
     storageDescription: t("settings.storage.description"),
     storagePathLabel: t("settings.storage.path"),
@@ -115,6 +172,8 @@ export function useBehavior(_: Record<string, never>) {
     onLanguageChange,
     onThemeChange,
     onSoundChange,
+    onAddCustomFont: () => void onAddCustomFont(),
+    onRemoveCustomFont: (id: string) => void onRemoveCustomFont(id),
     onRemoveDownloads,
     onShowDependencies,
     onShowModels,

@@ -1,7 +1,8 @@
 import styled from "@emotion/styled";
 
-export const Card = styled.article`
+export const Card = styled.article<{ $actionsOpen: boolean }>`
   position: relative;
+  z-index: ${({ $actionsOpen }) => ($actionsOpen ? 31 : "auto")};
   min-width: 0;
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: 0.65rem;

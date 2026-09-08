@@ -23,6 +23,7 @@ export function ProjectListRow(props: ProjectListRowProps) {
 
   return (
     <Row
+      $actionsOpen={behavior.actionsOpen}
       role="row"
       tabIndex={0}
       aria-label={behavior.openLabel}

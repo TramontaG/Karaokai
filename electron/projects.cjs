@@ -401,10 +401,284 @@ async function createLocalProject({
   return project;
 }
 
+function youtubeUrl(value) {
+  let url;
+  try {
+    url = new URL(String(value ?? "").trim());
+  } catch {
+    throw new Error("Enter a valid YouTube link");
+  }
+  const host = url.hostname.toLowerCase().replace(/^www\./, "");
+  const isYoutube =
+    host === "youtu.be" ||
+    host === "youtube.com" ||
+    host.endsWith(".youtube.com");
+  if (url.protocol !== "https:" || !isYoutube)
+    throw new Error("Enter a valid YouTube link");
+  return url.toString();
+}
+
+function runProcess(command, arguments_, options, failureMessage) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, arguments_, options);
+    let stderr = "";
+    let stdout = "";
+    child.stdout?.on("data", (chunk) => {
+      stdout = `${stdout}${chunk}`;
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr = `${stderr}${chunk}`.slice(-16_384);
+    });
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code === 0) resolve(stdout);
+      else
+        reject(new Error(stderr.trim() || `${failureMessage} (exit ${code})`));
+    });
+  });
+}
+
+function youtubeTitle(output) {
+  return (
+    output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean)
+      ?.slice(0, 160) || "YouTube video"
+  );
+}
+
+function youtubeCookiesPath(dataRoot) {
+  return path.join(dataRoot, "youtube-cookies.txt");
+}
+
+function validateYoutubeCookies(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error("Paste a Netscape-format cookie file before saving.");
+  }
+  if (Buffer.byteLength(value, "utf8") > 2 * 1024 * 1024) {
+    throw new Error("Cookie files must be smaller than 2 MB.");
+  }
+  const hasCookie = value.split(/\r?\n/).some((line) => {
+    const cookieLine = line.startsWith("#HttpOnly_")
+      ? line.slice("#HttpOnly_".length)
+      : line;
+    if (!cookieLine || cookieLine.startsWith("#")) return false;
+    return cookieLine.split("\t").length >= 7;
+  });
+  if (!hasCookie) {
+    throw new Error("Cookies must use the Netscape cookie-file format.");
+  }
+  return `${value.replace(/^\uFEFF/, "").trimEnd()}\n`;
+}
+
+async function saveYoutubeCookies(dataRoot, value) {
+  const cookies = validateYoutubeCookies(value);
+  await fs.promises.mkdir(dataRoot, { recursive: true });
+  const destination = youtubeCookiesPath(dataRoot);
+  const temporary = `${destination}.${process.pid}-${crypto.randomBytes(4).toString("hex")}.tmp`;
+  await fs.promises.writeFile(temporary, cookies, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  await fs.promises.rename(temporary, destination);
+  await fs.promises.chmod(destination, 0o600).catch(() => undefined);
+}
+
+async function hasYoutubeCookies(dataRoot) {
+  const stat = await fs.promises
+    .stat(youtubeCookiesPath(dataRoot))
+    .catch(() => null);
+  return Boolean(stat?.isFile() && stat.size > 0);
+}
+
+function youtubeCookiesArguments(dataRoot) {
+  const cookies = youtubeCookiesPath(dataRoot);
+  return fs.existsSync(cookies) ? ["--cookies", cookies] : [];
+}
+
+function youtubePlayerArguments(hasCookies) {
+  if (!hasCookies) return [];
+  return ["--extractor-args", "youtube:player_client=default,web_embedded"];
+}
+
+async function createYoutubeProject({
+  dataRoot,
+  youtubeUrl: sourceUrl,
+  whisperModelId,
+  demucsModelId,
+  emit,
+}) {
+  const url = youtubeUrl(sourceUrl);
+  const python = pythonBinary(dataRoot);
+  const ffmpeg = ffmpegBinary(dataRoot);
+  const cookies = youtubeCookiesArguments(dataRoot);
+  const player = youtubePlayerArguments(cookies.length > 0);
+  await Promise.all([fs.promises.access(python), fs.promises.access(ffmpeg)]);
+  const projectId = `project-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
+  const directory = projectRoot(dataRoot, projectId);
+  const assets = path.join(directory, "assets");
+  const audio = path.join(directory, "audio");
+  for (const name of [
+    audio,
+    assets,
+    path.join(directory, "thumbnails"),
+    path.join(directory, "cache"),
+  ]) {
+    await fs.promises.mkdir(name, { recursive: true });
+  }
+  try {
+    const titleOutput = await runProcess(
+      python,
+      [
+        "-m",
+        "yt_dlp",
+        "--no-playlist",
+        "--no-warnings",
+        ...cookies,
+        ...player,
+        "--print",
+        "%(title)s",
+        "--skip-download",
+        url,
+      ],
+      {
+        cwd: dataRoot,
+        env: environment(dataRoot, demucsModelId),
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+      "Unable to read YouTube video details"
+    );
+    await runProcess(
+      python,
+      [
+        "-m",
+        "yt_dlp",
+        "--no-playlist",
+        "--no-warnings",
+        ...cookies,
+        ...player,
+        "--newline",
+        "--ffmpeg-location",
+        path.dirname(ffmpeg),
+        "--merge-output-format",
+        "mp4",
+        "--output",
+        path.join(assets, "youtube-video.%(ext)s"),
+        "-f",
+        "bv*+ba/b",
+        url,
+      ],
+      {
+        cwd: dataRoot,
+        env: environment(dataRoot, demucsModelId),
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+      "Unable to download the YouTube video"
+    );
+    const video = (await fs.promises.readdir(assets))
+      .map((name) => path.join(assets, name))
+      .find((file) =>
+        [".mp4", ".mov", ".webm", ".mkv"].includes(
+          path.extname(file).toLowerCase()
+        )
+      );
+    if (!video)
+      throw new Error("The YouTube download did not include a video file");
+    const videoAsset = path.basename(video);
+    await runProcess(
+      ffmpeg,
+      [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        video,
+        "-vn",
+        "-acodec",
+        "pcm_s16le",
+        path.join(audio, "source.wav"),
+      ],
+      { stdio: ["ignore", "pipe", "pipe"] },
+      "Unable to extract audio from the YouTube video"
+    );
+    const now = String(Date.now());
+    const project = {
+      version: 1,
+      id: projectId,
+      name: youtubeTitle(titleOutput),
+      createdAt: now,
+      updatedAt: now,
+      duration: 0,
+      tempo: { bpm: 120, offset: 0 },
+      tracks: [
+        {
+          id: "background-main",
+          type: "background",
+          name: "Background",
+          visible: true,
+          locked: false,
+          zIndex: -10,
+          preset: "video",
+          videoAsset,
+          videoAssetName: videoAsset,
+          fit: "cover",
+          loop: true,
+        },
+        {
+          id: "audio-main",
+          type: "audio",
+          name: "Instrumental",
+          visible: true,
+          locked: false,
+          zIndex: 0,
+          source: "source.wav",
+          volume: 1,
+          muted: false,
+        },
+      ],
+      processing: [
+        { id: "import", status: "completed" },
+        { id: "separation", status: "pending", modelId: demucsModelId },
+        { id: "transcription", status: "pending", modelId: whisperModelId },
+        { id: "subtitles", status: "pending" },
+      ],
+    };
+    await writeJson(path.join(directory, "project.json"), project);
+    void processProject({
+      dataRoot,
+      directory,
+      projectId,
+      whisperModelId,
+      demucsModelId,
+      emit,
+    });
+    return project;
+  } catch (error) {
+    await fs.promises.rm(directory, { recursive: true, force: true });
+    throw error;
+  }
+}
+
 async function run(command, args, context) {
   const dataRoot = context.dataRoot(args.storageDirectory);
+  if (command === "youtube_cookies_status") {
+    return { configured: await hasYoutubeCookies(dataRoot) };
+  }
+  if (command === "save_youtube_cookies") {
+    await saveYoutubeCookies(dataRoot, args.cookies);
+    return null;
+  }
+  if (command === "remove_youtube_cookies") {
+    await fs.promises.rm(youtubeCookiesPath(dataRoot), { force: true });
+    return null;
+  }
   if (command === "create_local_project") {
     return createLocalProject({ dataRoot, emit: context.emit, ...args });
+  }
+  if (command === "create_youtube_project") {
+    return createYoutubeProject({ dataRoot, emit: context.emit, ...args });
   }
   if (command === "load_project") return loadProject(dataRoot, args.projectId);
   if (command === "list_projects") {

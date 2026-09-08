@@ -1,7 +1,8 @@
 import styled from "@emotion/styled";
 
-export const Row = styled.div`
+export const Row = styled.div<{ $actionsOpen: boolean }>`
   position: relative;
+  z-index: ${({ $actionsOpen }) => ($actionsOpen ? 31 : "auto")};
   display: grid;
   min-height: 3.5rem;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};

@@ -19,6 +19,7 @@ export function ProjectGridCard(props: ProjectGridCardProps) {
 
   return (
     <Card
+      $actionsOpen={behavior.actionsOpen}
       role="button"
       tabIndex={0}
       aria-label={behavior.openLabel}

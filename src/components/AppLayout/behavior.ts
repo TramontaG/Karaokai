@@ -1,5 +1,5 @@
-import { useRouterState } from "@tanstack/react-router";
-import { useCallback, useRef } from "react";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useCallback, useRef, type MouseEvent } from "react";
 import { useAppContext } from "../../hooks/useAppContext";
 import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "../../hooks/useTranslation";
@@ -8,6 +8,7 @@ import { saveProjectBeforeWindowClose } from "../../services/projectWindowLifecy
 
 export function useBehavior(_: Record<string, never>) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [data] = useAppContext();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
@@ -16,6 +17,7 @@ export function useBehavior(_: Record<string, never>) {
   const isEditorRoute = /^\/projects\/[^/]+\/editor$/.test(normalizedPathname);
   const { theme, setThemePreference } = useTheme();
   const closingRef = useRef(false);
+  const leavingEditorRef = useRef(false);
   const onToggleTheme = useCallback(() => {
     setThemePreference(theme.name === "dark" ? "light" : "dark");
   }, [setThemePreference, theme.name]);
@@ -35,6 +37,26 @@ export function useBehavior(_: Record<string, never>) {
       closingRef.current = false;
     }
   }, []);
+  const leaveEditor = useCallback(
+    (
+      event: MouseEvent<HTMLAnchorElement>,
+      to: "/" | "/library" | "/settings"
+    ) => {
+      if (!isEditorRoute) return;
+      event.preventDefault();
+      if (leavingEditorRef.current) return;
+      leavingEditorRef.current = true;
+      void (async () => {
+        try {
+          await saveProjectBeforeWindowClose();
+          await navigate({ to });
+        } finally {
+          leavingEditorRef.current = false;
+        }
+      })();
+    },
+    [isEditorRoute, navigate]
+  );
 
   return {
     brandName: t("app.name.prefix"),
@@ -58,8 +80,6 @@ export function useBehavior(_: Record<string, never>) {
     minimizeLabel: t("appLayout.window.minimize"),
     maximizeLabel: t("appLayout.window.maximize"),
     closeLabel: t("appLayout.window.close"),
-    storageLabel: t("appLayout.storage.label"),
-    storageDescription: t("appLayout.storage.description"),
     isEditorRoute,
     isDarkTheme: theme.name === "dark",
     isLightTheme: theme.name === "light",
@@ -67,5 +87,11 @@ export function useBehavior(_: Record<string, never>) {
     onMinimize,
     onToggleMaximize,
     onClose,
+    onNavigateHome: (event: MouseEvent<HTMLAnchorElement>) =>
+      leaveEditor(event, "/"),
+    onNavigateLibrary: (event: MouseEvent<HTMLAnchorElement>) =>
+      leaveEditor(event, "/library"),
+    onNavigateSettings: (event: MouseEvent<HTMLAnchorElement>) =>
+      leaveEditor(event, "/settings"),
   };
 }

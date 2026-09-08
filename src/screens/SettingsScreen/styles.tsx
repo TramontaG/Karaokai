@@ -127,6 +127,91 @@ export const ToggleLabel = styled(Label)`
   min-height: 2.5rem;
   cursor: pointer;
 `;
+export const AppearanceControls = styled.div`
+  display: grid;
+  grid-template-columns: minmax(16rem, 22rem) minmax(0, 1fr);
+  align-items: start;
+  gap: 1.5rem;
+
+  @media (max-width: 920px) {
+    grid-template-columns: 1fr;
+  }
+`;
+export const FontLibrary = styled.section`
+  display: grid;
+  min-width: 0;
+  border-left: 1px solid ${({ theme }) => theme.colors.border};
+  gap: 0.65rem;
+  padding-left: 1.5rem;
+
+  @media (max-width: 920px) {
+    border-top: 1px solid ${({ theme }) => theme.colors.border};
+    border-left: 0;
+    padding-top: 1rem;
+    padding-left: 0;
+  }
+`;
+export const FontLibraryHeader = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+
+  div {
+    display: grid;
+    min-width: 0;
+    gap: 0.2rem;
+  }
+  strong {
+    font-size: 0.78rem;
+  }
+  span {
+    max-width: 58rem;
+    color: ${({ theme }) => theme.colors.textMuted};
+    font-size: 0.68rem;
+  }
+  button {
+    display: inline-flex;
+    flex: 0 0 auto;
+    min-height: 2.2rem;
+    padding: 0 0.7rem;
+    border: 1px solid ${({ theme }) => theme.colors.border};
+    border-radius: 0.4rem;
+    align-items: center;
+    gap: 0.4rem;
+    color: ${({ theme }) => theme.colors.text};
+    background: transparent;
+    font: inherit;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+`;
+export const FontRow = styled.div`
+  display: flex;
+  min-height: 2.4rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 0.4rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.72rem;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  button {
+    border: 0;
+    color: #ff8ca2;
+    background: transparent;
+    font: inherit;
+    font-size: 0.66rem;
+    cursor: pointer;
+  }
+`;
 
 export const StoragePath = styled.div`
   display: grid;

@@ -1,4 +1,5 @@
 const path = require("node:path");
+const { randomUUID } = require("node:crypto");
 const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
@@ -7,6 +8,7 @@ const runtime = require("./runtime.cjs");
 
 const PROJECT_COMMANDS = new Set([
   "create_local_project",
+  "create_youtube_project",
   "load_project",
   "list_projects",
   "save_project",
@@ -26,6 +28,9 @@ const PROJECT_COMMANDS = new Set([
   "cancel_project_render",
   "render_job_data",
   "render_frame_complete",
+  "youtube_cookies_status",
+  "save_youtube_cookies",
+  "remove_youtube_cookies",
 ]);
 const renderJobs = new Map();
 const RENDER_FRAME_RATE = 240;
@@ -627,6 +632,53 @@ function createWindow() {
 }
 
 ipcMain.handle("karaokai:invoke", async (_event, command, args = {}) => {
+  if (command === "import_font_file") {
+    const sourcePath = String(args.sourcePath ?? "");
+    const extension = path.extname(sourcePath).toLowerCase();
+    if (!new Set([".ttf", ".otf", ".woff", ".woff2"]).has(extension)) {
+      throw new Error("Unsupported font file.");
+    }
+    const source = await fs.promises.stat(sourcePath);
+    if (!source.isFile() || source.size > 25 * 1024 * 1024) {
+      throw new Error("Font files must be smaller than 25 MB.");
+    }
+    const fontsDirectory = path.join(dataRoot(args.storageDirectory), "fonts");
+    await fs.promises.mkdir(fontsDirectory, { recursive: true });
+    const destination = path.join(
+      fontsDirectory,
+      `${randomUUID()}${extension}`
+    );
+    await fs.promises.copyFile(sourcePath, destination);
+    return destination;
+  }
+  if (command === "remove_font_file") {
+    const fontsDirectory = path.resolve(
+      dataRoot(args.storageDirectory),
+      "fonts"
+    );
+    const fontPath = path.resolve(String(args.path ?? ""));
+    if (
+      fontPath.startsWith(`${fontsDirectory}${path.sep}`) &&
+      [".ttf", ".otf", ".woff", ".woff2"].includes(
+        path.extname(fontPath).toLowerCase()
+      )
+    ) {
+      await fs.promises.rm(fontPath, { force: true });
+    }
+    return null;
+  }
+  if (command === "read_font_file") {
+    const filePath = String(args.path ?? "");
+    const extension = path.extname(filePath).toLowerCase();
+    if (!new Set([".ttf", ".otf", ".woff", ".woff2"]).has(extension)) {
+      throw new Error("Unsupported font file.");
+    }
+    const font = await fs.promises.readFile(filePath);
+    if (font.byteLength > 25 * 1024 * 1024) {
+      throw new Error("Font files must be smaller than 25 MB.");
+    }
+    return Array.from(font);
+  }
   if (command === "start_project_render") return startProjectRender(args);
   if (command === "cancel_project_render") {
     const job = renderJobs.get(args.jobId);
@@ -714,6 +766,16 @@ ipcMain.handle("karaokai:dialog:background", async (_event, kind) => {
   const result = await dialog.showOpenDialog({
     properties: ["openFile"],
     filters: [{ name: kind === "video" ? "Video" : "Image", extensions }],
+  });
+  return result.canceled ? null : (result.filePaths[0] ?? null);
+});
+
+ipcMain.handle("karaokai:dialog:font", async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openFile"],
+    filters: [
+      { name: "Font files", extensions: ["ttf", "otf", "woff", "woff2"] },
+    ],
   });
   return result.canceled ? null : (result.filePaths[0] ?? null);
 });

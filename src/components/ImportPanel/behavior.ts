@@ -13,7 +13,10 @@ import {
   desktopFilePath,
   isDesktop,
 } from "../../services/desktop";
-import { createLocalProject } from "../../services/projects";
+import {
+  createLocalProject,
+  createYoutubeProject,
+} from "../../services/projects";
 import { useTranslation } from "../../hooks/useTranslation";
 
 export function useBehavior(_: Record<string, never>) {
@@ -21,8 +24,11 @@ export function useBehavior(_: Record<string, never>) {
   const navigate = useNavigate();
   const [data, setAppData] = useAppContext();
   const [isImporting, setIsImporting] = useState(false);
+  const [isYoutubeImporting, setIsYoutubeImporting] = useState(false);
+  const [youtubeError, setYoutubeError] = useState<string | null>(null);
   const isImportingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importAudioPath = useCallback(
     async (sourcePath: string | undefined) => {
@@ -101,9 +107,61 @@ export function useBehavior(_: Record<string, never>) {
       setError(reason instanceof Error ? reason.message : String(reason))
     );
   }, [importAudioPath]);
-  const onYoutubeSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-  }, []);
+  const onYoutubeUrlChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setYoutubeUrl(event.target.value);
+    },
+    []
+  );
+  const onCloseYoutubeError = useCallback(() => setYoutubeError(null), []);
+  const onYoutubeSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const importYoutube = async () => {
+        if (isImportingRef.current) return;
+        isImportingRef.current = true;
+        setIsImporting(true);
+        setIsYoutubeImporting(true);
+        setError(null);
+        setYoutubeError(null);
+        try {
+          const project = await createYoutubeProject(
+            youtubeUrl,
+            data.preferences.storageDirectory,
+            {
+              whisperModelId: data.preferences.defaultWhisperModelId,
+              demucsModelId: data.preferences.defaultDemucsModelId,
+            }
+          );
+          setAppData({
+            currentProject: { id: project.id, name: project.name },
+          });
+          await navigate({
+            to: "/projects/$projectId/preparing",
+            params: { projectId: project.id },
+          });
+        } catch (reason) {
+          const message =
+            reason instanceof Error ? reason.message : String(reason);
+          setError(message);
+          setYoutubeError(message);
+        } finally {
+          isImportingRef.current = false;
+          setIsImporting(false);
+          setIsYoutubeImporting(false);
+        }
+      };
+      void importYoutube();
+    },
+    [
+      data.preferences.defaultDemucsModelId,
+      data.preferences.defaultWhisperModelId,
+      data.preferences.storageDirectory,
+      navigate,
+      setAppData,
+      youtubeUrl,
+    ]
+  );
 
   return {
     acceptedFiles: ".mp3,.wav,.flac,.m4a,.aac,.ogg,audio/*",
@@ -115,13 +173,29 @@ export function useBehavior(_: Record<string, never>) {
     youtubePlaceholder: t("home.import.youtubePlaceholder"),
     youtubeInputLabel: t("home.import.youtubeInputLabel"),
     download: t("home.import.download"),
+    importing: t("home.import.importing"),
+    youtubeDownloading: t("home.import.youtubeDownloading"),
+    youtubeDialogTitle: youtubeError
+      ? t("home.import.youtubeDownloadFailed")
+      : t("home.import.youtubeDownloading"),
+    closeYoutubeDialog: t("home.import.closeYoutubeDialog"),
     onYoutubeSubmit,
+    onYoutubeUrlChange,
+    youtubeUrl,
     onFileChange,
     fileInputRef,
     onChooseFile,
     onDrop,
     onDragOver,
     isImporting,
+    isYoutubeImporting,
+    youtubeDialogOpen: isYoutubeImporting || youtubeError !== null,
+    youtubeDialogError: youtubeError,
+    youtubeDialogDismissible: youtubeError !== null,
+    importActionLabel: isImporting
+      ? t("home.import.importing")
+      : t("home.import.download"),
     error,
+    onCloseYoutubeError,
   };
 }

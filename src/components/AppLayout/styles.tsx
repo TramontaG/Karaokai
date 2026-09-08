@@ -73,6 +73,7 @@ export const Navigation = styled.nav`
 
   a {
     display: flex;
+    min-width: 0;
     min-height: 3.2rem;
     padding: 0 0.9rem;
     border-radius: 0.65rem;
@@ -84,6 +85,10 @@ export const Navigation = styled.nav`
     transition:
       color 150ms ease,
       background 150ms ease;
+  }
+
+  a > svg {
+    flex: 0 0 1.375rem;
   }
 
   a:hover {
@@ -107,6 +112,13 @@ export const Navigation = styled.nav`
       font-size: 0;
     }
   }
+`;
+
+export const ProjectNavigationLabel = styled.span`
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 export const EditorTab = styled.div`

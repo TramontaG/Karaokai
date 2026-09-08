@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld("karaokaiDesktop", {
   chooseAudioFile: () => ipcRenderer.invoke("karaokai:dialog:audio"),
   chooseBackgroundFile: (kind) =>
     ipcRenderer.invoke("karaokai:dialog:background", kind),
+  chooseFontFile: () => ipcRenderer.invoke("karaokai:dialog:font"),
   chooseDirectory: () => ipcRenderer.invoke("karaokai:dialog:directory"),
   chooseVideoDestination: (defaultPath) =>
     ipcRenderer.invoke("karaokai:dialog:video-destination", defaultPath),

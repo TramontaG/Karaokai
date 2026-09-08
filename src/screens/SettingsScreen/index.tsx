@@ -1,21 +1,28 @@
 import {
   BrainCircuit,
   Database,
+  FilePlus2,
   Info,
   Monitor,
   Package,
   Settings2,
   Trash2,
 } from "lucide-react";
+import { ForEach } from "../../components/ForEach";
 import { Render } from "../../components/Render";
 import { useBehavior } from "./behavior";
 import { DependenciesTab } from "./components/DependenciesTab";
 import { ModelsTab } from "./components/ModelsTab";
+import { YoutubeCookies } from "./components/YoutubeCookies";
 import {
   AboutGrid,
+  AppearanceControls,
   DangerButton,
   DangerCopy,
   DangerZone,
+  FontLibrary,
+  FontLibraryHeader,
+  FontRow,
   Field,
   FormGrid,
   Label,
@@ -130,26 +137,57 @@ export function SettingsScreen() {
               {behavior.soundLabel}
             </ToggleLabel>
           </FormGrid>
+          <YoutubeCookies />
         </Panel>
       </Render>
       <Render when={behavior.appearanceActive}>
         <Panel>
           <PanelTitle>{behavior.appearanceTitle}</PanelTitle>
           <PanelDescription>{behavior.appearanceDescription}</PanelDescription>
-          <FormGrid>
-            <Field>
-              <Label htmlFor="theme">{behavior.themeLabel}</Label>
-              <Select
-                id="theme"
-                value={behavior.themePreference}
-                onChange={behavior.onThemeChange}
-              >
-                <option value="system">{behavior.system}</option>
-                <option value="light">{behavior.light}</option>
-                <option value="dark">{behavior.dark}</option>
-              </Select>
-            </Field>
-          </FormGrid>
+          <AppearanceControls>
+            <FormGrid>
+              <Field>
+                <Label htmlFor="theme">{behavior.themeLabel}</Label>
+                <Select
+                  id="theme"
+                  value={behavior.themePreference}
+                  onChange={behavior.onThemeChange}
+                >
+                  <option value="system">{behavior.system}</option>
+                  <option value="light">{behavior.light}</option>
+                  <option value="dark">{behavior.dark}</option>
+                </Select>
+              </Field>
+            </FormGrid>
+            <FontLibrary>
+              <FontLibraryHeader>
+                <div>
+                  <strong>{behavior.fontsTitle}</strong>
+                  <span>{behavior.fontsDescription}</span>
+                </div>
+                <button type="button" onClick={behavior.onAddCustomFont}>
+                  <FilePlus2 size={16} aria-hidden="true" />
+                  {behavior.addFontLabel}
+                </button>
+              </FontLibraryHeader>
+              <ForEach
+                data={behavior.customFonts}
+                idCompute={(font) => font.id}
+                render={(font) => (
+                  <FontRow>
+                    <span>{font.name}</span>
+                    <button
+                      type="button"
+                      aria-label={`${behavior.removeFontLabel} ${font.name}`}
+                      onClick={() => behavior.onRemoveCustomFont(font.id)}
+                    >
+                      {behavior.removeFontLabel}
+                    </button>
+                  </FontRow>
+                )}
+              />
+            </FontLibrary>
+          </AppearanceControls>
         </Panel>
       </Render>
       <Render when={behavior.storageActive}>

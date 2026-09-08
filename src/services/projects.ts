@@ -216,6 +216,21 @@ export async function createLocalProject(
   return project;
 }
 
+export async function createYoutubeProject(
+  youtubeUrl: string,
+  storageDirectory: string | null,
+  models: ProcessingModels
+) {
+  if (!isDesktop()) {
+    throw new Error("YouTube import is available in the desktop app only.");
+  }
+  return invokeDesktop<KaraokeProject>("create_youtube_project", {
+    youtubeUrl,
+    storageDirectory,
+    ...models,
+  });
+}
+
 export async function loadProject(id: string, storageDirectory: string | null) {
   if (isDesktop())
     return invokeDesktop<KaraokeProject>("load_project", {

@@ -24,12 +24,12 @@ export const themes: Record<ThemeName, AppTheme> = {
   light: {
     name: "light",
     colors: {
-      background: "#fbf9ff",
-      surface: "#fff",
-      text: "#272337",
-      textMuted: "#625d73",
-      accent: "#9333ea",
-      border: "rgb(39 35 55 / 12%)",
+      background: "#f8f7fc",
+      surface: "#ffffff",
+      text: "#29263d",
+      textMuted: "#746f88",
+      accent: "#ae3ded",
+      border: "#e4e1eb",
     },
   },
 };

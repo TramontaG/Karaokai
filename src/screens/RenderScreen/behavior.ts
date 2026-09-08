@@ -92,23 +92,25 @@ function subtitlePreview(track: SubtitleTrack, currentTime: number) {
   return {
     id: track.id,
     timing,
+    entryCuePhraseId: entryCuePhrase?.id ?? null,
     words,
     secondaryWords,
     containerStyle: {
       left: `calc(50% + ${((track.style.x ?? 0) / positionReferenceWidth) * 100}%)`,
-      top: `calc(38% + ${((track.style.y ?? 0) / positionReferenceHeight) * 100}%)`,
+      top: `calc(50% + ${((track.style.y ?? 0) / positionReferenceHeight) * 100}%)`,
       zIndex: track.zIndex,
     },
     currentStyle: { opacity: timing.primaryOpacity },
     nextPhraseStyle: {
       opacity: timing.secondaryOpacity,
-      top: `${timing.secondaryOffset * 100}%`,
-      transform: `translate(-50%, ${timing.secondaryOffset * 0.75}rem) scale(${timing.secondaryScale})`,
+      top: `${timing.secondaryOffset * 50}%`,
+      transform: `translate(-50%, calc(${(timing.secondaryOffset - 1) * 50}% + ${timing.secondaryOffset * 0.75}rem)) scale(${timing.secondaryScale})`,
     },
     entryCueStyle: {
       "--entry-cue-progress": entryCueProgress ?? 0,
       "--entry-cue-empty-color": entryCueColors.unreadColor,
       "--entry-cue-fill-color": entryCueColors.readColor,
+      "--entry-cue-scale": entryCueColors.scale,
     } as CSSProperties,
     showEntryCue: entryCueProgress !== null && !timing.suppressEntryCue,
     showCurrentPhrase: words.length > 0,

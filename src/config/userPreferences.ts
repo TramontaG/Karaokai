@@ -4,6 +4,12 @@ import { type ThemeName, type ThemePreference } from "../theme";
 const STORAGE_KEY = "karaokai.user-preferences";
 export type ProjectViewMode = "grid" | "list";
 
+export interface CustomFontPreference {
+  id: string;
+  name: string;
+  path: string;
+}
+
 export interface UserPreferences {
   language: Language;
   themePreference: ThemePreference;
@@ -15,6 +21,7 @@ export interface UserPreferences {
   timelineAutoFollow: boolean;
   defaultWhisperModelId: string;
   defaultDemucsModelId: string;
+  customFonts: CustomFontPreference[];
 }
 export const defaultPreferences: UserPreferences = {
   language: "pt-BR",
@@ -27,6 +34,7 @@ export const defaultPreferences: UserPreferences = {
   timelineAutoFollow: true,
   defaultWhisperModelId: "whisper-base",
   defaultDemucsModelId: "demucs-htdemucs",
+  customFonts: [],
 };
 
 export function getSystemTheme(): ThemeName {
@@ -81,6 +89,16 @@ export function loadUserPreferences(): UserPreferences {
         typeof stored.defaultDemucsModelId === "string"
           ? stored.defaultDemucsModelId
           : defaultPreferences.defaultDemucsModelId,
+      customFonts: Array.isArray(stored.customFonts)
+        ? stored.customFonts.filter(
+            (font): font is CustomFontPreference =>
+              typeof font === "object" &&
+              font !== null &&
+              typeof font.id === "string" &&
+              typeof font.name === "string" &&
+              typeof font.path === "string"
+          )
+        : defaultPreferences.customFonts,
     };
   } catch {
     return defaultPreferences;

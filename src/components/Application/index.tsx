@@ -12,7 +12,9 @@ export function Application() {
   return (
     <ThemeProvider theme={behavior.theme}>
       <Render when={renderJobId() !== null}>
-        <RenderScreen />
+        <Render when={behavior.fontsReady}>
+          <RenderScreen />
+        </Render>
       </Render>
       <Render when={renderJobId() === null}>
         <Render when={behavior.isLoading}>

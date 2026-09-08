@@ -44,6 +44,11 @@ export function RenderScreen() {
                     <PreviewWord
                       $unreadColor={word.unreadColor}
                       $scale={word.scale}
+                      $fontFamily={word.fontFamily}
+                      $fontWeight={word.fontWeight}
+                      $fontStyle={word.fontStyle}
+                      $textDecoration={word.textDecoration}
+                      $verticalAlign={word.verticalAlign}
                     >
                       {word.text}
                       <PreviewWordFill
@@ -55,14 +60,20 @@ export function RenderScreen() {
                     </PreviewWord>
                   )}
                 />
+                <Render
+                  when={
+                    preview.showEntryCue &&
+                    preview.entryCuePhraseId ===
+                      preview.timing.primaryPhrase?.id
+                  }
+                >
+                  <EntryCue style={preview.entryCueStyle}>
+                    <EntryCueBar>
+                      <EntryCueBarFill />
+                    </EntryCueBar>
+                  </EntryCue>
+                </Render>
               </CurrentPhrase>
-            </Render>
-            <Render when={preview.showEntryCue}>
-              <EntryCue style={preview.entryCueStyle}>
-                <EntryCueBar>
-                  <EntryCueBarFill />
-                </EntryCueBar>
-              </EntryCue>
             </Render>
             <Render when={preview.showNextPhrase}>
               <NextPhrase style={preview.nextPhraseStyle}>
@@ -73,6 +84,11 @@ export function RenderScreen() {
                     <PreviewWord
                       $unreadColor={word.unreadColor}
                       $scale={word.scale}
+                      $fontFamily={word.fontFamily}
+                      $fontWeight={word.fontWeight}
+                      $fontStyle={word.fontStyle}
+                      $textDecoration={word.textDecoration}
+                      $verticalAlign={word.verticalAlign}
                     >
                       {word.text}
                       <PreviewWordFill
@@ -84,6 +100,19 @@ export function RenderScreen() {
                     </PreviewWord>
                   )}
                 />
+                <Render
+                  when={
+                    preview.showEntryCue &&
+                    preview.entryCuePhraseId ===
+                      preview.timing.secondaryPhrase?.id
+                  }
+                >
+                  <EntryCue style={preview.entryCueStyle}>
+                    <EntryCueBar>
+                      <EntryCueBarFill />
+                    </EntryCueBar>
+                  </EntryCue>
+                </Render>
               </NextPhrase>
             </Render>
           </SubtitlePreview>

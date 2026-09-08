@@ -3,6 +3,7 @@ import { Render } from "../Render";
 import { useBehavior } from "./behavior";
 import {
   ChooseFile,
+  CloseYoutubeDialog,
   DropArea,
   DropTitle,
   FileInput,
@@ -12,6 +13,9 @@ import {
   InputShell,
   Separator,
   SeparatorLine,
+  YoutubeDownloadDialog,
+  YoutubeDownloadOverlay,
+  YoutubeDownloadSpinner,
   YoutubeButton,
   YoutubeForm,
   YoutubeInput,
@@ -22,6 +26,33 @@ export function ImportPanel() {
 
   return (
     <ImportShell>
+      <Render when={behavior.youtubeDialogOpen}>
+        <YoutubeDownloadOverlay>
+          <YoutubeDownloadDialog
+            role="alertdialog"
+            aria-modal="true"
+            aria-label={behavior.youtubeDownloading}
+          >
+            <Render when={behavior.isYoutubeImporting}>
+              <YoutubeDownloadSpinner aria-hidden="true" />
+            </Render>
+            <strong>{behavior.youtubeDialogTitle}</strong>
+            <Render when={behavior.youtubeDialogDismissible}>
+              <>
+                <ImportError role="alert">
+                  {behavior.youtubeDialogError}
+                </ImportError>
+                <CloseYoutubeDialog
+                  type="button"
+                  onClick={behavior.onCloseYoutubeError}
+                >
+                  {behavior.closeYoutubeDialog}
+                </CloseYoutubeDialog>
+              </>
+            </Render>
+          </YoutubeDownloadDialog>
+        </YoutubeDownloadOverlay>
+      </Render>
       <DropArea onDragOver={behavior.onDragOver} onDrop={behavior.onDrop}>
         <FileInput
           ref={behavior.fileInputRef}
@@ -35,7 +66,7 @@ export function ImportPanel() {
         <FormatText>{behavior.supportedFormats}</FormatText>
         <ChooseFile type="button" onClick={behavior.onChooseFile}>
           <FolderOpen aria-hidden="true" size={18} />
-          {behavior.isImporting ? "…" : behavior.chooseFile}
+          {behavior.importActionLabel}
         </ChooseFile>
       </DropArea>
       <Render when={() => behavior.error !== null}>
@@ -53,9 +84,15 @@ export function ImportPanel() {
             aria-label={behavior.youtubeInputLabel}
             type="url"
             placeholder={behavior.youtubePlaceholder}
+            value={behavior.youtubeUrl}
+            onChange={behavior.onYoutubeUrlChange}
+            disabled={behavior.isImporting}
+            required
           />
         </InputShell>
-        <YoutubeButton type="submit">{behavior.download}</YoutubeButton>
+        <YoutubeButton type="submit" disabled={behavior.isImporting}>
+          {behavior.importActionLabel}
+        </YoutubeButton>
       </YoutubeForm>
     </ImportShell>
   );

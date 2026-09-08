@@ -21,14 +21,11 @@ import {
   Content,
   EditorTab,
   Navigation,
+  ProjectNavigationLabel,
   SearchBox,
   SearchInput,
   Shell,
   Sidebar,
-  SidebarFooter,
-  StorageDescription,
-  StorageLabel,
-  StorageLine,
   ThemeButton,
   Titlebar,
   WindowAction,
@@ -50,11 +47,11 @@ export function AppLayout() {
           </BrandName>
         </Brand>
         <Navigation aria-label={behavior.navigationLabel}>
-          <Link to="/">
+          <Link to="/" onClick={behavior.onNavigateHome}>
             <Home aria-hidden="true" size={22} />
             {behavior.home}
           </Link>
-          <Link to="/library">
+          <Link to="/library" onClick={behavior.onNavigateLibrary}>
             <Folder aria-hidden="true" size={22} />
             {behavior.library}
           </Link>
@@ -66,7 +63,7 @@ export function AppLayout() {
               title={behavior.editorLabel}
             >
               <PanelsTopLeft aria-hidden="true" size={22} />
-              {behavior.editor}
+              <ProjectNavigationLabel>{behavior.editor}</ProjectNavigationLabel>
             </Link>
           </Render>
           <Render when={behavior.editorProjectId === null}>
@@ -75,16 +72,11 @@ export function AppLayout() {
               {behavior.editor}
             </EditorTab>
           </Render>
-          <Link to="/settings">
+          <Link to="/settings" onClick={behavior.onNavigateSettings}>
             <Settings aria-hidden="true" size={22} />
             {behavior.settings}
           </Link>
         </Navigation>
-        <SidebarFooter>
-          <StorageLabel>{behavior.storageLabel}</StorageLabel>
-          <StorageDescription>{behavior.storageDescription}</StorageDescription>
-          <StorageLine />
-        </SidebarFooter>
       </Sidebar>
       <Workspace data-editor={behavior.isEditorRoute}>
         <Titlebar data-editor={behavior.isEditorRoute}>
