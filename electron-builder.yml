@@ -13,6 +13,12 @@ files:
 extraResources:
   - from: worker
     to: worker
+  - from: LICENSE
+    to: licenses/LICENSE
+  - from: THIRD_PARTY_NOTICES.md
+    to: licenses/THIRD_PARTY_NOTICES.md
+  - from: src/assets/fonts/LICENSE.txt
+    to: licenses/DejaVu-Fonts-LICENSE.txt
 
 linux:
   category: AudioVideo

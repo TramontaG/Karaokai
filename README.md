@@ -1,98 +1,98 @@
 # KaraokAI
 
-Aplicação desktop local-first para transformar músicas em projetos de karaokê: separa vocais e instrumental, transcreve letras com timestamps por palavra, permite editar a timeline visualmente e exporta o resultado em vídeo.
+A local-first desktop application that turns songs into karaoke projects: it separates vocals and instrumental tracks, transcribes lyrics with word-level timestamps, provides a visual timeline editor, and exports the result as a video.
 
 > [!NOTE]
-> Versão atual: `0.1.0` — release candidate. O fluxo principal está funcional; os instaladores públicos para Windows e macOS ainda dependem das respectivas etapas de distribuição e assinatura.
+> Current version: `0.1.0-rc.1` — release candidate. The main workflow is functional; public Windows and macOS distribution still require their respective publishing and signing steps.
 
-## O que o KaraokAI faz
+## What KaraokAI does
 
 ```text
-Importar música ou vídeo do YouTube
+Import a song or YouTube video
              ↓
-Separar vocais e instrumental localmente
+Separate vocals and instrumental locally
              ↓
-Transcrever e criar legendas sincronizadas
+Transcribe and create synchronized subtitles
              ↓
-Editar letra, timings, visual e background
+Edit lyrics, timing, appearance, and background
              ↓
-Exportar vídeo de karaokê
+Export a karaoke video
 ```
 
-O processamento de áudio e de vídeo ocorre no computador do usuário. Internet só é necessária para baixar o runtime/modelos no primeiro uso e, naturalmente, para importar um vídeo do YouTube.
+Audio and video processing run on the user's computer. Internet access is only required to download the runtime and models on first use and, naturally, to import a YouTube video.
 
-## Funcionalidades
+## Features
 
-### Criação e processamento de projetos
+### Project creation and processing
 
-- importação de arquivos locais (`.mp3`, `.wav`, `.flac`, `.m4a`, `.aac` e `.ogg`);
-- importação de vídeos do YouTube, preservando o vídeo como background do projeto;
-- suporte opcional a cookies do YouTube para casos em que a plataforma exige autenticação;
-- separação local de vocais e instrumental com Demucs;
-- transcrição de vocais com timestamps por palavra;
-- tokens explícitos de pausa entre palavras, preservados no projeto e na timeline;
-- acompanhamento de cada etapa do processamento: importação, separação, transcrição e geração de legendas.
+- local file import (`.mp3`, `.wav`, `.flac`, `.m4a`, `.aac`, and `.ogg`);
+- YouTube video import, preserving the video as the project's background;
+- optional YouTube cookies for cases where the platform requires authentication;
+- local vocal and instrumental separation with Demucs;
+- vocal transcription with word-level timestamps;
+- explicit pause tokens between words, preserved in both the project and timeline;
+- progress for every processing stage: import, separation, transcription, and subtitle generation.
 
-### Editor de karaokê
+### Karaoke editor
 
-- múltiplas tracks de legendas, além de tracks de áudio e background;
-- edição de texto da frase e de cada palavra diretamente no painel lateral;
-- inserção, remoção e edição de palavras e pausas;
-- ao digitar múltiplas palavras em um item, divisão automática do intervalo de tempo proporcionalmente ao tamanho de cada palavra;
-- split de frases por atalho (`S`) ou pela ferramenta de corte, usando o limite de palavra mais próximo do cursor;
-- arraste de frases horizontalmente e entre tracks;
-- arraste de palavras com `Ctrl` para redistribuir o timing sem criar espaços vazios na frase;
-- zoom da timeline com `Ctrl` + scroll, grade de BPM/offset e acompanhamento opcional da reprodução;
-- desfazer/refazer com histórico das edições;
-- estilos por track, frase ou palavra: fonte, peso, itálico, sublinhado, sobrescrito/subscrito, escala, posição e cores de leitura;
-- curvas de animação e transição entre frases;
-- backgrounds de vídeo, imagem, capa do álbum, cor sólida ou gradiente, com modos `cover` e `contain`;
-- fontes próprias importadas pelo usuário;
-- miniaturas de projeto geradas a partir da prévia do editor.
+- multiple subtitle tracks, as well as audio and background tracks;
+- phrase and word text editing directly from the side panel;
+- insert, remove, and edit words and pauses;
+- automatic splitting of multiple words entered into one item, distributing its duration proportionally to word length;
+- phrase splitting with the `S` shortcut or the split tool, using the word boundary nearest the cursor;
+- horizontal phrase dragging and movement between tracks;
+- `Ctrl`-dragging words to redistribute timing without leaving empty space in a phrase;
+- timeline zoom with `Ctrl` + scroll, BPM/offset grid, and optional playback following;
+- undo and redo history for edits;
+- track, phrase, and word styling: font, weight, italic, underline, superscript/subscript, scale, position, and read colors;
+- animation curves and inter-phrase transitions;
+- video, image, album-art, solid-color, and gradient backgrounds with `cover` and `contain` modes;
+- user-imported fonts;
+- project thumbnails generated from the editor preview.
 
-### Biblioteca e exportação
+### Library and export
 
-- biblioteca de projetos em grade ou lista;
-- renomear, duplicar, excluir, abrir a pasta e reabrir projetos;
-- persistência de projeto e assets no diretório de dados escolhido;
-- exportação de vídeo com resoluções de 480p a 1440p, 30 ou 60 FPS, modos de áudio instrumental/vocais/mix e presets H.264;
-- progresso de renderização, cancelamento seguro e bloqueio de edição enquanto o vídeo é gerado.
+- project library in grid or list view;
+- rename, duplicate, delete, open the project folder, and reopen projects;
+- project and asset persistence in the selected data directory;
+- video export from 480p to 1440p, at 30 or 60 FPS, with instrumental/vocals/mix audio modes and H.264 presets;
+- render progress, safe cancellation, and editing lock while a video is being generated.
 
-## Tecnologia
+## Technology
 
-| Camada        | Tecnologias                                  |
-| ------------- | -------------------------------------------- |
-| Desktop       | Electron, Node.js                            |
-| Interface     | React 19, TypeScript, Vite                   |
-| Estilos       | Emotion Styled                               |
-| Navegação     | TanStack Router                              |
-| Processamento | Python 3.11, PyTorch, Demucs, faster-whisper |
-| Mídia         | FFmpeg, yt-dlp                               |
+| Layer      | Technologies                                 |
+| ---------- | -------------------------------------------- |
+| Desktop    | Electron, Node.js                            |
+| Interface  | React 19, TypeScript, Vite                   |
+| Styling    | Emotion Styled                               |
+| Navigation | TanStack Router                              |
+| Processing | Python 3.11, PyTorch, Demucs, faster-whisper |
+| Media      | FFmpeg, yt-dlp                               |
 
-## Runtime local
+## Local runtime
 
-O bundle do aplicativo não inclui Python, modelos ou binários pesados. No primeiro uso, o Runtime Manager instala tudo no diretório de dados escolhido, sem modificar o Python do sistema, `PATH` ou registro do Windows.
+The application bundle does not include Python, models, or large binaries. On first use, the Runtime Manager installs everything in the selected data directory without modifying the system Python, `PATH`, or Windows Registry.
 
-| Componente | Origem                                          |
-| ---------- | ----------------------------------------------- |
-| `uv`       | Release oficial da Astral, com SHA-256 validado |
-| Python     | Instalação privada gerenciada pelo `uv`         |
-| ML Worker  | PyPI e índice oficial de wheels do PyTorch      |
-| FFmpeg     | Wheel `imageio-ffmpeg` no PyPI                  |
-| yt-dlp     | PyPI                                            |
-| Whisper    | Revisões fixadas no Hugging Face                |
-| Demucs     | Repositório de modelos da Meta                  |
+| Component | Source                                         |
+| --------- | ---------------------------------------------- |
+| `uv`      | Official Astral release, verified with SHA-256 |
+| Python    | Private installation managed by `uv`           |
+| ML Worker | PyPI and the official PyTorch wheel index      |
+| FFmpeg    | `imageio-ffmpeg` wheel from PyPI               |
+| yt-dlp    | PyPI                                           |
+| Whisper   | Pinned revisions from Hugging Face             |
+| Demucs    | Meta's model repository                        |
 
-Modelos, runtime e cache podem ser verificados, removidos ou reinstalados pelas configurações. Veja [docs/runtime-installation.md](docs/runtime-installation.md) para detalhes.
+Models, runtime components, and cache can be checked, removed, or reinstalled from Settings. See [docs/runtime-installation.md](docs/runtime-installation.md) for details.
 
-## Desenvolvimento
+## Development
 
-### Pré-requisitos
+### Prerequisites
 
 - Node.js 22 LTS;
 - npm.
 
-### Instalação
+### Installation
 
 ```bash
 git clone git@github.com:TramontaG/Karaokai.git
@@ -100,62 +100,71 @@ cd Karaokai
 npm install
 ```
 
-### Executar em desenvolvimento
+### Run in development
 
 ```bash
 npm run dev
 ```
 
-O comando inicia o Vite e a janela Electron.
+This command starts Vite and the Electron window.
 
-### Comandos
+### Commands
 
-| Comando                       | Descrição                                                |
+| Command                       | Description                                              |
 | ----------------------------- | -------------------------------------------------------- |
-| `npm run dev`                 | Executa o Electron com Vite em desenvolvimento           |
-| `npm run dev:web`             | Executa somente o frontend Vite                          |
-| `npm run build`               | Valida TypeScript e gera o bundle web                    |
-| `npm run build:desktop`       | Empacota os targets da plataforma atual                  |
-| `npm run build:windows`       | Gera o instalador NSIS Windows x64                       |
-| `npm run build:windows:store` | Gera o pacote AppX para Microsoft Store em Windows 10/11 |
-| `npm run format`              | Formata o repositório com Prettier                       |
-| `npm run format:check`        | Verifica a formatação sem alterar arquivos               |
+| `npm run dev`                 | Runs Electron with Vite in development mode              |
+| `npm run dev:web`             | Runs only the Vite frontend                              |
+| `npm run build`               | Type-checks and generates the web bundle                 |
+| `npm run build:desktop`       | Packages targets for the current platform                |
+| `npm run build:windows`       | Builds the Windows x64 NSIS installer                    |
+| `npm run build:windows:store` | Builds the Microsoft Store AppX package on Windows 10/11 |
+| `npm run format`              | Formats the repository with Prettier                     |
+| `npm run format:check`        | Checks formatting without changing files                 |
 
-Os artefatos são gravados em `release/`.
+Artifacts are written to `release/`.
 
-## Distribuição
+## Distribution
 
-| Plataforma      | Target atual      | Situação                                                                                   |
-| --------------- | ----------------- | ------------------------------------------------------------------------------------------ |
-| Linux           | AppImage e `.deb` | Empacotamento validado                                                                     |
-| Windows x64     | NSIS `.exe`       | Empacotamento validado; não assinado para RC fechado                                       |
-| Microsoft Store | AppX              | Configurado; requer conta/identidade reservada no Partner Center                           |
-| macOS           | DMG               | Configurado; requer build em macOS, assinatura e notarização antes da distribuição pública |
+| Platform        | Current target      | Status                                                                                   |
+| --------------- | ------------------- | ---------------------------------------------------------------------------------------- |
+| Linux           | AppImage and `.deb` | Packaging validated                                                                      |
+| Windows x64     | NSIS `.exe`         | Packaging validated; unsigned for closed RC distribution                                 |
+| Microsoft Store | AppX                | Configured; requires a Partner Center account and reserved identity                      |
+| macOS           | DMG                 | Configured; requires a macOS build, signing, and notarization before public distribution |
 
-Para enviar à Microsoft Store, reserve primeiro o nome do app no Partner Center e substitua `appx.identityName` em `electron-builder.yml` pelo valor exato fornecido pela Microsoft. O target `appx` é o formato de pacote da Store suportado pelo electron-builder; a Microsoft assina o pacote publicado.
+Before submitting to the Microsoft Store, reserve the app name in Partner Center and replace `appx.identityName` in `electron-builder.yml` with the exact value supplied by Microsoft. The `appx` target is the Store package format supported by electron-builder; Microsoft signs the published package.
 
-## Privacidade
+## Privacy
 
-- áudio, stems, projetos e renders permanecem no dispositivo;
-- não há telemetria, anúncios ou upload obrigatório de músicas;
-- downloads de runtime/modelos vão apenas para o diretório escolhido;
-- importações do YouTube usam rede para consultar e baixar o vídeo;
-- todos os dados gerenciados podem ser removidos pelas configurações.
+- audio, stems, projects, and renders stay on the device;
+- there is no telemetry, advertising, or mandatory song upload;
+- runtime and model downloads are stored only in the selected data directory;
+- YouTube imports use the network to retrieve video information and download the video;
+- all managed data can be removed from Settings.
 
-## Estrutura do repositório
+## License and third-party software
+
+KaraokAI is free software licensed under the
+[GNU General Public License v3.0 or later](LICENSE). Third-party components
+remain subject to their own licenses; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Read
+[PRIVACY.md](PRIVACY.md) and [CONTENT_RIGHTS.md](CONTENT_RIGHTS.md) before
+importing or publishing media.
+
+## Repository structure
 
 ```text
 Karaokai/
-├── src/                  # Interface React, editor e serviços do renderer
-├── electron/             # Processo principal, IPC, renderização e runtime
-├── worker/               # Worker Python de separação e transcrição
-├── docs/                 # Documentação técnica
-├── src-tauri/            # Implementação anterior, mantida temporariamente
-├── electron-builder.yml  # Targets e configuração de empacotamento
-└── projectDefinition.md  # Especificação técnica e de produto
+├── src/                  # React UI, editor, and renderer services
+├── electron/             # Main process, IPC, rendering, and runtime
+├── worker/               # Python separation and transcription worker
+├── docs/                 # Technical documentation
+├── src-tauri/            # Previous implementation, kept temporarily
+├── electron-builder.yml  # Build targets and packaging configuration
+└── projectDefinition.md  # Technical and product specification
 ```
 
-## Documentação adicional
+## Additional documentation
 
-- [Instalação do runtime](docs/runtime-installation.md)
-- [Especificação técnica e de produto](projectDefinition.md)
+- [Runtime installation](docs/runtime-installation.md)
+- [Technical and product specification](projectDefinition.md)
