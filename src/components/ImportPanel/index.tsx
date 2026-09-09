@@ -66,7 +66,7 @@ export function ImportPanel() {
         <FormatText>{behavior.supportedFormats}</FormatText>
         <ChooseFile type="button" onClick={behavior.onChooseFile}>
           <FolderOpen aria-hidden="true" size={18} />
-          {behavior.importActionLabel}
+          {behavior.fileActionLabel}
         </ChooseFile>
       </DropArea>
       <Render when={() => behavior.error !== null}>
@@ -91,7 +91,7 @@ export function ImportPanel() {
           />
         </InputShell>
         <YoutubeButton type="submit" disabled={behavior.isImporting}>
-          {behavior.importActionLabel}
+          {behavior.youtubeActionLabel}
         </YoutubeButton>
       </YoutubeForm>
     </ImportShell>

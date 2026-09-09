@@ -41,7 +41,7 @@ export function useAppBootstrap() {
                   : (report.installedDemucsModelIds[0] ??
                     data.preferences.defaultDemucsModelId),
               }
-            : {},
+            : { onboardingCompleted: false },
           bootstrap: {
             status: "ready",
             dataDirectory: report.dataDirectory,

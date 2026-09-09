@@ -13,3 +13,9 @@ src-tauri/target/
 
 # Runtime-generated session marker
 /:memory:.ses
+
+# Python build artifacts
+worker/build/
+worker/*.egg-info/
+worker/**/__pycache__/
+*.py[cod]

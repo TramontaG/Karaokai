@@ -1,12 +1,27 @@
 import { ModelOption } from "./components/ModelOption";
-import { createElement } from "react";
+import { createElement, useCallback } from "react";
 import { useOnboarding } from "../../hooks/useOnboarding";
+import { useTheme } from "../../hooks/useTheme";
 import { useTranslation } from "../../hooks/useTranslation";
+import { windowAction } from "../../services/desktop";
 import { type ModelStatus } from "../../services/models";
 
 export function useBehavior(_: Record<string, never>) {
   const onboarding = useOnboarding();
   const { language, t } = useTranslation();
+  const { theme, setThemePreference } = useTheme();
+  const onToggleTheme = useCallback(() => {
+    setThemePreference(theme.name === "dark" ? "light" : "dark");
+  }, [setThemePreference, theme.name]);
+  const onMinimize = useCallback(() => {
+    void windowAction("minimize");
+  }, []);
+  const onToggleMaximize = useCallback(() => {
+    void windowAction("maximize");
+  }, []);
+  const onClose = useCallback(() => {
+    void windowAction("close");
+  }, []);
 
   const modelOptions = onboarding.models
     .filter((model) => model.kind === "whisper")
@@ -88,6 +103,7 @@ export function useBehavior(_: Record<string, never>) {
     isModels: onboarding.onboarding.step === "models",
     isDownloading: onboarding.onboarding.step === "download",
     isSuccess: onboarding.onboarding.step === "success",
+    isStoragePreparing: onboarding.isSettingStorage,
     hasError: onboarding.onboarding.error !== null,
     canRetryDownload: true,
     hasStatusMessage: onboarding.onboarding.statusMessage !== null,
@@ -116,6 +132,8 @@ export function useBehavior(_: Record<string, never>) {
     getStartedLabel: t("onboarding.getStarted"),
     storageTitle: t("onboarding.storage.title"),
     storageDescription: t("onboarding.storage.description"),
+    storagePreparingTitle: t("onboarding.storage.preparing.title"),
+    storagePreparingDescription: t("onboarding.storage.preparing.description"),
     useDefaultStorageLabel: t("onboarding.storage.useDefault"),
     chooseStorageLabel: t("onboarding.storage.choose"),
     modelsTitle: t("onboarding.models.title"),
@@ -127,5 +145,15 @@ export function useBehavior(_: Record<string, never>) {
     successTitle: t("onboarding.success.title"),
     successDescription: t("onboarding.success.description"),
     finishLabel: t("onboarding.finish"),
+    themeLabel: t("appLayout.theme.toggle"),
+    minimizeLabel: t("appLayout.window.minimize"),
+    maximizeLabel: t("appLayout.window.maximize"),
+    closeLabel: t("appLayout.window.close"),
+    isDarkTheme: theme.name === "dark",
+    isLightTheme: theme.name === "light",
+    onToggleTheme,
+    onMinimize,
+    onToggleMaximize,
+    onClose,
   };
 }

@@ -8,7 +8,13 @@ const { pythonBinary, ffmpegBinary } = require("./projects.cjs");
 
 const UV_VERSION = "0.12.9";
 const PYTHON_VERSION = "3.11.16";
-const WORKER_VERSION = "0.3.1";
+const WORKER_VERSION = "0.4.11";
+const WORKER_FINGERPRINT_FILE = "worker-source.sha256";
+const WORKER_COPY_FILTER = (source) => !source.split(path.sep).some(
+  (part) =>
+    ["build", "__pycache__", ".pytest_cache", ".mypy_cache"].includes(part) ||
+    part.endsWith(".egg-info")
+);
 const WHISPER_FILES = [
   "config.json",
   "model.bin",
@@ -110,6 +116,80 @@ function commandWorksAsync(command, args = ["--version"], options = {}) {
     child.once("error", () => resolve(false));
     child.once("close", (code) => resolve(code === 0));
   });
+}
+
+async function workerSourceFingerprint(workerSource) {
+  const files = [];
+  async function collect(directory) {
+    for (const entry of await fs.promises.readdir(directory, { withFileTypes: true })) {
+      const target = path.join(directory, entry.name);
+      if (!WORKER_COPY_FILTER(target)) continue;
+      if (entry.isDirectory()) await collect(target);
+      else if (entry.isFile()) files.push(path.relative(workerSource, target));
+    }
+  }
+  await collect(workerSource);
+  const hash = crypto.createHash("sha256");
+  for (const file of files.sort()) {
+    hash.update(file);
+    hash.update("\0");
+    hash.update(await fs.promises.readFile(path.join(workerSource, file)));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
+async function synchronizeWorkerSource(dataRoot, appPath) {
+  const source = path.join(appPath, "worker");
+  const destination = path.join(dataRoot, "runtime", "worker-source");
+  const runtimeDirectory = path.dirname(destination);
+  const sourceFingerprint = await workerSourceFingerprint(source);
+  const fingerprintFile = path.join(runtimeDirectory, WORKER_FINGERPRINT_FILE);
+  const previousFingerprint = await fs.promises.readFile(fingerprintFile, "utf8").catch(() => "");
+  if (previousFingerprint.trim() === sourceFingerprint && fs.existsSync(destination)) {
+    return { directory: destination, fingerprint: sourceFingerprint, changed: false };
+  }
+  const temporary = `${destination}.${process.pid}-${crypto.randomBytes(4).toString("hex")}.tmp`;
+  await fs.promises.mkdir(runtimeDirectory, { recursive: true });
+  await fs.promises.rm(temporary, { recursive: true, force: true });
+  await fs.promises.cp(source, temporary, { recursive: true, filter: WORKER_COPY_FILTER });
+  await fs.promises.rm(destination, { recursive: true, force: true });
+  await fs.promises.rename(temporary, destination);
+  await fs.promises.writeFile(fingerprintFile, sourceFingerprint, "utf8");
+  return { directory: destination, fingerprint: sourceFingerprint, changed: true };
+}
+
+async function installedWorkerMatchesSource(dataRoot, appPath) {
+  try {
+    const source = await synchronizeWorkerSource(dataRoot, appPath);
+    const installed = await fs.promises.readFile(
+      path.join(dataRoot, "runtime", "worker-installed.sha256"),
+      "utf8"
+    );
+    return installed.trim() === source.fingerprint;
+  } catch {
+    return false;
+  }
+}
+
+async function workerVersionMatches(dataRoot, appPath) {
+  try {
+    const output = await runCommand(
+      pythonBinary(dataRoot),
+      ["-m", "karaoke_worker", "--healthcheck"],
+      { env: runtimeEnvironment(dataRoot) }
+    );
+    const report = JSON.parse(
+      output
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("{"))
+        .at(-1) ?? ""
+    );
+    return report.workerVersion === WORKER_VERSION && await installedWorkerMatchesSource(dataRoot, appPath);
+  } catch {
+    return false;
+  }
 }
 
 function runtimeEnvironment(dataRoot) {
@@ -327,7 +407,7 @@ async function ensureRuntime(dataRoot, model, emit, appPath) {
       progress: value,
       message,
     });
-  const existingComponents = runtimeComponents(dataRoot);
+  const existingComponents = await runtimeComponents(dataRoot, appPath);
   const runtimeReady = existingComponents.every(
     (component) => component.verified
   );
@@ -379,7 +459,7 @@ async function ensureRuntime(dataRoot, model, emit, appPath) {
     );
   }
   progress("ml-worker", 28);
-  const workerSource = path.join(appPath, "worker");
+  const workerSource = await synchronizeWorkerSource(dataRoot, appPath);
   const cuda = commandWorks("nvidia-smi", ["-L"]);
   const torchIndex = cuda
     ? "https://download.pytorch.org/whl/cu124"
@@ -392,13 +472,18 @@ async function ensureRuntime(dataRoot, model, emit, appPath) {
       "--python",
       python,
       "--reinstall",
-      workerSource,
+      workerSource.directory,
       "--extra-index-url",
       torchIndex,
       "--index-strategy",
       "unsafe-best-match",
     ],
     { env }
+  );
+  await fs.promises.writeFile(
+    path.join(dataRoot, "runtime", "worker-installed.sha256"),
+    workerSource.fingerprint,
+    "utf8"
   );
   progress("ffmpeg", 64);
   await runCommand(
@@ -466,12 +551,10 @@ function modelInstalled(dataRoot, model) {
   });
 }
 
-async function runtimeComponents(dataRoot) {
+async function runtimeComponents(dataRoot, appPath) {
   const python = pythonBinary(dataRoot);
   const [workerReady, ytDlpReady, ffmpegReady] = await Promise.all([
-    commandWorksAsync(python, ["-m", "karaoke_worker", "--healthcheck"], {
-      env: runtimeEnvironment(dataRoot),
-    }),
+    workerVersionMatches(dataRoot, appPath),
     commandWorksAsync(python, ["-m", "yt_dlp", "--version"], {
       env: runtimeEnvironment(dataRoot),
     }),
@@ -517,11 +600,11 @@ async function runtimeComponents(dataRoot) {
   }));
 }
 
-async function runtimeComponentInventory(dataRoot) {
+async function runtimeComponentInventory(dataRoot, appPath) {
   const python = pythonBinary(dataRoot);
   const [ffmpegReady, workerRuntimeReady, ytDlpReady] = await Promise.all([
     commandWorksAsync(ffmpegBinary(dataRoot), ["-version"]),
-    commandWorksAsync(python, ["--version"]),
+    workerVersionMatches(dataRoot, appPath),
     commandWorksAsync(python, ["-m", "yt_dlp", "--version"], {
       env: runtimeEnvironment(dataRoot),
     }),
@@ -581,12 +664,26 @@ async function run(command, args, context) {
         fs.promises.mkdir(directory, { recursive: true })
       )
     );
-    const installedWhisperModelIds = MODELS.filter((model) =>
+    let installedWhisperModelIds = MODELS.filter((model) =>
       modelInstalled(dataRoot, model)
     ).map((model) => model.id);
-    const installedDemucsModelIds = DEMUCS_MODELS.filter((model) =>
+    let installedDemucsModelIds = DEMUCS_MODELS.filter((model) =>
       modelInstalled(dataRoot, model)
     ).map((model) => model.id);
+    let workerReady = await workerVersionMatches(dataRoot, context.appPath);
+    if (!workerReady && installedWhisperModelIds.length > 0) {
+      const model = MODELS.find((entry) => entry.id === installedWhisperModelIds[0]);
+      if (model) {
+        await ensureRuntime(dataRoot, model, context.emit, context.appPath);
+        workerReady = await workerVersionMatches(dataRoot, context.appPath);
+        installedWhisperModelIds = MODELS.filter((entry) =>
+          modelInstalled(dataRoot, entry)
+        ).map((entry) => entry.id);
+        installedDemucsModelIds = DEMUCS_MODELS.filter((entry) =>
+          modelInstalled(dataRoot, entry)
+        ).map((entry) => entry.id);
+      }
+    }
     return {
       dataDirectory: dataRoot,
       directories,
@@ -594,7 +691,7 @@ async function run(command, args, context) {
       architecture: process.arch,
       runtimeProfile: commandWorks("nvidia-smi", ["-L"]) ? "cuda" : "cpu",
       runtimeReady:
-        fs.existsSync(pythonBinary(dataRoot)) &&
+        workerReady &&
         fs.existsSync(ffmpegBinary(dataRoot)) &&
         installedWhisperModelIds.length > 0 &&
         installedDemucsModelIds.length > 0,
@@ -665,8 +762,9 @@ async function run(command, args, context) {
     return jobId;
   }
   if (command === "list_runtime_components")
-    return runtimeComponentInventory(dataRoot);
-  if (command === "run_runtime_checkup") return runtimeComponents(dataRoot);
+    return runtimeComponentInventory(dataRoot, context.appPath);
+  if (command === "run_runtime_checkup")
+    return runtimeComponents(dataRoot, context.appPath);
   if (command === "install_runtime_component") {
     const model =
       MODELS.find((entry) => modelInstalled(dataRoot, entry)) ?? MODELS[0];

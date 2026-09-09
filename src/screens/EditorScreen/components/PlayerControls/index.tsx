@@ -1,7 +1,7 @@
 import { memo } from "react";
-import { Maximize, Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { Render } from "../../../../components/Render";
-import { useEditorBehavior, useEditorState } from "../EditorState";
+import { MixerPanel } from "../MixerPanel";
 import {
   PlayerBar,
   PlayerControls as Controls,
@@ -9,10 +9,10 @@ import {
   PlayerTools,
   Time,
 } from "../../styles";
+import { useBehavior } from "./behavior";
 
 function PlayerControlsView() {
-  useEditorState((behavior) => behavior.currentTime);
-  const behavior = useEditorBehavior();
+  const behavior = useBehavior({});
   return (
     <PlayerBar>
       <PlayerSeek>
@@ -46,7 +46,7 @@ function PlayerControlsView() {
         </button>
       </Controls>
       <PlayerTools>
-        <Maximize size={17} />
+        <MixerPanel />
       </PlayerTools>
     </PlayerBar>
   );

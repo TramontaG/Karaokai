@@ -255,7 +255,10 @@ export const SubtitlePreview = styled.div`
 export const CurrentPhrase = styled.p`
   position: relative;
   margin: 0;
-  transform: translateY(calc(-50% + 0.18em));
+  transform: translate(
+    var(--phrase-offset-x, 0),
+    calc(-50% + 0.18em + var(--phrase-offset-y, 0))
+  );
   transform-origin: center;
   will-change: opacity, transform;
 `;
@@ -276,11 +279,17 @@ export const PreviewWord = styled.span<
     $fontStyle: "normal" | "italic";
     $textDecoration: "none" | "underline";
     $verticalAlign: "baseline" | "super" | "sub";
+    $offsetX: number;
+    $offsetY: number;
   } & SubtitlePreviewDataAttributes
 >`
   position: relative;
   display: inline-block;
   margin-right: 0.25em;
+  transform: translate(
+    ${({ $offsetX }) => `${$offsetX}cqw`},
+    ${({ $offsetY }) => `${$offsetY}cqw`}
+  );
   color: ${({ $unreadColor }) => $unreadColor};
   font-family: ${({ $fontFamily }) => subtitleFontStack($fontFamily)};
   font-size: ${({ $scale, $verticalAlign }) =>
@@ -405,9 +414,11 @@ export const PlayerControls = styled.div`
 `;
 export const PlayerTools = styled.div`
   display: flex;
+  min-width: 0;
   justify-content: flex-end;
   align-items: center;
   color: ${({ theme }) => theme.colors.textMuted};
+
   @media (max-width: 780px) {
     display: none;
   }
@@ -666,11 +677,13 @@ export const TimelineLane = styled.div<{
 export const TimelinePlayhead = styled.div`
   position: absolute;
   z-index: 4;
+  left: 0;
   top: -0.15rem;
   bottom: -0.15rem;
   width: 2px;
   border-radius: 2px;
   pointer-events: none;
+  will-change: transform;
   background: ${({ theme }) => theme.colors.accent};
   box-shadow: 0 0 0.55rem ${({ theme }) => theme.colors.accent};
   &::before {
@@ -736,7 +749,8 @@ export const InspectorHeader = styled.div`
 `;
 export const Tabs = styled.div`
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
 
   button {
@@ -818,66 +832,34 @@ export const AnimationDescription = styled.p`
   font-size: 0.72rem;
   line-height: 1.45;
 `;
-export const MixerContent = styled.section`
+export const InlineMixer = styled.section`
   display: grid;
-  padding: 1rem;
-  gap: 1rem;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
 `;
-export const MixerHeader = styled.p`
-  margin: 0;
-  color: ${({ theme }) => theme.colors.textMuted};
-  font-size: 0.72rem;
-  line-height: 1.45;
-`;
-export const MixerChannel = styled.div`
-  position: relative;
+export const InlineMixerChannel = styled.div`
   display: grid;
-  overflow: hidden;
-  padding: 0.85rem;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: 0.55rem;
-  gap: 0.75rem;
-  background: color-mix(
-    in srgb,
-    ${({ theme }) => theme.colors.background} 72%,
-    transparent
-  );
+  min-width: 0;
+  grid-template-columns: 1rem minmax(0, 1fr) 2rem;
+  align-items: center;
+  gap: 0.35rem;
 
-  label {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    align-items: center;
-    gap: 0.55rem;
-    color: ${({ theme }) => theme.colors.text};
-    font-size: 0.74rem;
-  }
-
-  label svg {
+  svg {
     color: ${({ theme }) => theme.colors.accent};
   }
 
   output {
     color: ${({ theme }) => theme.colors.textMuted};
+    font-size: 0.62rem;
     font-variant-numeric: tabular-nums;
+    text-align: right;
   }
 
   input {
-    z-index: 1;
     width: 100%;
     accent-color: ${({ theme }) => theme.colors.accent};
   }
-`;
-export const MixerMeter = styled.span`
-  display: block;
-  height: 0.2rem;
-  max-width: 100%;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    #54d99b,
-    ${({ theme }) => theme.colors.accent}
-  );
-  transition: width 80ms linear;
 `;
 export const Field = styled.label`
   display: grid;
@@ -913,7 +895,7 @@ export const Field = styled.label`
   }
 
   select {
-    padding-right: 2.5rem;
+    padding-right: 2.75rem;
   }
 `;
 export const BackgroundAssetButton = styled.button`

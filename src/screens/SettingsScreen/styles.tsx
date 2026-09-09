@@ -111,7 +111,7 @@ export const Label = styled.label`
 `;
 
 export const Select = styled.select`
-  padding: 0.65rem;
+  padding: 0.65rem 2.75rem 0.65rem 0.65rem;
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: 0.5rem;
   color: ${({ theme }) => theme.colors.text};

@@ -70,12 +70,6 @@ export function useBehavior(_: Record<string, never>) {
       ? t("navigation.editorProject", { project: data.currentProject.name })
       : t("navigation.editorUnavailable"),
     settings: t("navigation.settings"),
-    searchPlaceholder: t(
-      pathname === "/settings"
-        ? "appLayout.search.settingsPlaceholder"
-        : "appLayout.search.placeholder"
-    ),
-    searchLabel: t("appLayout.search.label"),
     themeLabel: t("appLayout.theme.toggle"),
     minimizeLabel: t("appLayout.window.minimize"),
     maximizeLabel: t("appLayout.window.maximize"),

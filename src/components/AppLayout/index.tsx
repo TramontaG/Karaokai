@@ -5,7 +5,6 @@ import {
   Minus,
   Moon,
   PanelsTopLeft,
-  Search,
   Settings,
   Square,
   Sun,
@@ -22,8 +21,6 @@ import {
   EditorTab,
   Navigation,
   ProjectNavigationLabel,
-  SearchBox,
-  SearchInput,
   Shell,
   Sidebar,
   ThemeButton,
@@ -80,16 +77,6 @@ export function AppLayout() {
       </Sidebar>
       <Workspace data-editor={behavior.isEditorRoute}>
         <Titlebar data-editor={behavior.isEditorRoute}>
-          <Render when={!behavior.isEditorRoute}>
-            <SearchBox>
-              <Search aria-hidden="true" size={18} />
-              <SearchInput
-                aria-label={behavior.searchLabel}
-                type="search"
-                placeholder={behavior.searchPlaceholder}
-              />
-            </SearchBox>
-          </Render>
           <Render when={!behavior.isEditorRoute}>
             <ThemeButton
               type="button"

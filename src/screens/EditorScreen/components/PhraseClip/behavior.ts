@@ -22,7 +22,7 @@ export interface PhraseClipProps {
   splitting: boolean;
   words: PhraseWordView[];
   interactionKey: object;
-  onSelect: (phrase: SubtitlePhrase) => void;
+  onSelect: (phrase: SubtitlePhrase, event: MouseEvent<HTMLElement>) => void;
   onSelectWord: (phrase: SubtitlePhrase, word: SubtitleWord) => void;
   onHoverPhrase: (phrase: SubtitlePhrase, clientX: number) => void;
   onLeavePhrase: (phrase: SubtitlePhrase) => void;
@@ -73,6 +73,7 @@ export function useBehavior(props: PhraseClipProps) {
           $selected: word.selected,
           $splitting: props.splitting,
           $gap: word.type === "gap",
+          "data-timeline-word-id": word.id,
           style: { left: word.left, width: word.width },
           onPointerDown: (event: PointerEvent<HTMLElement>) => {
             if (props.splitting) {
@@ -124,7 +125,7 @@ export function useBehavior(props: PhraseClipProps) {
         props.onSplitPhrase(props.phrase, event.clientX);
         return;
       }
-      props.onSelect(props.phrase);
+      props.onSelect(props.phrase, event);
     },
     [props]
   );
@@ -134,6 +135,7 @@ export function useBehavior(props: PhraseClipProps) {
         event.stopPropagation();
         return;
       }
+      if (event.ctrlKey || event.metaKey || event.shiftKey) return;
       props.onStartPhraseGesture(event, props.phrase, "move");
     },
     [props]

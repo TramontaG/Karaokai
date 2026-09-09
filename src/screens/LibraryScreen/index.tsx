@@ -1,12 +1,11 @@
 import {
   ArrowDown,
-  ChevronDown,
   Clock3,
   Heart,
   LayoutGrid,
   List,
   Plus,
-  UserRound,
+  Search,
 } from "lucide-react";
 import { ForEach } from "../../components/ForEach";
 import { Render } from "../../components/Render";
@@ -26,6 +25,7 @@ import {
   PageDescription,
   PageHeader,
   PageTitle,
+  ProjectSearch,
   SortButton,
   SortControl,
   SortLabel,
@@ -80,22 +80,30 @@ export function LibraryScreen() {
               <Heart aria-hidden="true" size={16} />
               {behavior.favorites}
             </FilterButton>
-            <FilterButton
-              type="button"
-              aria-pressed={behavior.mineActive}
-              data-active={behavior.mineActive}
-              onClick={behavior.onShowMine}
-            >
-              <UserRound aria-hidden="true" size={16} />
-              {behavior.mine}
-            </FilterButton>
           </Filters>
+          <ProjectSearch>
+            <Search aria-hidden="true" size={17} />
+            <input
+              aria-label={behavior.searchLabel}
+              type="search"
+              value={behavior.searchQuery}
+              placeholder={behavior.searchPlaceholder}
+              onChange={(event) => behavior.onSearchChange(event.target.value)}
+            />
+          </ProjectSearch>
           <ViewControls>
             <SortControl>
               <SortLabel>{behavior.sortLabel}</SortLabel>
-              <SortButton type="button">
-                {behavior.sortRecent}
-                <ChevronDown aria-hidden="true" size={15} />
+              <SortButton
+                aria-label={behavior.sortLabel}
+                value={behavior.projectSort}
+                onChange={(event) => behavior.onSortChange(event.target.value)}
+              >
+                <ForEach
+                  data={behavior.sortOptions}
+                  idCompute={behavior.getProjectSortOptionId}
+                  render={behavior.renderProjectSortOption}
+                />
               </SortButton>
             </SortControl>
             <ViewSwitcher>

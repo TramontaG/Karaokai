@@ -67,7 +67,7 @@ const initialData: AppData = {
   onboarding: {
     step: "welcome",
     progress: 0,
-    selectedModelId: "whisper-tiny",
+    selectedModelId: "whisper-large-v3",
     statusMessage: null,
     completedBytes: 0,
     totalBytes: null,

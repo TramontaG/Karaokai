@@ -1,4 +1,4 @@
-export type ProjectFilter = "all" | "recent" | "favorites" | "mine";
+export type ProjectFilter = "all" | "recent" | "favorites";
 
 export type ProjectCover =
   | "violet-sunset"
@@ -31,8 +31,8 @@ export interface ProjectItem {
   size: string;
   thumbnail: string | null;
   updated: string;
+  updatedAt: string;
   cover: ProjectCover;
   isFavorite: boolean;
   isRecent: boolean;
-  isMine: boolean;
 }

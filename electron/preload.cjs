@@ -13,7 +13,7 @@ contextBridge.exposeInMainWorld("karaokaiDesktop", {
     ipcRenderer.on(eventName, listener);
     return () => ipcRenderer.removeListener(eventName, listener);
   },
-  chooseAudioFile: () => ipcRenderer.invoke("karaokai:dialog:audio"),
+  chooseMediaFile: () => ipcRenderer.invoke("karaokai:dialog:media"),
   chooseBackgroundFile: (kind) =>
     ipcRenderer.invoke("karaokai:dialog:background", kind),
   chooseFontFile: () => ipcRenderer.invoke("karaokai:dialog:font"),

@@ -3,6 +3,7 @@ import { type ThemeName, type ThemePreference } from "../theme";
 
 const STORAGE_KEY = "karaokai.user-preferences";
 export type ProjectViewMode = "grid" | "list";
+export type ProjectSort = "updated-desc" | "updated-asc" | "name-asc";
 
 export interface CustomFontPreference {
   id: string;
@@ -17,6 +18,7 @@ export interface UserPreferences {
   onboardingCompleted: boolean;
   storageDirectory: string | null;
   projectViewMode: ProjectViewMode;
+  projectSort: ProjectSort;
   favoriteProjectIds: string[];
   timelineAutoFollow: boolean;
   defaultWhisperModelId: string;
@@ -30,9 +32,10 @@ export const defaultPreferences: UserPreferences = {
   onboardingCompleted: false,
   storageDirectory: null,
   projectViewMode: "grid",
+  projectSort: "updated-desc",
   favoriteProjectIds: [],
   timelineAutoFollow: true,
-  defaultWhisperModelId: "whisper-base",
+  defaultWhisperModelId: "whisper-large-v3",
   defaultDemucsModelId: "demucs-htdemucs",
   customFonts: [],
 };
@@ -72,6 +75,11 @@ export function loadUserPreferences(): UserPreferences {
       projectViewMode: ["grid", "list"].includes(stored.projectViewMode ?? "")
         ? (stored.projectViewMode as ProjectViewMode)
         : defaultPreferences.projectViewMode,
+      projectSort: ["updated-desc", "updated-asc", "name-asc"].includes(
+        stored.projectSort ?? ""
+      )
+        ? (stored.projectSort as ProjectSort)
+        : defaultPreferences.projectSort,
       favoriteProjectIds: Array.isArray(stored.favoriteProjectIds)
         ? stored.favoriteProjectIds.filter(
             (projectId): projectId is string => typeof projectId === "string"

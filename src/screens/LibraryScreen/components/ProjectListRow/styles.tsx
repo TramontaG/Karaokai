@@ -31,12 +31,14 @@ export const NameCell = styled.div`
 
 export const TitleLine = styled.div`
   display: flex;
+  flex: 1;
   min-width: 0;
   align-items: center;
   gap: 0.65rem;
 `;
 
 export const ProjectName = styled.strong`
+  min-width: 0;
   overflow: hidden;
   color: ${({ theme }) => theme.colors.text};
   font-weight: 600;
@@ -65,11 +67,13 @@ export const ProjectUpdated = styled.span`
 
 export const FavoriteIcon = styled.button<{ $active: boolean }>`
   display: grid;
+  flex: 0 0 auto;
   width: 1.7rem;
   height: 1.7rem;
   padding: 0;
   border: 0;
   place-items: center;
+  margin-left: auto;
   color: ${({ $active, theme }) =>
     $active ? theme.colors.accent : theme.colors.textMuted};
   background: transparent;

@@ -231,6 +231,19 @@ export async function createYoutubeProject(
   });
 }
 
+export async function continueProjectProcessing(
+  id: string,
+  lyrics: string,
+  storageDirectory: string | null
+) {
+  if (!isDesktop()) return;
+  await invokeDesktop<void>("continue_project_processing", {
+    projectId: id,
+    lyrics,
+    storageDirectory,
+  });
+}
+
 export async function loadProject(id: string, storageDirectory: string | null) {
   if (isDesktop())
     return invokeDesktop<KaraokeProject>("load_project", {

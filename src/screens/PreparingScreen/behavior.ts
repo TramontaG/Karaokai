@@ -7,11 +7,16 @@ import {
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
+  type FormEvent,
 } from "react";
 import { type ProjectStage } from "../../domain/project";
 import { useAppContext } from "../../hooks/useAppContext";
 import { useTranslation } from "../../hooks/useTranslation";
-import { loadProject } from "../../services/projects";
+import {
+  continueProjectProcessing,
+  loadProject,
+} from "../../services/projects";
 import { PreparationStage, StageProgress, StageProgressFill } from "./styles";
 
 const stageKey = {
@@ -42,6 +47,9 @@ export function useBehavior(_: Record<string, never>) {
   const navigate = useNavigate();
   const [stages, setStages] = useState<ProjectStage[]>([]);
   const [projectName, setProjectName] = useState(projectId);
+  const [lyrics, setLyrics] = useState("");
+  const [isStartingTranscription, setIsStartingTranscription] = useState(false);
+  const [lyricsError, setLyricsError] = useState<string | null>(null);
   const opened = useRef(false);
   const refresh = useCallback(async () => {
     try {
@@ -69,6 +77,41 @@ export function useBehavior(_: Record<string, never>) {
   ).length;
   const hasFailed = stages.some((stage) => stage.status === "failed");
   const isComplete = stages.length > 0 && completedCount === stages.length;
+  const awaitingLyrics =
+    !isStartingTranscription &&
+    stages.find((stage) => stage.id === "separation")?.status === "completed" &&
+    stages.find((stage) => stage.id === "transcription")?.status === "pending";
+  const onLyricsChange = useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) => setLyrics(event.target.value),
+    []
+  );
+  const onStartTranscription = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const submitter = (event.nativeEvent as SubmitEvent)
+        .submitter as HTMLButtonElement | null;
+      const submittedLyrics = submitter?.name === "skipLyrics" ? "" : lyrics;
+      const start = async () => {
+        setIsStartingTranscription(true);
+        setLyricsError(null);
+        try {
+          await continueProjectProcessing(
+            projectId,
+            submittedLyrics,
+            data.preferences.storageDirectory
+          );
+          await refresh();
+        } catch (error) {
+          setLyricsError(
+            error instanceof Error ? error.message : String(error)
+          );
+          setIsStartingTranscription(false);
+        }
+      };
+      void start();
+    },
+    [data.preferences.storageDirectory, lyrics, projectId, refresh]
+  );
   const onOpenEditor = useCallback(() => {
     opened.current = true;
     void navigate({ to: "/projects/$projectId/editor", params: { projectId } });
@@ -85,7 +128,12 @@ export function useBehavior(_: Record<string, never>) {
             ? 100
             : (stage.progress ?? (stage.status === "running" ? 8 : 0)),
         label: t(stageKey[stage.id]),
-        statusLabel: t(statusKey[stage.status]),
+        statusLabel:
+          stage.status === "running"
+            ? t("preparing.status.runningProgress", {
+                progress: String(Math.round(stage.progress ?? 0)),
+              })
+            : t(statusKey[stage.status]),
         Icon: statusIcon[stage.status],
       })),
     [stages, t]
@@ -100,7 +148,7 @@ export function useBehavior(_: Record<string, never>) {
           "div",
           undefined,
           createElement("strong", undefined, stage.label),
-          createElement("span", undefined, stage.message ?? stage.statusLabel),
+          createElement("span", undefined, stage.statusLabel),
           createElement(
             StageProgress,
             undefined,
@@ -131,7 +179,20 @@ export function useBehavior(_: Record<string, never>) {
     renderStage,
     getStageId: (stage: (typeof uiStages)[number]) => stage.id,
     hasFailed,
+    awaitingLyrics,
+    lyrics,
+    lyricsError,
+    isStartingTranscription,
+    onLyricsChange,
+    onStartTranscription,
     openEditor: t("preparing.openEditor"),
+    lyricsTitle: t("preparing.lyrics.title"),
+    lyricsDescription: t("preparing.lyrics.description"),
+    lyricsFieldLabel: t("preparing.lyrics.fieldLabel"),
+    lyricsPlaceholder: t("preparing.lyrics.placeholder"),
+    lyricsContinue: t("preparing.lyrics.continue"),
+    lyricsSkip: t("preparing.lyrics.skip"),
+    lyricsStarting: t("preparing.lyrics.starting"),
     onOpenEditor,
   };
 }

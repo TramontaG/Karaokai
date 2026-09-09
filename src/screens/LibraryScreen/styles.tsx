@@ -77,6 +77,47 @@ export const Filters = styled.div`
   gap: 0.65rem;
 `;
 
+export const ProjectSearch = styled.label`
+  display: flex;
+  width: min(19rem, 28vw);
+  min-width: 12rem;
+  min-height: 2.6rem;
+  padding: 0 0.85rem;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 0.68rem;
+  align-items: center;
+  gap: 0.6rem;
+  color: ${({ theme }) => theme.colors.textMuted};
+  background: color-mix(
+    in srgb,
+    ${({ theme }) => theme.colors.surface} 54%,
+    transparent
+  );
+
+  &:focus-within {
+    border-color: color-mix(
+      in srgb,
+      ${({ theme }) => theme.colors.accent} 45%,
+      transparent
+    );
+  }
+
+  input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    color: ${({ theme }) => theme.colors.text};
+    background: transparent;
+    font: inherit;
+    font-size: 0.72rem;
+  }
+
+  input::placeholder {
+    color: ${({ theme }) => theme.colors.textMuted};
+  }
+`;
+
 export const FilterButton = styled.button`
   display: inline-flex;
   min-height: 2.6rem;
@@ -141,16 +182,13 @@ export const SortLabel = styled.span`
   white-space: nowrap;
 `;
 
-export const SortButton = styled.button`
+export const SortButton = styled.select`
   display: flex;
   min-width: 10rem;
   min-height: 2.7rem;
-  padding: 0 0.9rem;
+  padding: 0 2.75rem 0 0.9rem;
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: 0.55rem;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
   color: ${({ theme }) => theme.colors.text};
   background: color-mix(
     in srgb,

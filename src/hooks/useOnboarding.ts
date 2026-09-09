@@ -1,5 +1,5 @@
 import { isDesktop, listenDesktop } from "../services/desktop";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { bootstrapApplication } from "../services/bootstrap";
 import { installRuntime, type InstallProgress } from "../services/models";
 import { selectStorageDirectory } from "../services/storage";
@@ -9,6 +9,7 @@ import { useModels } from "./useModels";
 
 export function useOnboarding() {
   const [data, setData] = useAppContext();
+  const [isSettingStorage, setIsSettingStorage] = useState(false);
   const { models, refresh } = useModels();
   const { removeDownloads } = useDownloadedData();
 
@@ -78,6 +79,12 @@ export function useOnboarding() {
 
   const setStorageDirectory = useCallback(
     async (storageDirectory: string | null) => {
+      if (isSettingStorage) return;
+
+      setIsSettingStorage(true);
+      setData({
+        onboarding: { error: null, errorCode: null },
+      });
       try {
         const report = await bootstrapApplication(storageDirectory);
         setData({
@@ -100,9 +107,11 @@ export function useOnboarding() {
             errorCode: "STORAGE_UNAVAILABLE",
           },
         });
+      } finally {
+        setIsSettingStorage(false);
       }
     },
-    [refresh, setData]
+    [isSettingStorage, refresh, setData]
   );
 
   const useDefaultStorage = useCallback(
@@ -172,6 +181,7 @@ export function useOnboarding() {
     onboarding: data.onboarding,
     models,
     storageDirectory: data.preferences.storageDirectory,
+    isSettingStorage,
     completed: data.preferences.onboardingCompleted,
     getStarted,
     useDefaultStorage,

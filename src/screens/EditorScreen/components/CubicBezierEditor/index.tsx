@@ -66,7 +66,7 @@ export function CubicBezierEditor(props: CubicBezierEditorProps) {
           onPointerDown={behavior.onPointOnePointerDown}
           onPointerMove={behavior.onPointOnePointerMove}
           onPointerUp={behavior.onPointerUp}
-          onPointerCancel={behavior.onPointerUp}
+          onPointerCancel={behavior.onPointerCancel}
           onKeyDown={behavior.onPointOneKeyDown}
         />
         <ControlPoint
@@ -79,7 +79,7 @@ export function CubicBezierEditor(props: CubicBezierEditorProps) {
           onPointerDown={behavior.onPointTwoPointerDown}
           onPointerMove={behavior.onPointTwoPointerMove}
           onPointerUp={behavior.onPointerUp}
-          onPointerCancel={behavior.onPointerUp}
+          onPointerCancel={behavior.onPointerCancel}
           onKeyDown={behavior.onPointTwoKeyDown}
         />
       </CurveCanvas>

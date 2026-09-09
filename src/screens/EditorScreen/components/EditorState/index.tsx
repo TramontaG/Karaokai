@@ -11,7 +11,7 @@ import { useRecursiveState } from "../../../../hooks/useRecursiveState";
 import type { KaraokeProject } from "../../../../domain/project";
 import type { DeepPartial } from "../../../../util/dataManipulation";
 
-export type EditorInspectorTab = "properties" | "mixer";
+export type EditorInspectorTab = "track" | "phrase" | "word";
 export type TimelineTool = "pointer" | "split";
 
 export interface EditorData extends Record<string, unknown> {
@@ -21,6 +21,8 @@ export interface EditorData extends Record<string, unknown> {
   isAudioReady: boolean;
   selectedTrackId: string | null;
   selectedPhraseId: string | null;
+  selectedPhraseIds: string[];
+  phraseSelectionAnchorId: string | null;
   selectedWordId: string | null;
   trackPendingDeletionId: string | null;
   inspectorTab: EditorInspectorTab;
@@ -41,9 +43,11 @@ const initialEditorData: EditorData = {
   isAudioReady: false,
   selectedTrackId: null,
   selectedPhraseId: null,
+  selectedPhraseIds: [],
+  phraseSelectionAnchorId: null,
   selectedWordId: null,
   trackPendingDeletionId: null,
-  inspectorTab: "properties",
+  inspectorTab: "track",
   timelineZoom: 1,
   timelineTool: "pointer",
   bpmInputValue: "120",

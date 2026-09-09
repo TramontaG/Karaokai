@@ -78,6 +78,8 @@ function subtitlePreview(track: SubtitleTrack, currentTime: number) {
             )
           ),
       ...style,
+      offsetX: ((word.style?.x ?? 0) / positionReferenceWidth) * 100,
+      offsetY: ((word.style?.y ?? 0) / positionReferenceHeight) * 100,
     };
   });
   const secondaryWords = (timing.secondaryPhrase?.words ?? []).map((word) => ({
@@ -88,6 +90,8 @@ function subtitlePreview(track: SubtitleTrack, currentTime: number) {
       timing.secondaryPhrase?.style,
       word.style
     ),
+    offsetX: ((word.style?.x ?? 0) / positionReferenceWidth) * 100,
+    offsetY: ((word.style?.y ?? 0) / positionReferenceHeight) * 100,
   }));
   return {
     id: track.id,
@@ -100,11 +104,15 @@ function subtitlePreview(track: SubtitleTrack, currentTime: number) {
       top: `calc(50% + ${((track.style.y ?? 0) / positionReferenceHeight) * 100}%)`,
       zIndex: track.zIndex,
     },
-    currentStyle: { opacity: timing.primaryOpacity },
+    currentStyle: {
+      opacity: timing.primaryOpacity,
+      "--phrase-offset-x": `${((timing.primaryPhrase?.style?.x ?? 0) / positionReferenceWidth) * 100}cqw`,
+      "--phrase-offset-y": `${((timing.primaryPhrase?.style?.y ?? 0) / positionReferenceHeight) * 100}cqw`,
+    } as CSSProperties,
     nextPhraseStyle: {
       opacity: timing.secondaryOpacity,
       top: `${timing.secondaryOffset * 50}%`,
-      transform: `translate(-50%, calc(${(timing.secondaryOffset - 1) * 50}% + ${timing.secondaryOffset * 0.75}rem)) scale(${timing.secondaryScale})`,
+      transform: `translate(calc(-50% + ${((timing.secondaryPhrase?.style?.x ?? 0) / positionReferenceWidth) * 100}cqw), calc(${(timing.secondaryOffset - 1) * 50}% + ${timing.secondaryOffset * 0.75}rem + ${((timing.secondaryPhrase?.style?.y ?? 0) / positionReferenceHeight) * 100}cqw)) scale(${timing.secondaryScale})`,
     },
     entryCueStyle: {
       "--entry-cue-progress": entryCueProgress ?? 0,

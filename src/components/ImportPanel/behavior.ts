@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useAppContext } from "../../hooks/useAppContext";
 import {
-  chooseAudioFile,
+  chooseMediaFile,
   desktopFilePath,
   isDesktop,
 } from "../../services/desktop";
@@ -17,6 +17,7 @@ import {
   createLocalProject,
   createYoutubeProject,
 } from "../../services/projects";
+import { youtubeImportError } from "../../services/userFacingErrors";
 import { useTranslation } from "../../hooks/useTranslation";
 
 export function useBehavior(_: Record<string, never>) {
@@ -98,7 +99,7 @@ export function useBehavior(_: Record<string, never>) {
   const onChooseFile = useCallback(() => {
     const choose = async () => {
       if (isDesktop()) {
-        await importAudioPath((await chooseAudioFile()) ?? undefined);
+        await importAudioPath((await chooseMediaFile()) ?? undefined);
       } else {
         fileInputRef.current?.click();
       }
@@ -113,7 +114,10 @@ export function useBehavior(_: Record<string, never>) {
     },
     []
   );
-  const onCloseYoutubeError = useCallback(() => setYoutubeError(null), []);
+  const onCloseYoutubeError = useCallback(() => {
+    setYoutubeError(null);
+    setError(null);
+  }, []);
   const onYoutubeSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -141,10 +145,9 @@ export function useBehavior(_: Record<string, never>) {
             params: { projectId: project.id },
           });
         } catch (reason) {
-          const message =
-            reason instanceof Error ? reason.message : String(reason);
-          setError(message);
-          setYoutubeError(message);
+          setYoutubeError(
+            t(`home.import.youtubeError.${youtubeImportError(reason)}`)
+          );
         } finally {
           isImportingRef.current = false;
           setIsImporting(false);
@@ -159,12 +162,14 @@ export function useBehavior(_: Record<string, never>) {
       data.preferences.storageDirectory,
       navigate,
       setAppData,
+      t,
       youtubeUrl,
     ]
   );
 
   return {
-    acceptedFiles: ".mp3,.wav,.flac,.m4a,.aac,.ogg,audio/*",
+    acceptedFiles:
+      ".mp3,.wav,.flac,.m4a,.aac,.ogg,.mp4,.mov,.webm,.mkv,audio/*,video/*",
     dropTitle: t("home.import.dropTitle"),
     supportedFormats: t("home.import.supportedFormats"),
     chooseFile: t("home.import.chooseFile"),
@@ -192,7 +197,10 @@ export function useBehavior(_: Record<string, never>) {
     youtubeDialogOpen: isYoutubeImporting || youtubeError !== null,
     youtubeDialogError: youtubeError,
     youtubeDialogDismissible: youtubeError !== null,
-    importActionLabel: isImporting
+    fileActionLabel: isImporting
+      ? t("home.import.importing")
+      : t("home.import.chooseFile"),
+    youtubeActionLabel: isImporting
       ? t("home.import.importing")
       : t("home.import.download"),
     error,

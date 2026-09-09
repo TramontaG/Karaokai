@@ -6,6 +6,7 @@ const { spawn } = require("node:child_process");
 
 const audioRegistry = new Map();
 let processingQueue = Promise.resolve();
+const queuedTranscriptions = new Set();
 
 function projectRoot(dataRoot, projectId) {
   if (!/^project-[a-zA-Z0-9-]+$/.test(projectId)) {
@@ -254,15 +255,13 @@ async function processProject({
       [
         "-m",
         "karaoke_worker",
-        "--project-pipeline",
+        "--separate",
         "--source",
         source,
         "--project-directory",
         directory,
         "--demucs-model",
         demucsModelName(demucsModelId),
-        "--whisper-model-path",
-        whisperModelDirectory(dataRoot, whisperModelId),
       ],
       {
         cwd: dataRoot,
@@ -270,6 +269,110 @@ async function processProject({
         stdio: ["ignore", "pipe", "pipe"],
       }
     );
+    const exitPromise = new Promise((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", resolve);
+    });
+    let workerError = "";
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    const lines = readline.createInterface({ input: child.stdout });
+    for await (const line of lines) {
+      let event;
+      try {
+        event = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (event.type === "project.progress") {
+        await notify(
+          event.stage,
+          event.progress >= 100 ? "completed" : "running",
+          event.progress,
+          event.message
+        );
+      }
+      if (event.type === "project.failed") workerError = event.error;
+    }
+    const exitCode = await exitPromise;
+    if (exitCode !== 0) {
+      throw new Error(
+        workerError || stderr.trim() || `Worker exited with ${exitCode}`
+      );
+    }
+  };
+  processingQueue = processingQueue.then(task, task);
+  try {
+    await processingQueue;
+    await notify(
+      "transcription",
+      "pending",
+      0,
+      "Waiting for supplied lyrics or transcription"
+    );
+  } catch (error) {
+    const project = await loadProject(dataRoot, projectId);
+    const failedStage =
+      ["subtitles", "transcription", "separation"].find(
+        (id) =>
+          project.processing.find((stage) => stage.id === id)?.status ===
+          "running"
+      ) ?? "separation";
+    await notify(failedStage, "failed", 0, error.message);
+  }
+}
+
+async function processTranscription({ dataRoot, projectId, lyrics, emit }) {
+  if (queuedTranscriptions.has(projectId)) return;
+  queuedTranscriptions.add(projectId);
+  const directory = projectRoot(dataRoot, projectId);
+  const notify = async (stage, status, progress, message) => {
+    await updateStage(directory, stage, status, progress, message);
+    emit("project-processing-progress", {
+      projectId,
+      stage,
+      status,
+      progress,
+      message,
+    });
+  };
+  const task = async () => {
+    const project = await loadProject(dataRoot, projectId);
+    const whisperModelId =
+      project.processing.find((stage) => stage.id === "transcription")
+        ?.modelId ?? "whisper-large-v3";
+    const demucsModelId =
+      project.processing.find((stage) => stage.id === "separation")?.modelId ??
+      "demucs-htdemucs";
+    const lyricsPath = path.join(directory, "cache", "provided-lyrics.txt");
+    if (lyrics) {
+      await fs.promises.writeFile(lyricsPath, lyrics, {
+        encoding: "utf8",
+        mode: 0o600,
+      });
+    } else {
+      await fs.promises.rm(lyricsPath, { force: true });
+    }
+    const python = pythonBinary(dataRoot);
+    await fs.promises.access(python);
+    await notify("transcription", "running", 0, "Preparing lyric alignment");
+    const args = [
+      "-m",
+      "karaoke_worker",
+      "--transcribe",
+      "--project-directory",
+      directory,
+      "--whisper-model-path",
+      whisperModelDirectory(dataRoot, whisperModelId),
+    ];
+    if (lyrics) args.push("--lyrics-path", lyricsPath);
+    const child = spawn(python, args, {
+      cwd: dataRoot,
+      env: environment(dataRoot, demucsModelId),
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     const exitPromise = new Promise((resolve, reject) => {
       child.once("error", reject);
       child.once("close", resolve);
@@ -316,14 +419,9 @@ async function processProject({
       message: "Karaoke ready",
     });
   } catch (error) {
-    const project = await loadProject(dataRoot, projectId);
-    const failedStage =
-      ["subtitles", "transcription", "separation"].find(
-        (id) =>
-          project.processing.find((stage) => stage.id === id)?.status ===
-          "running"
-      ) ?? "separation";
-    await notify(failedStage, "failed", 0, error.message);
+    await notify("transcription", "failed", 0, error.message);
+  } finally {
+    queuedTranscriptions.delete(projectId);
   }
 }
 
@@ -337,68 +435,110 @@ async function createLocalProject({
   const source = path.resolve(sourcePath);
   const stat = await fs.promises.stat(source).catch(() => null);
   if (!stat?.isFile())
-    throw new Error("The selected audio file does not exist");
+    throw new Error("The selected media file does not exist");
   const projectId = `project-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
   const directory = projectRoot(dataRoot, projectId);
   for (const name of ["audio", "assets", "thumbnails", "cache"]) {
     await fs.promises.mkdir(path.join(directory, name), { recursive: true });
   }
-  const copiedSource = `source${path.extname(source)}`;
-  await fs.promises.copyFile(
-    source,
-    path.join(directory, "audio", copiedSource)
-  );
-  const now = String(Date.now());
-  const project = {
-    version: 1,
-    id: projectId,
-    name: path.basename(source, path.extname(source)),
-    createdAt: now,
-    updatedAt: now,
-    duration: 0,
-    tempo: {
-      bpm: 120,
-      offset: 0,
-    },
-    tracks: [
-      {
-        id: "background-main",
-        type: "background",
-        name: "Background",
-        visible: true,
-        locked: false,
-        zIndex: -10,
-        source: "solid-color",
+  const extension = path.extname(source).toLowerCase();
+  const video = isVideoAsset(source);
+  const copiedSource = video ? "source.wav" : `source${extension}`;
+  const videoAsset = video ? `source-video${extension}` : null;
+  try {
+    if (video) {
+      const ffmpeg = ffmpegBinary(dataRoot);
+      await fs.promises.access(ffmpeg);
+      await fs.promises.copyFile(
+        source,
+        path.join(directory, "assets", videoAsset)
+      );
+      await runProcess(
+        ffmpeg,
+        [
+          "-hide_banner",
+          "-loglevel",
+          "error",
+          "-y",
+          "-i",
+          source,
+          "-vn",
+          "-acodec",
+          "pcm_s16le",
+          path.join(directory, "audio", copiedSource),
+        ],
+        { stdio: ["ignore", "pipe", "pipe"] },
+        "Unable to extract audio from the selected video"
+      );
+    } else {
+      await fs.promises.copyFile(
+        source,
+        path.join(directory, "audio", copiedSource)
+      );
+    }
+    const now = String(Date.now());
+    const project = {
+      version: 1,
+      id: projectId,
+      name: path.basename(source, path.extname(source)),
+      createdAt: now,
+      updatedAt: now,
+      duration: 0,
+      tempo: {
+        bpm: 120,
+        offset: 0,
       },
-      {
-        id: "audio-main",
-        type: "audio",
-        name: "Instrumental",
-        visible: true,
-        locked: false,
-        zIndex: 0,
-        source: copiedSource,
-        volume: 1,
-        muted: false,
-      },
-    ],
-    processing: [
-      { id: "import", status: "completed" },
-      { id: "separation", status: "pending", modelId: demucsModelId },
-      { id: "transcription", status: "pending", modelId: whisperModelId },
-      { id: "subtitles", status: "pending" },
-    ],
-  };
-  await writeJson(path.join(directory, "project.json"), project);
-  void processProject({
-    dataRoot,
-    directory,
-    projectId,
-    whisperModelId,
-    demucsModelId,
-    emit,
-  });
-  return project;
+      tracks: [
+        {
+          id: "background-main",
+          type: "background",
+          name: "Background",
+          visible: true,
+          locked: false,
+          zIndex: -10,
+          ...(video
+            ? {
+                preset: "video",
+                videoAsset,
+                videoAssetName: videoAsset,
+                fit: "cover",
+                loop: true,
+              }
+            : { source: "solid-color" }),
+        },
+        {
+          id: "audio-main",
+          type: "audio",
+          name: "Instrumental",
+          visible: true,
+          locked: false,
+          zIndex: 0,
+          source: copiedSource,
+          volume: 1,
+          muted: false,
+        },
+      ],
+      processing: [
+        { id: "import", status: "completed" },
+        { id: "separation", status: "pending", modelId: demucsModelId },
+        { id: "transcription", status: "pending", modelId: whisperModelId },
+        { id: "subtitles", status: "pending" },
+      ],
+    };
+    await writeJson(path.join(directory, "project.json"), project);
+    void processProject({
+      dataRoot,
+      directory,
+      projectId,
+      whisperModelId,
+      demucsModelId,
+      emit,
+    });
+    return project;
+  } catch (error) {
+    await fs.promises.rm(directory, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 function youtubeUrl(value) {
@@ -497,11 +637,6 @@ function youtubeCookiesArguments(dataRoot) {
   return fs.existsSync(cookies) ? ["--cookies", cookies] : [];
 }
 
-function youtubePlayerArguments(hasCookies) {
-  if (!hasCookies) return [];
-  return ["--extractor-args", "youtube:player_client=default,web_embedded"];
-}
-
 async function createYoutubeProject({
   dataRoot,
   youtubeUrl: sourceUrl,
@@ -513,7 +648,6 @@ async function createYoutubeProject({
   const python = pythonBinary(dataRoot);
   const ffmpeg = ffmpegBinary(dataRoot);
   const cookies = youtubeCookiesArguments(dataRoot);
-  const player = youtubePlayerArguments(cookies.length > 0);
   await Promise.all([fs.promises.access(python), fs.promises.access(ffmpeg)]);
   const projectId = `project-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
   const directory = projectRoot(dataRoot, projectId);
@@ -536,7 +670,6 @@ async function createYoutubeProject({
         "--no-playlist",
         "--no-warnings",
         ...cookies,
-        ...player,
         "--print",
         "%(title)s",
         "--skip-download",
@@ -557,7 +690,6 @@ async function createYoutubeProject({
         "--no-playlist",
         "--no-warnings",
         ...cookies,
-        ...player,
         "--newline",
         "--ffmpeg-location",
         path.dirname(ffmpeg),
@@ -679,6 +811,33 @@ async function run(command, args, context) {
   }
   if (command === "create_youtube_project") {
     return createYoutubeProject({ dataRoot, emit: context.emit, ...args });
+  }
+  if (command === "continue_project_processing") {
+    const projectId = String(args.projectId ?? "");
+    const lyrics = String(args.lyrics ?? "").trim();
+    if (lyrics.length > 200_000) {
+      throw new Error("Lyrics must be 200,000 characters or fewer.");
+    }
+    const project = await loadProject(dataRoot, projectId);
+    const separation = project.processing.find(
+      (stage) => stage.id === "separation"
+    );
+    const transcription = project.processing.find(
+      (stage) => stage.id === "transcription"
+    );
+    if (
+      separation?.status !== "completed" ||
+      transcription?.status !== "pending"
+    ) {
+      throw new Error("This project is not ready for lyric alignment.");
+    }
+    void processTranscription({
+      dataRoot,
+      projectId,
+      lyrics: lyrics || null,
+      emit: context.emit,
+    });
+    return null;
   }
   if (command === "load_project") return loadProject(dataRoot, args.projectId);
   if (command === "list_projects") {

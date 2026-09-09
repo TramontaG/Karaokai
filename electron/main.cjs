@@ -9,6 +9,7 @@ const runtime = require("./runtime.cjs");
 const PROJECT_COMMANDS = new Set([
   "create_local_project",
   "create_youtube_project",
+  "continue_project_processing",
   "load_project",
   "list_projects",
   "save_project",
@@ -745,13 +746,24 @@ ipcMain.on("karaokai:render-ready", (_event, jobId) => {
   }
 });
 
-ipcMain.handle("karaokai:dialog:audio", async () => {
+ipcMain.handle("karaokai:dialog:media", async () => {
   const result = await dialog.showOpenDialog({
     properties: ["openFile"],
     filters: [
       {
-        name: "Audio",
-        extensions: ["mp3", "wav", "flac", "m4a", "aac", "ogg"],
+        name: "Audio or video",
+        extensions: [
+          "mp3",
+          "wav",
+          "flac",
+          "m4a",
+          "aac",
+          "ogg",
+          "mp4",
+          "mov",
+          "webm",
+          "mkv",
+        ],
       },
     ],
   });

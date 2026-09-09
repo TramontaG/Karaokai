@@ -33,6 +33,7 @@ export const WordSegment = styled.span<{
   $selected: boolean;
   $splitting?: boolean;
   $gap: boolean;
+  "data-timeline-word-id"?: string;
 }>`
   position: absolute;
   top: 0;
@@ -52,6 +53,10 @@ export const WordSegment = styled.span<{
         : $active
           ? "rgb(255 255 255 / 14%)"
           : "transparent"};
+  &[data-playback-active="true"] {
+    color: #fff;
+    background: rgb(255 255 255 / 14%);
+  }
   cursor: ${({ $splitting }) => ($splitting ? "crosshair" : "pointer")};
   pointer-events: auto;
 `;

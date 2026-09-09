@@ -4,6 +4,19 @@
 }
 * {
   box-sizing: border-box;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  user-select: text;
+}
+
+a,
+button,
+[role="button"] {
+  -webkit-user-drag: none;
 }
 body {
   min-width: 320px;

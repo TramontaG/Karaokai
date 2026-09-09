@@ -1,4 +1,10 @@
-import { useCallback, type KeyboardEvent, type PointerEvent } from "react";
+import {
+  useCallback,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+} from "react";
 import {
   formatCubicBezier,
   parseCubicBezier,
@@ -15,17 +21,33 @@ const clamp = (value: number, minimum: number, maximum: number) =>
 const roundPoint = (value: number) => Math.round(value * 1000) / 1000;
 
 export function useBehavior(props: CubicBezierEditorProps) {
-  const points = parseCubicBezier(props.value) ?? fallbackPoints;
+  const [draftPoints, setDraftPoints] = useState<CubicBezierPoints | null>(
+    null
+  );
+  const draftPointsRef = useRef<CubicBezierPoints | null>(null);
+  const sourcePoints = parseCubicBezier(props.value) ?? fallbackPoints;
+  const points = draftPoints ?? sourcePoints;
 
-  const updateControlPoint = useCallback(
+  const nextControlPoint = useCallback(
     (point: 0 | 1, x: number, y: number) => {
-      const next = [...points] as CubicBezierPoints;
+      const next = [
+        ...(draftPointsRef.current ?? sourcePoints),
+      ] as CubicBezierPoints;
       const offset = point * 2;
       next[offset] = roundPoint(clamp(x, 0, 1));
       next[offset + 1] = roundPoint(clamp(y, 0, 1));
-      props.onChange(formatCubicBezier(next));
+      return next;
     },
-    [points, props.onChange]
+    [sourcePoints]
+  );
+
+  const previewControlPoint = useCallback(
+    (point: 0 | 1, x: number, y: number) => {
+      const next = nextControlPoint(point, x, y);
+      draftPointsRef.current = next;
+      setDraftPoints(next);
+    },
+    [nextControlPoint]
   );
 
   const updateFromPointer = useCallback(
@@ -33,13 +55,13 @@ export function useBehavior(props: CubicBezierEditorProps) {
       const svg = event.currentTarget.ownerSVGElement;
       if (!svg) return;
       const bounds = svg.getBoundingClientRect();
-      updateControlPoint(
+      previewControlPoint(
         point,
         (event.clientX - bounds.left) / Math.max(1, bounds.width),
         1 - (event.clientY - bounds.top) / Math.max(1, bounds.height)
       );
     },
-    [updateControlPoint]
+    [previewControlPoint]
   );
 
   const startDrag = useCallback(
@@ -59,11 +81,18 @@ export function useBehavior(props: CubicBezierEditorProps) {
     [updateFromPointer]
   );
 
-  const stopDrag = useCallback((event: PointerEvent<SVGCircleElement>) => {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  }, []);
+  const stopDrag = useCallback(
+    (event: PointerEvent<SVGCircleElement>, commit: boolean) => {
+      if (event.currentTarget.hasPointerCapture(event.pointerId))
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      const next = draftPointsRef.current;
+      draftPointsRef.current = null;
+      setDraftPoints(null);
+      const value = next ? formatCubicBezier(next) : null;
+      if (commit && value && value !== props.value) props.onChange(value);
+    },
+    [props.onChange, props.value]
+  );
 
   const moveWithKeyboard = useCallback(
     (point: 0 | 1, event: KeyboardEvent<SVGCircleElement>) => {
@@ -80,13 +109,17 @@ export function useBehavior(props: CubicBezierEditorProps) {
       if (horizontal === 0 && vertical === 0) return;
 
       event.preventDefault();
-      updateControlPoint(
-        point,
-        points[offset] + horizontal,
-        points[offset + 1] + vertical
+      props.onChange(
+        formatCubicBezier(
+          nextControlPoint(
+            point,
+            points[offset] + horizontal,
+            points[offset + 1] + vertical
+          )
+        )
       );
     },
-    [points, updateControlPoint]
+    [nextControlPoint, points, props.onChange]
   );
 
   const pointOne = {
@@ -117,6 +150,9 @@ export function useBehavior(props: CubicBezierEditorProps) {
       drag(1, event),
     onPointTwoKeyDown: (event: KeyboardEvent<SVGCircleElement>) =>
       moveWithKeyboard(1, event),
-    onPointerUp: stopDrag,
+    onPointerUp: (event: PointerEvent<SVGCircleElement>) =>
+      stopDrag(event, true),
+    onPointerCancel: (event: PointerEvent<SVGCircleElement>) =>
+      stopDrag(event, false),
   };
 }

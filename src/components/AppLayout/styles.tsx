@@ -203,51 +203,6 @@ export const Titlebar = styled.header`
   }
 `;
 
-export const SearchBox = styled.label`
-  display: flex;
-  width: min(18rem, 34vw);
-  height: 2.6rem;
-  padding: 0 0.85rem;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: 0.65rem;
-  align-items: center;
-  gap: 0.6rem;
-  color: ${({ theme }) => theme.colors.textMuted};
-  background: color-mix(
-    in srgb,
-    ${({ theme }) => theme.colors.surface} 70%,
-    transparent
-  );
-  -webkit-app-region: no-drag;
-
-  &:focus-within {
-    border-color: color-mix(
-      in srgb,
-      ${({ theme }) => theme.colors.accent} 45%,
-      transparent
-    );
-  }
-`;
-
-export const SearchInput = styled.input`
-  width: 100%;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  color: ${({ theme }) => theme.colors.text};
-  background: transparent;
-  font: inherit;
-  font-size: 0.75rem;
-
-  &::placeholder {
-    color: ${({ theme }) => theme.colors.textMuted};
-  }
-
-  &::-webkit-search-cancel-button {
-    display: none;
-  }
-`;
-
 export const ThemeButton = styled.button`
   display: grid;
   width: 2.65rem;

@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import { FileUp, Mic2, Plus, Trash2, Undo2, Volume2, X } from "lucide-react";
+import { FileUp, Plus, Trash2, Undo2, X } from "lucide-react";
 import { DraggableNumberInput } from "../../../../components/DraggableNumberInput";
 import { ForEach } from "../../../../components/ForEach";
 import { Render } from "../../../../components/Render";
@@ -17,15 +17,9 @@ import {
   InheritanceHint,
   Inspector,
   InspectorEmpty,
-  MixerChannel,
-  MixerContent,
-  MixerHeader,
-  MixerMeter,
   BackgroundAssetButton,
   PhraseActions,
-  PropertyAccordion,
   PropertyAccordionContent,
-  PropertyAccordions,
   Tabs,
   TrackActions,
   WordList,
@@ -340,398 +334,343 @@ function EditorSidebarView() {
   const behavior = useEditorBehavior();
   return (
     <Inspector>
-      <Tabs role="tablist" aria-label={behavior.inspectorTitle}>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={behavior.propertiesActive}
-          data-active={behavior.propertiesActive}
-          onClick={behavior.onShowProperties}
-        >
-          {behavior.propertiesLabel}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={behavior.mixerActive}
-          data-active={behavior.mixerActive}
-          onClick={behavior.onShowMixer}
-        >
-          {behavior.mixerLabel}
-        </button>
-      </Tabs>
-      <Render when={behavior.propertiesActive}>
-        <Render when={behavior.backgroundTrackSelected}>
-          <PropertyAccordions>
-            <PropertyAccordion open>
-              <summary>{behavior.backgroundClipLabel}</summary>
-              <PropertyAccordionContent>
-                <Field>
-                  <span>{behavior.backgroundPresetLabel}</span>
-                  <select
-                    value={behavior.backgroundPreset}
-                    onChange={(event) =>
-                      void behavior.onBackgroundPresetChange(
-                        event.target.value as
-                          "album-art" | "video" | "image" | "solid" | "gradient"
-                      )
-                    }
-                  >
-                    <option value="album-art">
-                      {behavior.backgroundAlbumArtLabel}
-                    </option>
-                    <option value="video">
-                      {behavior.backgroundVideoLabel}
-                    </option>
-                    <option value="image">
-                      {behavior.backgroundImageLabel}
-                    </option>
-                    <option value="solid">
-                      {behavior.backgroundSolidLabel}
-                    </option>
-                    <option value="gradient">
-                      {behavior.backgroundGradientLabel}
-                    </option>
-                  </select>
-                </Field>
-                <Render
-                  when={
-                    behavior.backgroundPreset === "video" ||
-                    behavior.backgroundPreset === "image"
-                  }
+      <Render when={behavior.backgroundTrackSelected}>
+        <Tabs role="tablist" aria-label={behavior.backgroundClipLabel}>
+          <button type="button" role="tab" aria-selected data-active>
+            {behavior.backgroundClipLabel}
+          </button>
+        </Tabs>
+        <PropertyAccordionContent>
+          <Field>
+            <span>{behavior.backgroundPresetLabel}</span>
+            <select
+              value={behavior.backgroundPreset}
+              onChange={(event) =>
+                void behavior.onBackgroundPresetChange(
+                  event.target.value as
+                    "album-art" | "video" | "image" | "solid" | "gradient"
+                )
+              }
+            >
+              <option value="album-art">
+                {behavior.backgroundAlbumArtLabel}
+              </option>
+              <option value="video">{behavior.backgroundVideoLabel}</option>
+              <option value="image">{behavior.backgroundImageLabel}</option>
+              <option value="solid">{behavior.backgroundSolidLabel}</option>
+              <option value="gradient">
+                {behavior.backgroundGradientLabel}
+              </option>
+            </select>
+          </Field>
+          <Render
+            when={
+              behavior.backgroundPreset === "video" ||
+              behavior.backgroundPreset === "image"
+            }
+          >
+            <Field>
+              <span>
+                {behavior.backgroundAsset
+                  ? behavior.backgroundReplaceLabel
+                  : behavior.backgroundChooseLabel}
+              </span>
+              <BackgroundAssetButton
+                type="button"
+                onClick={() =>
+                  void behavior.onBackgroundAssetImport(
+                    behavior.backgroundPreset === "video" ? "video" : "image"
+                  )
+                }
+              >
+                <FileUp size={15} aria-hidden="true" />
+                {behavior.backgroundAsset
+                  ? behavior.backgroundReplaceLabel
+                  : behavior.backgroundChooseLabel}
+              </BackgroundAssetButton>
+              <Render when={behavior.backgroundAssetName !== null}>
+                <BackgroundAssetName
+                  title={behavior.backgroundAssetName ?? undefined}
                 >
-                  <Field>
-                    <span>
-                      {behavior.backgroundAsset
-                        ? behavior.backgroundReplaceLabel
-                        : behavior.backgroundChooseLabel}
-                    </span>
-                    <BackgroundAssetButton
-                      type="button"
-                      onClick={() =>
-                        void behavior.onBackgroundAssetImport(
-                          behavior.backgroundPreset === "video"
-                            ? "video"
-                            : "image"
-                        )
-                      }
-                    >
-                      <FileUp size={15} aria-hidden="true" />
-                      {behavior.backgroundAsset
-                        ? behavior.backgroundReplaceLabel
-                        : behavior.backgroundChooseLabel}
-                    </BackgroundAssetButton>
-                    <Render when={behavior.backgroundAssetName !== null}>
-                      <BackgroundAssetName
-                        title={behavior.backgroundAssetName ?? undefined}
-                      >
-                        {behavior.backgroundSelectedFileLabel}
-                      </BackgroundAssetName>
-                    </Render>
-                  </Field>
-                </Render>
-                <Render
-                  when={
-                    behavior.backgroundPreset === "video" ||
-                    behavior.backgroundPreset === "image" ||
-                    behavior.backgroundPreset === "album-art"
+                  {behavior.backgroundSelectedFileLabel}
+                </BackgroundAssetName>
+              </Render>
+            </Field>
+          </Render>
+          <Render
+            when={
+              behavior.backgroundPreset === "video" ||
+              behavior.backgroundPreset === "image" ||
+              behavior.backgroundPreset === "album-art"
+            }
+          >
+            <Field>
+              <span>{behavior.backgroundFitLabel}</span>
+              <select
+                value={behavior.backgroundFit}
+                onChange={(event) =>
+                  behavior.onBackgroundChange({
+                    fit: event.target.value as "cover" | "contain",
+                  })
+                }
+              >
+                <option value="cover">Cover</option>
+                <option value="contain">Contain</option>
+              </select>
+            </Field>
+          </Render>
+          <Render
+            when={
+              behavior.backgroundPreset === "solid" ||
+              behavior.backgroundPreset === "image" ||
+              behavior.backgroundPreset === "album-art"
+            }
+          >
+            <Field>
+              <span>{behavior.backgroundColorLabel}</span>
+              <ColorInput
+                color={behavior.backgroundColor}
+                label={behavior.backgroundColorLabel}
+                onChange={(color) => behavior.onBackgroundChange({ color })}
+              />
+            </Field>
+          </Render>
+          <Render when={behavior.backgroundPreset === "gradient"}>
+            <>
+              <Field>
+                <span>{behavior.backgroundGradientStartLabel}</span>
+                <ColorInput
+                  color={behavior.backgroundGradientStart}
+                  label={behavior.backgroundGradientStartLabel}
+                  onChange={(gradientStart) =>
+                    behavior.onBackgroundChange({ gradientStart })
                   }
-                >
-                  <Field>
-                    <span>{behavior.backgroundFitLabel}</span>
-                    <select
-                      value={behavior.backgroundFit}
-                      onChange={(event) =>
-                        behavior.onBackgroundChange({
-                          fit: event.target.value as "cover" | "contain",
-                        })
-                      }
-                    >
-                      <option value="cover">Cover</option>
-                      <option value="contain">Contain</option>
-                    </select>
-                  </Field>
-                </Render>
-                <Render
-                  when={
-                    behavior.backgroundPreset === "solid" ||
-                    behavior.backgroundPreset === "image" ||
-                    behavior.backgroundPreset === "album-art"
+                />
+              </Field>
+              <Field>
+                <span>{behavior.backgroundGradientEndLabel}</span>
+                <ColorInput
+                  color={behavior.backgroundGradientEnd}
+                  label={behavior.backgroundGradientEndLabel}
+                  onChange={(gradientEnd) =>
+                    behavior.onBackgroundChange({ gradientEnd })
                   }
-                >
-                  <Field>
-                    <span>{behavior.backgroundColorLabel}</span>
-                    <ColorInput
-                      color={behavior.backgroundColor}
-                      label={behavior.backgroundColorLabel}
-                      onChange={(color) =>
-                        behavior.onBackgroundChange({ color })
-                      }
-                    />
-                  </Field>
-                </Render>
-                <Render when={behavior.backgroundPreset === "gradient"}>
-                  <>
-                    <Field>
-                      <span>{behavior.backgroundGradientStartLabel}</span>
-                      <ColorInput
-                        color={behavior.backgroundGradientStart}
-                        label={behavior.backgroundGradientStartLabel}
-                        onChange={(gradientStart) =>
-                          behavior.onBackgroundChange({ gradientStart })
-                        }
-                      />
-                    </Field>
-                    <Field>
-                      <span>{behavior.backgroundGradientEndLabel}</span>
-                      <ColorInput
-                        color={behavior.backgroundGradientEnd}
-                        label={behavior.backgroundGradientEndLabel}
-                        onChange={(gradientEnd) =>
-                          behavior.onBackgroundChange({ gradientEnd })
-                        }
-                      />
-                    </Field>
-                    <Field>
-                      <span>{behavior.backgroundGradientAngleLabel}</span>
-                      <DraggableNumberInput
-                        min="0"
-                        max="360"
-                        value={behavior.backgroundGradientAngle}
-                        onValueChange={(value) =>
-                          behavior.onBackgroundChange({
-                            gradientAngle: Number(value),
-                          })
-                        }
-                      />
-                    </Field>
-                  </>
-                </Render>
-              </PropertyAccordionContent>
-            </PropertyAccordion>
-          </PropertyAccordions>
-        </Render>
-        <Render when={behavior.selectedSubtitleTrack !== null}>
-          <PropertyAccordions>
-            <PropertyAccordion open>
-              <summary>{behavior.trackStyleLabel}</summary>
-              <PropertyAccordionContent>
-                <StyleFields scope="Track" />
-                <Field>
-                  <span>{behavior.animationTemplateLabel}</span>
-                  <select
-                    value={behavior.animationTemplate}
-                    onChange={behavior.onAnimationTemplateChange}
-                  >
-                    <option value="template-1">
-                      {behavior.animationTemplateOneLabel}
-                    </option>
-                  </select>
-                </Field>
-                <AnimationDescription>
-                  {behavior.animationTemplateOneDescription}
-                </AnimationDescription>
-                <TrackActions>
-                  <button type="button" onClick={behavior.onRequestDeleteTrack}>
-                    <Trash2 size={15} />
-                    {behavior.deleteTrackLabel}
-                  </button>
-                </TrackActions>
-              </PropertyAccordionContent>
-            </PropertyAccordion>
-            <PropertyAccordion>
-              <summary>{behavior.phraseStyleLabel}</summary>
-              <Render when={behavior.activePhrase !== null}>
-                <PropertyAccordionContent>
-                  <Field>
-                    <span>{behavior.textLabel}</span>
-                    <PhraseTextInput
-                      phraseId={behavior.activePhrase?.id ?? ""}
-                      value={behavior.activePhrase?.text ?? ""}
-                      onCommit={behavior.onPhraseTextCommit}
-                    />
-                  </Field>
-                  <FieldGrid>
-                    <Field>
-                      <span>{behavior.startLabel}</span>
-                      <DraggableNumberInput
-                        min="0"
-                        step="0.01"
-                        value={(behavior.activePhrase?.start ?? 0) / 1000}
-                        onValueChange={behavior.onPhraseStartInput}
-                      />
-                    </Field>
-                    <Field>
-                      <span>{behavior.endLabel}</span>
-                      <DraggableNumberInput
-                        min="0"
-                        step="0.01"
-                        value={(behavior.activePhrase?.end ?? 0) / 1000}
-                        onValueChange={behavior.onPhraseEndInput}
-                      />
-                    </Field>
-                  </FieldGrid>
-                  <StyleFields scope="Phrase" />
-                  <Field>
-                    <span>{behavior.wordsLabel}</span>
-                    <WordList>
-                      <ForEach
-                        data={behavior.inspectorWords}
-                        idCompute={behavior.getWordId}
-                        render={(word) => (
-                          <WordTimingRow
-                            $active={word.id === behavior.selectedWord?.id}
-                          >
-                            <WordTextInput
-                              label={behavior.wordTextLabel}
-                              placeholder={behavior.gapLabel}
-                              disabled={false}
-                              value={word.type === "gap" ? "" : word.text}
-                              onFocus={() =>
-                                behavior.onInspectorWordSelect(word.id)
-                              }
-                              onCommit={(value) =>
-                                behavior.onInspectorWordTextInput(
-                                  word.id,
-                                  value
-                                )
-                              }
-                            />
-                            <DraggableNumberInput
-                              aria-label={`${word.type === "gap" ? behavior.gapLabel : word.text} ${behavior.startLabel}`}
-                              min="0"
-                              step="0.01"
-                              value={word.start / 1000}
-                              onValueChange={(value) =>
-                                behavior.onInspectorWordStartInput(
-                                  word.id,
-                                  value
-                                )
-                              }
-                            />
-                            <DraggableNumberInput
-                              aria-label={`${word.type === "gap" ? behavior.gapLabel : word.text} ${behavior.endLabel}`}
-                              min="0"
-                              step="0.01"
-                              value={word.end / 1000}
-                              onValueChange={(value) =>
-                                behavior.onInspectorWordEndInput(word.id, value)
-                              }
-                            />
-                            <button
-                              type="button"
-                              data-word-action="insert-gap"
-                              aria-label={behavior.insertGapLabel}
-                              title={behavior.insertGapLabel}
-                              onClick={() =>
-                                behavior.onInsertInspectorGap(word.id)
-                              }
-                            >
-                              <Plus size={13} />
-                            </button>
-                            <button
-                              type="button"
-                              data-word-action="delete"
-                              aria-label={behavior.deleteWordLabel}
-                              title={behavior.deleteWordLabel}
-                              onClick={() =>
-                                behavior.onDeleteInspectorWord(word.id)
-                              }
-                            >
-                              <X size={13} />
-                            </button>
-                          </WordTimingRow>
-                        )}
-                      />
-                    </WordList>
-                  </Field>
-                  <PhraseActions>
-                    <button
-                      type="button"
-                      title={behavior.deletePhraseShortcut}
-                      onClick={behavior.onDeletePhrase}
-                    >
-                      <Trash2 size={15} />
-                      {behavior.deletePhraseLabel}
-                      <kbd>{behavior.deleteKeyLabel}</kbd>
-                    </button>
-                  </PhraseActions>
-                </PropertyAccordionContent>
-              </Render>
-              <Render when={behavior.activePhrase === null}>
-                <PropertyAccordionContent></PropertyAccordionContent>
-              </Render>
-            </PropertyAccordion>
-            <PropertyAccordion>
-              <summary>{behavior.wordStyleLabel}</summary>
-              <Render when={behavior.selectedWord !== null}>
-                <PropertyAccordionContent>
-                  <InheritanceHint>
-                    {behavior.inheritScaleLabel}
-                  </InheritanceHint>
-                  <FieldGrid>
-                    <Field>
-                      <span>{behavior.startLabel}</span>
-                      <DraggableNumberInput
-                        min="0"
-                        step="0.01"
-                        value={(behavior.selectedWord?.start ?? 0) / 1000}
-                        onValueChange={behavior.onWordStartInput}
-                      />
-                    </Field>
-                    <Field>
-                      <span>{behavior.endLabel}</span>
-                      <DraggableNumberInput
-                        min="0"
-                        step="0.01"
-                        value={(behavior.selectedWord?.end ?? 0) / 1000}
-                        onValueChange={behavior.onWordEndInput}
-                      />
-                    </Field>
-                  </FieldGrid>
-                  <StyleFields scope="Word" />
-                </PropertyAccordionContent>
-              </Render>
-            </PropertyAccordion>
-          </PropertyAccordions>
-        </Render>
+                />
+              </Field>
+              <Field>
+                <span>{behavior.backgroundGradientAngleLabel}</span>
+                <DraggableNumberInput
+                  min="0"
+                  max="360"
+                  value={behavior.backgroundGradientAngle}
+                  onValueChange={(value) =>
+                    behavior.onBackgroundChange({
+                      gradientAngle: Number(value),
+                    })
+                  }
+                />
+              </Field>
+            </>
+          </Render>
+        </PropertyAccordionContent>
       </Render>
-      <Render when={behavior.mixerActive}>
-        <MixerContent>
-          <MixerHeader>{behavior.mixerDescription}</MixerHeader>
-          <MixerChannel>
-            <label htmlFor="instrumental-volume">
-              <Volume2 size={17} />
-              <span>{behavior.instrumentalVolumeLabel}</span>
-              <output>{behavior.instrumentalVolume}%</output>
-            </label>
-            <input
-              id="instrumental-volume"
-              type="range"
-              min="0"
-              max="100"
-              value={behavior.instrumentalVolume}
-              onChange={behavior.onInstrumentalVolumeChange}
-            />
-            <MixerMeter style={{ width: `${behavior.instrumentalVolume}%` }} />
-          </MixerChannel>
-          <MixerChannel>
-            <label htmlFor="vocals-volume">
-              <Mic2 size={17} />
-              <span>{behavior.vocalsVolumeLabel}</span>
-              <output>{behavior.vocalsVolume}%</output>
-            </label>
-            <input
-              id="vocals-volume"
-              type="range"
-              min="0"
-              max="100"
-              value={behavior.vocalsVolume}
-              onChange={behavior.onVocalsVolumeChange}
-            />
-            <MixerMeter style={{ width: `${behavior.vocalsVolume}%` }} />
-          </MixerChannel>
-        </MixerContent>
+      <Render when={behavior.selectedSubtitleTrack !== null}>
+        <Tabs role="tablist" aria-label={behavior.trackStyleLabel}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={behavior.trackTabActive}
+            data-active={behavior.trackTabActive}
+            onClick={behavior.onShowTrackTab}
+          >
+            {behavior.trackStyleLabel}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={behavior.phraseTabActive}
+            data-active={behavior.phraseTabActive}
+            onClick={behavior.onShowPhraseTab}
+          >
+            {behavior.phraseStyleLabel}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={behavior.wordTabActive}
+            data-active={behavior.wordTabActive}
+            onClick={behavior.onShowWordTab}
+          >
+            {behavior.wordStyleLabel}
+          </button>
+        </Tabs>
+        <Render when={behavior.trackTabActive}>
+          <PropertyAccordionContent>
+            <StyleFields scope="Track" />
+            <Field>
+              <span>{behavior.animationTemplateLabel}</span>
+              <select
+                value={behavior.animationTemplate}
+                onChange={behavior.onAnimationTemplateChange}
+              >
+                <option value="template-1">
+                  {behavior.animationTemplateOneLabel}
+                </option>
+              </select>
+            </Field>
+            <AnimationDescription>
+              {behavior.animationTemplateOneDescription}
+            </AnimationDescription>
+            <TrackActions>
+              <button type="button" onClick={behavior.onRequestDeleteTrack}>
+                <Trash2 size={15} />
+                {behavior.deleteTrackLabel}
+              </button>
+            </TrackActions>
+          </PropertyAccordionContent>
+        </Render>
+        <Render when={behavior.phraseTabActive}>
+          <Render when={behavior.activePhrase !== null}>
+            <PropertyAccordionContent>
+              <Field>
+                <span>{behavior.textLabel}</span>
+                <PhraseTextInput
+                  phraseId={behavior.activePhrase?.id ?? ""}
+                  value={behavior.activePhrase?.text ?? ""}
+                  onCommit={behavior.onPhraseTextCommit}
+                />
+              </Field>
+              <FieldGrid>
+                <Field>
+                  <span>{behavior.startLabel}</span>
+                  <DraggableNumberInput
+                    min="0"
+                    step="0.01"
+                    value={(behavior.activePhrase?.start ?? 0) / 1000}
+                    onValueChange={behavior.onPhraseStartInput}
+                  />
+                </Field>
+                <Field>
+                  <span>{behavior.endLabel}</span>
+                  <DraggableNumberInput
+                    min="0"
+                    step="0.01"
+                    value={(behavior.activePhrase?.end ?? 0) / 1000}
+                    onValueChange={behavior.onPhraseEndInput}
+                  />
+                </Field>
+              </FieldGrid>
+              <StyleFields scope="Phrase" />
+              <Field>
+                <span>{behavior.wordsLabel}</span>
+                <WordList>
+                  <ForEach
+                    data={behavior.inspectorWords}
+                    idCompute={behavior.getWordId}
+                    render={(word) => (
+                      <WordTimingRow
+                        $active={word.id === behavior.selectedWord?.id}
+                      >
+                        <WordTextInput
+                          label={behavior.wordTextLabel}
+                          placeholder={behavior.gapLabel}
+                          disabled={false}
+                          value={word.type === "gap" ? "" : word.text}
+                          onFocus={() =>
+                            behavior.onInspectorWordSelect(word.id)
+                          }
+                          onCommit={(value) =>
+                            behavior.onInspectorWordTextInput(word.id, value)
+                          }
+                        />
+                        <DraggableNumberInput
+                          aria-label={`${word.type === "gap" ? behavior.gapLabel : word.text} ${behavior.startLabel}`}
+                          min="0"
+                          step="0.01"
+                          value={word.start / 1000}
+                          onValueChange={(value) =>
+                            behavior.onInspectorWordStartInput(word.id, value)
+                          }
+                        />
+                        <DraggableNumberInput
+                          aria-label={`${word.type === "gap" ? behavior.gapLabel : word.text} ${behavior.endLabel}`}
+                          min="0"
+                          step="0.01"
+                          value={word.end / 1000}
+                          onValueChange={(value) =>
+                            behavior.onInspectorWordEndInput(word.id, value)
+                          }
+                        />
+                        <button
+                          type="button"
+                          data-word-action="insert-gap"
+                          aria-label={behavior.insertGapLabel}
+                          title={behavior.insertGapLabel}
+                          onClick={() => behavior.onInsertInspectorGap(word.id)}
+                        >
+                          <Plus size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          data-word-action="delete"
+                          aria-label={behavior.deleteWordLabel}
+                          title={behavior.deleteWordLabel}
+                          onClick={() =>
+                            behavior.onDeleteInspectorWord(word.id)
+                          }
+                        >
+                          <X size={13} />
+                        </button>
+                      </WordTimingRow>
+                    )}
+                  />
+                </WordList>
+              </Field>
+              <PhraseActions>
+                <button
+                  type="button"
+                  title={behavior.deletePhraseShortcut}
+                  onClick={behavior.onDeletePhrase}
+                >
+                  <Trash2 size={15} />
+                  {behavior.deletePhraseLabel}
+                  <kbd>{behavior.deleteKeyLabel}</kbd>
+                </button>
+              </PhraseActions>
+            </PropertyAccordionContent>
+          </Render>
+          <Render when={behavior.activePhrase === null}>
+            <PropertyAccordionContent></PropertyAccordionContent>
+          </Render>
+        </Render>
+        <Render when={behavior.wordTabActive}>
+          <Render when={behavior.selectedWord !== null}>
+            <PropertyAccordionContent>
+              <InheritanceHint>{behavior.inheritScaleLabel}</InheritanceHint>
+              <FieldGrid>
+                <Field>
+                  <span>{behavior.startLabel}</span>
+                  <DraggableNumberInput
+                    min="0"
+                    step="0.01"
+                    value={(behavior.selectedWord?.start ?? 0) / 1000}
+                    onValueChange={behavior.onWordStartInput}
+                  />
+                </Field>
+                <Field>
+                  <span>{behavior.endLabel}</span>
+                  <DraggableNumberInput
+                    min="0"
+                    step="0.01"
+                    value={(behavior.selectedWord?.end ?? 0) / 1000}
+                    onValueChange={behavior.onWordEndInput}
+                  />
+                </Field>
+              </FieldGrid>
+              <StyleFields scope="Word" />
+            </PropertyAccordionContent>
+          </Render>
+        </Render>
       </Render>
     </Inspector>
   );

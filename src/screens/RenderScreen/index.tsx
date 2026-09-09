@@ -49,6 +49,8 @@ export function RenderScreen() {
                       $fontStyle={word.fontStyle}
                       $textDecoration={word.textDecoration}
                       $verticalAlign={word.verticalAlign}
+                      $offsetX={word.offsetX}
+                      $offsetY={word.offsetY}
                     >
                       {word.text}
                       <PreviewWordFill
@@ -89,6 +91,8 @@ export function RenderScreen() {
                       $fontStyle={word.fontStyle}
                       $textDecoration={word.textDecoration}
                       $verticalAlign={word.verticalAlign}
+                      $offsetX={word.offsetX}
+                      $offsetY={word.offsetY}
                     >
                       {word.text}
                       <PreviewWordFill

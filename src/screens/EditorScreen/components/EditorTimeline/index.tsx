@@ -124,16 +124,19 @@ function EditorTimelineView() {
             $splitting={behavior.splitToolActive}
             onClick={behavior.onTimelineClick}
           >
-            <TimelineBeatGrid style={behavior.timelineGridStyle} />
-            <TimelinePlayhead
-              ref={behavior.timelinePlayheadRef}
-              style={{ left: `${behavior.playheadPercent}%` }}
-            />
-            <ForEach
-              data={behavior.timelineRows}
-              idCompute={behavior.getTimelineRowId}
-              render={behavior.renderTimelineRow}
-            />
+            {behavior.hideTimelineGrid ? null : (
+              <TimelineBeatGrid style={behavior.timelineGridStyle} />
+            )}
+            {behavior.hideTimelineClips ? null : (
+              <ForEach
+                data={behavior.timelineRows}
+                idCompute={behavior.getTimelineRowId}
+                render={behavior.renderTimelineRow}
+              />
+            )}
+            {behavior.hideTimelinePlayhead ? null : (
+              <TimelinePlayhead ref={behavior.timelinePlayheadRef} />
+            )}
           </TimelineContent>
         </TimelineViewport>
       </Timeline>

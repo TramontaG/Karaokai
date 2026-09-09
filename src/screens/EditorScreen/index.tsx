@@ -1,5 +1,6 @@
 import { ForEach } from "../../components/ForEach";
 import { Render } from "../../components/Render";
+import { Profiler, useRef, type ReactNode } from "react";
 import { useBehavior } from "./behavior";
 import { DeleteTrackDialog } from "./components/DeleteTrackDialog";
 import { ExportDialog } from "./components/ExportDialog";
@@ -20,6 +21,49 @@ import {
   PreviewCanvas,
   Workspace,
 } from "./styles";
+
+const PLAYBACK_PROFILER_STORAGE_KEY = "karaokai.debug.playback-profiler";
+
+function PlaybackPreviewProfiler({ children }: { children: ReactNode }) {
+  const samples = useRef({
+    startedAt: performance.now(),
+    commits: 0,
+    totalRender: 0,
+    maximumRender: 0,
+  });
+  return (
+    <Profiler
+      id="editor-preview"
+      onRender={(_id, _phase, actualDuration) => {
+        if (
+          window.localStorage.getItem(PLAYBACK_PROFILER_STORAGE_KEY) !== "true"
+        )
+          return;
+        const sample = samples.current;
+        sample.commits += 1;
+        sample.totalRender += actualDuration;
+        sample.maximumRender = Math.max(sample.maximumRender, actualDuration);
+        const now = performance.now();
+        if (now - sample.startedAt < 1_000) return;
+        console.table({
+          reactPreviewCommits: sample.commits,
+          reactPreviewAverageMs: Number(
+            (sample.totalRender / sample.commits).toFixed(2)
+          ),
+          reactPreviewMaximumMs: Number(sample.maximumRender.toFixed(2)),
+        });
+        samples.current = {
+          startedAt: now,
+          commits: 0,
+          totalRender: 0,
+          maximumRender: 0,
+        };
+      }}
+    >
+      {children}
+    </Profiler>
+  );
+}
 
 export function EditorScreen() {
   return (
@@ -53,7 +97,6 @@ function EditorScreenContent() {
             ref={behavior.instrumentalAudio}
             src={behavior.instrumentalSource}
             preload="auto"
-            onTimeUpdate={behavior.onInstrumentalTimeUpdate}
             onEnded={behavior.onPlaybackEnded}
             onError={behavior.onInstrumentalError}
             onCanPlay={behavior.onInstrumentalCanPlay}
@@ -64,47 +107,51 @@ function EditorScreenContent() {
             preload="auto"
           />
           <PreviewArea>
-            <PreviewCanvas ref={behavior.previewCanvas}>
-              <PreviewBackground style={behavior.backgroundStyle}>
-                <Render
-                  when={
-                    behavior.backgroundPreset === "video" &&
-                    behavior.backgroundAssetUrl !== null
-                  }
-                >
-                  <video
-                    ref={behavior.backgroundVideo}
-                    src={behavior.backgroundAssetUrl ?? undefined}
-                    loop
-                    muted
-                    playsInline
-                    onLoadedMetadata={behavior.onBackgroundVideoLoadedMetadata}
-                  />
+            <PlaybackPreviewProfiler>
+              <PreviewCanvas ref={behavior.previewCanvas}>
+                <PreviewBackground style={behavior.backgroundStyle}>
+                  <Render
+                    when={
+                      behavior.backgroundPreset === "video" &&
+                      behavior.backgroundAssetUrl !== null
+                    }
+                  >
+                    <video
+                      ref={behavior.backgroundVideo}
+                      src={behavior.backgroundAssetUrl ?? undefined}
+                      loop
+                      muted
+                      playsInline
+                      onLoadedMetadata={
+                        behavior.onBackgroundVideoLoadedMetadata
+                      }
+                    />
+                  </Render>
+                  <Render
+                    when={
+                      ["album-art", "image"].includes(
+                        behavior.backgroundPreset
+                      ) && behavior.backgroundAssetUrl !== null
+                    }
+                  >
+                    <img
+                      ref={behavior.backgroundImage}
+                      src={behavior.backgroundAssetUrl ?? undefined}
+                      alt=""
+                      onLoad={behavior.onBackgroundImageLoaded}
+                    />
+                  </Render>
+                </PreviewBackground>
+                <ForEach
+                  data={behavior.subtitlePreviews}
+                  idCompute={behavior.getSubtitlePreviewId}
+                  render={behavior.renderSubtitlePreview}
+                />
+                <Render when={behavior.error !== null}>
+                  <PlayerError>{behavior.error}</PlayerError>
                 </Render>
-                <Render
-                  when={
-                    ["album-art", "image"].includes(
-                      behavior.backgroundPreset
-                    ) && behavior.backgroundAssetUrl !== null
-                  }
-                >
-                  <img
-                    ref={behavior.backgroundImage}
-                    src={behavior.backgroundAssetUrl ?? undefined}
-                    alt=""
-                    onLoad={behavior.onBackgroundImageLoaded}
-                  />
-                </Render>
-              </PreviewBackground>
-              <ForEach
-                data={behavior.subtitlePreviews}
-                idCompute={behavior.getSubtitlePreviewId}
-                render={behavior.renderSubtitlePreview}
-              />
-              <Render when={behavior.error !== null}>
-                <PlayerError>{behavior.error}</PlayerError>
-              </Render>
-            </PreviewCanvas>
+              </PreviewCanvas>
+            </PlaybackPreviewProfiler>
           </PreviewArea>
 
           <PlayerControls />

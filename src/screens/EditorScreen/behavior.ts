@@ -39,6 +39,7 @@ import {
   type SubtitlePhrase,
   type SubtitleTrack,
   type SubtitleWord,
+  hasSubtitlePhraseTiming,
   normalizeSubtitlePhraseOrder,
   createProjectThumbnail,
   sortSubtitlePhrases,
@@ -74,6 +75,7 @@ import {
   subtitleFontOptions,
   type SubtitleFontOption,
 } from "../../services/subtitleFonts";
+import { albumArtError } from "../../services/userFacingErrors";
 import { PhraseClip } from "./components/PhraseClip";
 import {
   useEditorData,
@@ -122,8 +124,14 @@ type EditorHistoryEntry = {
   project: KaraokeProject;
   selectedTrackId: string | null;
   selectedPhraseId: string | null;
+  selectedPhraseIds: string[];
+  phraseSelectionAnchorId: string | null;
   selectedWordId: string | null;
 };
+
+function snapshotProject(project: KaraokeProject) {
+  return structuredClone(project);
+}
 
 type TimelineRow = {
   id: string;
@@ -132,6 +140,7 @@ type TimelineRow = {
   Icon: typeof Image;
   track: ProjectTrack | null;
 };
+type TimelineVisibleRange = { start: number; end: number };
 
 const HISTORY_LIMIT = 100;
 const DEFAULT_BPM = 120;
@@ -142,6 +151,88 @@ const MAXIMUM_SCALE_PERCENTAGE = 400;
 const VOCALS_HARD_SYNC_THRESHOLD = 0.25;
 const VOCALS_HARD_SYNC_INTERVAL = 1_000;
 const VOCALS_SYNC_RATE_ADJUSTMENT = 0.04;
+const MEDIA_SYNC_INTERVAL = 125;
+const TIMELINE_FOLLOW_INTERVAL = 33;
+const TIMELINE_VIRTUALIZATION_MARGIN = 2;
+const PLAYBACK_PROFILER_STORAGE_KEY = "karaokai.debug.playback-profiler";
+const HIDE_TIMELINE_GRID_STORAGE_KEY = "karaokai.debug.hide-timeline-grid";
+const HIDE_TIMELINE_CLIPS_STORAGE_KEY = "karaokai.debug.hide-timeline-clips";
+const HIDE_TIMELINE_PLAYHEAD_STORAGE_KEY =
+  "karaokai.debug.hide-timeline-playhead";
+const PLAYBACK_FRAME_BUDGET_MS = 1000 / 120;
+const PLAYBACK_JANK_BUDGET_MS = 1000 / 60;
+
+type PlaybackProfiler = {
+  enabled: boolean;
+  windowStartedAt: number;
+  previousFrameAt: number | null;
+  frames: number;
+  slowFrames: number;
+  droppedFrames: number;
+  totalFrameInterval: number;
+  maximumFrameInterval: number;
+  totalTick: number;
+  maximumTick: number;
+  totalVocalsSync: number;
+  maximumVocalsSync: number;
+  totalVideoSync: number;
+  maximumVideoSync: number;
+  totalPlayhead: number;
+  maximumPlayhead: number;
+  totalTimelineWord: number;
+  maximumTimelineWord: number;
+  totalTimelineFollow: number;
+  maximumTimelineFollow: number;
+};
+
+function playbackProfilerEnabled() {
+  try {
+    return window.localStorage.getItem(PLAYBACK_PROFILER_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function debugFlagEnabled(key: string) {
+  try {
+    return window.localStorage.getItem(key) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function createPlaybackProfiler(): PlaybackProfiler {
+  return {
+    enabled: playbackProfilerEnabled(),
+    windowStartedAt: performance.now(),
+    previousFrameAt: null,
+    frames: 0,
+    slowFrames: 0,
+    droppedFrames: 0,
+    totalFrameInterval: 0,
+    maximumFrameInterval: 0,
+    totalTick: 0,
+    maximumTick: 0,
+    totalVocalsSync: 0,
+    maximumVocalsSync: 0,
+    totalVideoSync: 0,
+    maximumVideoSync: 0,
+    totalPlayhead: 0,
+    maximumPlayhead: 0,
+    totalTimelineWord: 0,
+    maximumTimelineWord: 0,
+    totalTimelineFollow: 0,
+    maximumTimelineFollow: 0,
+  };
+}
+
+function resetPlaybackProfiler(profiler: PlaybackProfiler, now: number) {
+  Object.assign(profiler, createPlaybackProfiler(), {
+    enabled: true,
+    windowStartedAt: now,
+    previousFrameAt: now,
+  });
+}
 
 const isSubtitleTrack = (
   track: KaraokeProject["tracks"][number] | null | undefined
@@ -153,7 +244,9 @@ const isBackgroundTrack = (
   track: KaraokeProject["tracks"][number] | null | undefined
 ): track is BackgroundTrack => track?.type === "background";
 const formatTime = (milliseconds: number) =>
-  new Date(Math.max(0, milliseconds)).toISOString().slice(14, 23);
+  new Date(Math.max(0, Number.isFinite(milliseconds) ? milliseconds : 0))
+    .toISOString()
+    .slice(14, 23);
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(maximum, Math.max(minimum, value));
 
@@ -352,6 +445,8 @@ function subtitlePreviewView(track: SubtitleTrack, currentTime: number) {
         fontStyle: style.fontStyle,
         textDecoration: style.textDecoration,
         verticalAlign: style.verticalAlign,
+        offsetX: ((word.style?.x ?? 0) / positionReferenceWidth) * 100,
+        offsetY: ((word.style?.y ?? 0) / positionReferenceHeight) * 100,
         unreadColorSource: subtitleColorSource(
           "unreadColor",
           track.style,
@@ -385,6 +480,8 @@ function subtitlePreviewView(track: SubtitleTrack, currentTime: number) {
         fontStyle: style.fontStyle,
         textDecoration: style.textDecoration,
         verticalAlign: style.verticalAlign,
+        offsetX: ((word.style?.x ?? 0) / positionReferenceWidth) * 100,
+        offsetY: ((word.style?.y ?? 0) / positionReferenceHeight) * 100,
         unreadColorSource: subtitleColorSource(
           "unreadColor",
           track.style,
@@ -414,11 +511,15 @@ function subtitlePreviewView(track: SubtitleTrack, currentTime: number) {
       top: `calc(50% + ${((track.style.y ?? 0) / positionReferenceHeight) * 100}%)`,
       zIndex: track.zIndex,
     } as CSSProperties,
-    currentStyle: { opacity: timing.primaryOpacity },
+    currentStyle: {
+      opacity: timing.primaryOpacity,
+      "--phrase-offset-x": `${((timing.primaryPhrase?.style?.x ?? 0) / positionReferenceWidth) * 100}cqw`,
+      "--phrase-offset-y": `${((timing.primaryPhrase?.style?.y ?? 0) / positionReferenceHeight) * 100}cqw`,
+    } as CSSProperties,
     nextPhraseStyle: {
       opacity: timing.secondaryOpacity,
       top: `${timing.secondaryOffset * 50}%`,
-      transform: `translate(-50%, calc(${(timing.secondaryOffset - 1) * 50}% + ${timing.secondaryOffset * 0.75}rem)) scale(${timing.secondaryScale})`,
+      transform: `translate(calc(-50% + ${((timing.secondaryPhrase?.style?.x ?? 0) / positionReferenceWidth) * 100}cqw), calc(${(timing.secondaryOffset - 1) * 50}% + ${timing.secondaryOffset * 0.75}rem + ${((timing.secondaryPhrase?.style?.y ?? 0) / positionReferenceHeight) * 100}cqw)) scale(${timing.secondaryScale})`,
     } as CSSProperties,
     entryCueStyle: {
       "--entry-cue-progress": entryCueProgress ?? 0,
@@ -465,6 +566,18 @@ export function useBehavior(_: Record<string, never>) {
   const { timelineAutoFollow, setTimelineAutoFollow } = useTimelineAutoFollow();
   const [data, setAppData] = useAppContext();
   const [editorData, setEditorData] = useEditorData();
+  const hideTimelineGrid = useMemo(
+    () => debugFlagEnabled(HIDE_TIMELINE_GRID_STORAGE_KEY),
+    []
+  );
+  const hideTimelineClips = useMemo(
+    () => debugFlagEnabled(HIDE_TIMELINE_CLIPS_STORAGE_KEY),
+    []
+  );
+  const hideTimelinePlayhead = useMemo(
+    () => debugFlagEnabled(HIDE_TIMELINE_PLAYHEAD_STORAGE_KEY),
+    []
+  );
   const [backgroundAssetUrl, setBackgroundAssetUrl] = useState<string | null>(
     null
   );
@@ -472,6 +585,8 @@ export function useBehavior(_: Record<string, never>) {
   const [timelineDropTargetTrackId, setTimelineDropTargetTrackId] = useState<
     string | null
   >(null);
+  const [timelineVisibleRange, setTimelineVisibleRange] =
+    useState<TimelineVisibleRange>({ start: 0, end: 0 });
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportResolution, setExportResolution] = useState<
     "480p" | "720p" | "1080p" | "1440p"
@@ -505,6 +620,8 @@ export function useBehavior(_: Record<string, never>) {
     isAudioReady,
     selectedTrackId,
     selectedPhraseId,
+    selectedPhraseIds,
+    phraseSelectionAnchorId,
     selectedWordId,
     trackPendingDeletionId,
     inspectorTab,
@@ -541,6 +658,15 @@ export function useBehavior(_: Record<string, never>) {
     (selectedPhraseId: string | null) => setEditorData({ selectedPhraseId }),
     [setEditorData]
   );
+  const setSelectedPhraseIds = useCallback(
+    (selectedPhraseIds: string[]) => setEditorData({ selectedPhraseIds }),
+    [setEditorData]
+  );
+  const setPhraseSelectionAnchorId = useCallback(
+    (phraseSelectionAnchorId: string | null) =>
+      setEditorData({ phraseSelectionAnchorId }),
+    [setEditorData]
+  );
   const setSelectedWordId = useCallback(
     (selectedWordId: string | null) => setEditorData({ selectedWordId }),
     [setEditorData]
@@ -558,12 +684,16 @@ export function useBehavior(_: Record<string, never>) {
     (trackId: string) => {
       setSelectedTrackId(trackId);
       setSelectedPhraseId(null);
+      setSelectedPhraseIds([]);
+      setPhraseSelectionAnchorId(null);
       setSelectedWordId(null);
-      setInspectorTab("properties");
+      setInspectorTab("track");
     },
     [
       setInspectorTab,
       setSelectedPhraseId,
+      setSelectedPhraseIds,
+      setPhraseSelectionAnchorId,
       setSelectedTrackId,
       setSelectedWordId,
     ]
@@ -602,11 +732,15 @@ export function useBehavior(_: Record<string, never>) {
   const selectionRef = useRef({
     selectedTrackId,
     selectedPhraseId,
+    selectedPhraseIds,
+    phraseSelectionAnchorId,
     selectedWordId,
   });
   selectionRef.current = {
     selectedTrackId,
     selectedPhraseId,
+    selectedPhraseIds,
+    phraseSelectionAnchorId,
     selectedWordId,
   };
   const instrumentalAudio = useRef<HTMLAudioElement>(null);
@@ -618,6 +752,10 @@ export function useBehavior(_: Record<string, never>) {
   const timelineLabelsRef = useRef<HTMLDivElement>(null);
   const timelineContentRef = useRef<HTMLDivElement>(null);
   const timelinePlayheadRef = useRef<HTMLDivElement>(null);
+  const timelineVisibleRangeRef = useRef<TimelineVisibleRange>(
+    timelineVisibleRange
+  );
+  const timelineContentWidthRef = useRef(0);
   const timelineZoomRef = useRef(timelineZoom);
   const timelineZoomingUntilRef = useRef(0);
   const hoveredPhraseRef = useRef<{
@@ -626,16 +764,36 @@ export function useBehavior(_: Record<string, never>) {
     clientX: number;
   } | null>(null);
   const lastVocalsHardSyncRef = useRef(Number.NEGATIVE_INFINITY);
+  const lastMediaSyncRef = useRef(Number.NEGATIVE_INFINITY);
+  const lastTimelineFollowRef = useRef(Number.NEGATIVE_INFINITY);
+  const playbackTimelineWordIdRef = useRef<string | null>(null);
+  const playbackProfilerRef = useRef<PlaybackProfiler>(
+    createPlaybackProfiler()
+  );
   const saveTimerRef = useRef<number | null>(null);
   const closingWindowRef = useRef(false);
-  const phraseClipboardRef = useRef<SubtitlePhrase | null>(null);
+  const phraseClipboardRef = useRef<SubtitlePhrase[]>([]);
   const historyRef = useRef<EditorHistoryEntry[]>([]);
   const thumbnailCaptureKeyRef = useRef<string | null>(null);
   const thumbnailCaptureRef = useRef<(() => Promise<void>) | null>(null);
   const liveColorElementsRef = useRef<HTMLElement[]>([]);
   const exportLockRef = useRef(false);
   const renderJobIdRef = useRef<string | null>(null);
+  const errorTimerRef = useRef<number | null>(null);
   const [isCancellingExport, setIsCancellingExport] = useState(false);
+
+  const showTemporaryError = useCallback(
+    (message: string) => {
+      if (errorTimerRef.current !== null)
+        window.clearTimeout(errorTimerRef.current);
+      setError(message);
+      errorTimerRef.current = window.setTimeout(() => {
+        errorTimerRef.current = null;
+        setError(null);
+      }, 6_000);
+    },
+    [setError]
+  );
 
   const setLiveProject = useCallback(
     (next: KaraokeProject) => {
@@ -693,9 +851,13 @@ export function useBehavior(_: Record<string, never>) {
       if (historySource && historySource !== next) {
         const selection = selectionRef.current;
         historyRef.current.push({
-          project: historySource,
+          // Keep a real snapshot: a later edit must never mutate the state that
+          // Ctrl+Z is expected to restore.
+          project: snapshotProject(historySource),
           selectedTrackId: selection.selectedTrackId,
           selectedPhraseId: selection.selectedPhraseId,
+          selectedPhraseIds: selection.selectedPhraseIds,
+          phraseSelectionAnchorId: selection.phraseSelectionAnchorId,
           selectedWordId: selection.selectedWordId,
         });
         if (historyRef.current.length > HISTORY_LIMIT) {
@@ -752,7 +914,7 @@ export function useBehavior(_: Record<string, never>) {
 
   useEffect(() => {
     historyRef.current = [];
-    phraseClipboardRef.current = null;
+    phraseClipboardRef.current = [];
   }, [projectId]);
   useEffect(() => {
     void refresh();
@@ -769,6 +931,8 @@ export function useBehavior(_: Record<string, never>) {
   }, [data.requestedEditorAction, project, projectId, setAppData]);
   useEffect(
     () => () => {
+      if (errorTimerRef.current !== null)
+        window.clearTimeout(errorTimerRef.current);
       if (saveTimerRef.current !== null) {
         window.clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
@@ -916,7 +1080,7 @@ export function useBehavior(_: Record<string, never>) {
   const firstPhraseStart = useMemo(
     () =>
       [...subtitleTracks]
-        .flatMap((track) => track.phrases)
+        .flatMap((track) => track.phrases.filter(hasSubtitlePhraseTiming))
         .reduce<number | null>(
           (earliest, phrase) =>
             earliest === null || phrase.start < earliest
@@ -958,7 +1122,10 @@ export function useBehavior(_: Record<string, never>) {
         Math.max(
           trackMaximum,
           track.phrases.reduce(
-            (phraseMaximum, phrase) => Math.max(phraseMaximum, phrase.end),
+            (phraseMaximum, phrase) =>
+              hasSubtitlePhraseTiming(phrase)
+                ? Math.max(phraseMaximum, phrase.end)
+                : phraseMaximum,
             0
           )
         ),
@@ -1206,14 +1373,14 @@ export function useBehavior(_: Record<string, never>) {
   } as CSSProperties;
   useEffect(() => setBpmInputValue(String(tempoBpm)), [tempoBpm]);
 
-  const syncBackgroundVideoTime = useCallback((seconds: number) => {
+  const syncBackgroundVideoTime = useCallback((seconds: number, force = false) => {
     const video = backgroundVideo.current;
     if (!video) return;
     const duration = video.duration;
     const videoTime =
       Number.isFinite(duration) && duration > 0 ? seconds % duration : seconds;
 
-    if (Math.abs(video.currentTime - videoTime) < 0.12) return;
+    if (!force && Math.abs(video.currentTime - videoTime) < 0.12) return;
     try {
       video.currentTime = videoTime;
       video.playbackRate = 1;
@@ -1233,26 +1400,33 @@ export function useBehavior(_: Record<string, never>) {
           // Metadata may still be loading; the next seek will apply the position.
         }
       });
-      syncBackgroundVideoTime(seconds);
+      syncBackgroundVideoTime(seconds, true);
     },
     [syncBackgroundVideoTime]
   );
   const followTimelineAt = useCallback(
     (milliseconds: number) => {
       if (!timelineAutoFollow) return;
-      if (performance.now() < timelineZoomingUntilRef.current) return;
+      const now = performance.now();
+      if (
+        now < timelineZoomingUntilRef.current ||
+        now - lastTimelineFollowRef.current < TIMELINE_FOLLOW_INTERVAL
+      )
+        return;
       const viewport = timelineRef.current;
       const content = timelineContentRef.current;
       if (!viewport || !content) return;
-      const contentWidth = content.getBoundingClientRect().width;
-      viewport.scrollLeft = timelineFollowScrollLeft(
+      const nextScrollLeft = timelineFollowScrollLeft(
         milliseconds,
         timelineDuration,
         content.offsetLeft,
-        contentWidth,
+        timelineContentWidthRef.current,
         viewport.clientWidth,
         viewport.scrollWidth
       );
+      if (Math.abs(viewport.scrollLeft - nextScrollLeft) < 1) return;
+      lastTimelineFollowRef.current = now;
+      viewport.scrollLeft = nextScrollLeft;
     },
     [timelineAutoFollow, timelineDuration]
   );
@@ -1260,18 +1434,106 @@ export function useBehavior(_: Record<string, never>) {
     (milliseconds: number) => {
       const playhead = timelinePlayheadRef.current;
       if (!playhead) return;
-      const percent = clamp(
-        (milliseconds / Math.max(1, timelineDuration)) * 100,
-        0,
-        100
-      );
-      playhead.style.left = `${percent}%`;
+      const position =
+        timelineContentWidthRef.current *
+        clamp(milliseconds / Math.max(1, timelineDuration), 0, 1);
+      playhead.style.transform = `translate3d(${position}px, 0, 0)`;
     },
     [timelineDuration]
+  );
+  const updateTimelineVisibleRange = useCallback(() => {
+    const viewport = timelineRef.current;
+    const content = timelineContentRef.current;
+    if (!viewport || !content || timelineContentWidthRef.current <= 0) return;
+
+    const visibleStart = clamp(
+      ((viewport.scrollLeft - content.offsetLeft) /
+        timelineContentWidthRef.current) *
+        timelineDuration,
+      0,
+      timelineDuration
+    );
+    const visibleEnd = clamp(
+      ((viewport.scrollLeft - content.offsetLeft + viewport.clientWidth) /
+        timelineContentWidthRef.current) *
+        timelineDuration,
+      0,
+      timelineDuration
+    );
+    const visibleDuration = Math.max(1, visibleEnd - visibleStart);
+    const current = timelineVisibleRangeRef.current;
+    const safeStart = current.start + visibleDuration * 0.5;
+    const safeEnd = current.end - visibleDuration * 0.5;
+    if (
+      current.end > current.start &&
+      visibleStart >= safeStart &&
+      visibleEnd <= safeEnd
+    )
+      return;
+
+    const margin = visibleDuration * TIMELINE_VIRTUALIZATION_MARGIN;
+    const next = {
+      start: Math.max(0, visibleStart - margin),
+      end: Math.min(timelineDuration, visibleEnd + margin),
+    };
+    timelineVisibleRangeRef.current = next;
+    setTimelineVisibleRange(next);
+  }, [timelineDuration]);
+  const updateTimelinePlaybackWord = useCallback(
+    (milliseconds: number) => {
+      let nextWordId: string | null = null;
+      for (const track of subtitleTracks) {
+        const phrase = subtitlePreviewAt(
+          track.phrases,
+          milliseconds,
+          track.animation?.template ?? "template-1"
+        ).currentPhrase;
+        const word = phrase?.words.find(
+          (item) =>
+            item.type !== "gap" &&
+            milliseconds >= item.start &&
+            milliseconds <= item.end
+        );
+        if (word) {
+          nextWordId = word.id;
+          break;
+        }
+      }
+      if (nextWordId === playbackTimelineWordIdRef.current) return;
+      if (playbackTimelineWordIdRef.current) {
+        document
+          .querySelector<HTMLElement>(
+            `[data-timeline-word-id="${playbackTimelineWordIdRef.current}"]`
+          )
+          ?.removeAttribute("data-playback-active");
+      }
+      if (nextWordId) {
+        document
+          .querySelector<HTMLElement>(
+            `[data-timeline-word-id="${nextWordId}"]`
+          )
+          ?.setAttribute("data-playback-active", "true");
+      }
+      playbackTimelineWordIdRef.current = nextWordId;
+    },
+    [subtitleTracks]
   );
   useEffect(() => {
     if (timelineAutoFollow) followTimelineAt(currentTimeRef.current);
   }, [followTimelineAt, timelineAutoFollow]);
+  useLayoutEffect(() => {
+    const content = timelineContentRef.current;
+    if (!content) return;
+    const updateContentWidth = () => {
+      timelineContentWidthRef.current = content.clientWidth;
+      updateTimelinePlayhead(currentTimeRef.current);
+      updateTimelineVisibleRange();
+    };
+    updateContentWidth();
+    const observer = new ResizeObserver(updateContentWidth);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [timelineZoom, updateTimelinePlayhead, updateTimelineVisibleRange]);
   useEffect(() => {
     if (instrumentalAudio.current)
       instrumentalAudio.current.volume = instrumentalVolume / 100;
@@ -1304,19 +1566,8 @@ export function useBehavior(_: Record<string, never>) {
       (word) => currentTime >= word.start && currentTime <= word.end
     ) ?? null;
   const playbackWordId = playbackWord?.id ?? null;
-  const playingPhraseId = playingPhrase?.id ?? null;
   const selectedWord =
     activePhrase?.words.find((word) => word.id === selectedWordId) ?? null;
-
-  useEffect(() => {
-    if (playingPhraseId === null) {
-      setSelectedWordId(null);
-      return;
-    }
-
-    setSelectedPhraseId(playingPhraseId);
-    setSelectedWordId(playbackWordId);
-  }, [playbackWordId, playingPhraseId]);
 
   const trackScalePercentage = Math.round(
     (subtitleTrack?.style.scale ?? 1) * 100
@@ -1809,7 +2060,7 @@ export function useBehavior(_: Record<string, never>) {
     setSelectedTrackId(track.id);
     setSelectedPhraseId(null);
     setSelectedWordId(null);
-    setInspectorTab("properties");
+    setInspectorTab("track");
     persistProject(
       {
         ...currentProject,
@@ -1952,7 +2203,9 @@ export function useBehavior(_: Record<string, never>) {
           );
           updateBackground({ preset, asset, fit: "cover" });
         } catch (reason) {
-          setError(String(reason));
+          showTemporaryError(
+            t(`editor.background.error.${albumArtError(reason)}`)
+          );
         }
         return;
       }
@@ -1962,6 +2215,8 @@ export function useBehavior(_: Record<string, never>) {
       backgroundTrack,
       data.preferences.storageDirectory,
       projectId,
+      showTemporaryError,
+      t,
       updateBackground,
     ]
   );
@@ -2111,6 +2366,7 @@ export function useBehavior(_: Record<string, never>) {
       updateMediaTime(next);
       currentTimeRef.current = next;
       updateTimelinePlayhead(next);
+      updateTimelinePlaybackWord(next);
       setCurrentTime(next);
       followTimelineAt(next);
     },
@@ -2118,25 +2374,86 @@ export function useBehavior(_: Record<string, never>) {
       followTimelineAt,
       timelineDuration,
       updateMediaTime,
+      updateTimelinePlaybackWord,
       updateTimelinePlayhead,
     ]
   );
   const onSelectPhrase = useCallback(
-    (trackId: string, phrase: SubtitlePhrase) => {
+    (
+      trackId: string,
+      phrase: SubtitlePhrase,
+      event?: Pick<MouseEvent<HTMLElement>, "ctrlKey" | "metaKey" | "shiftKey">
+    ) => {
+      const track = projectRef.current?.tracks.find(
+        (item): item is SubtitleTrack =>
+          item.type === "subtitle" && item.id === trackId
+      );
+      const commandKey = event?.ctrlKey || event?.metaKey;
+      const anchorId =
+        trackId === selectedTrackId ? phraseSelectionAnchorId : null;
+      let nextIds: string[];
+      if (event?.shiftKey && track && anchorId) {
+        const anchorIndex = track.phrases.findIndex(
+          (item) => item.id === anchorId
+        );
+        const phraseIndex = track.phrases.findIndex(
+          (item) => item.id === phrase.id
+        );
+        nextIds =
+          anchorIndex < 0 || phraseIndex < 0
+            ? [phrase.id]
+            : track.phrases
+                .slice(
+                  Math.min(anchorIndex, phraseIndex),
+                  Math.max(anchorIndex, phraseIndex) + 1
+                )
+                .map((item) => item.id);
+      } else if (commandKey && trackId === selectedTrackId) {
+        nextIds = selectedPhraseIds.includes(phrase.id)
+          ? selectedPhraseIds.filter((id) => id !== phrase.id)
+          : [...selectedPhraseIds, phrase.id];
+      } else {
+        nextIds = [phrase.id];
+      }
       setSelectedTrackId(trackId);
-      setSelectedPhraseId(phrase.id);
+      setSelectedPhraseId(
+        nextIds.includes(phrase.id) ? phrase.id : (nextIds.at(-1) ?? null)
+      );
+      setSelectedPhraseIds(nextIds);
+      if (!event?.shiftKey && !commandKey)
+        setPhraseSelectionAnchorId(phrase.id);
+      else if (!anchorId && nextIds.length)
+        setPhraseSelectionAnchorId(phrase.id);
       setSelectedWordId(null);
+      setInspectorTab("phrase");
     },
-    []
+    [
+      setInspectorTab,
+      setSelectedPhraseId,
+      setSelectedPhraseIds,
+      setPhraseSelectionAnchorId,
+      setSelectedTrackId,
+      setSelectedWordId,
+      phraseSelectionAnchorId,
+      selectedPhraseIds,
+      selectedTrackId,
+    ]
   );
   const onSelectWord = useCallback(
     (trackId: string, phrase: SubtitlePhrase, word: SubtitleWord) => {
       setSelectedTrackId(trackId);
       setSelectedPhraseId(phrase.id);
       setSelectedWordId(word.id);
+      setInspectorTab("word");
       onSeek(word.start);
     },
-    [onSeek]
+    [
+      onSeek,
+      setInspectorTab,
+      setSelectedPhraseId,
+      setSelectedTrackId,
+      setSelectedWordId,
+    ]
   );
 
   const startGesture = useCallback(
@@ -2157,6 +2474,14 @@ export function useBehavior(_: Record<string, never>) {
       const initialX = event.clientX;
       setSelectedTrackId(track.id);
       setSelectedPhraseId(phrase.id);
+      const selectedPhrases =
+        gesture === "move" &&
+        !word &&
+        selectedTrackId === track.id &&
+        selectedPhraseIds.includes(phrase.id)
+          ? track.phrases.filter((item) => selectedPhraseIds.includes(item.id))
+          : [phrase];
+      setSelectedPhraseIds(selectedPhrases.map((item) => item.id));
       if (word) setSelectedWordId(word.id);
 
       const onMove = (moveEvent: globalThis.PointerEvent) => {
@@ -2184,7 +2509,50 @@ export function useBehavior(_: Record<string, never>) {
                   timelineDuration
                 );
         } else if (gesture === "move") {
-          nextPhrase = movePhrase(phrase, delta, timelineDuration);
+          const groupDelta = clamp(
+            delta,
+            -Math.min(...selectedPhrases.map((item) => item.start)),
+            timelineDuration -
+              Math.max(...selectedPhrases.map((item) => item.end))
+          );
+          const nextPhrases = selectedPhrases.map((item) =>
+            movePhrase(item, groupDelta, timelineDuration)
+          );
+          setLiveProject({
+            ...sourceProject,
+            updatedAt: String(Date.now()),
+            tracks: sourceProject.tracks.map((item) => {
+              if (item.type !== "subtitle") return item;
+              if (item.id === track.id && item.id === targetTrackId)
+                return {
+                  ...item,
+                  phrases: sortSubtitlePhrases(
+                    item.phrases.map(
+                      (itemPhrase) =>
+                        nextPhrases.find((next) => next.id === itemPhrase.id) ??
+                        itemPhrase
+                    )
+                  ),
+                };
+              if (item.id === track.id)
+                return {
+                  ...item,
+                  phrases: item.phrases.filter(
+                    (itemPhrase) => !selectedPhraseIds.includes(itemPhrase.id)
+                  ),
+                };
+              if (item.id === targetTrackId)
+                return {
+                  ...item,
+                  phrases: sortSubtitlePhrases([
+                    ...item.phrases,
+                    ...nextPhrases,
+                  ]),
+                };
+              return item;
+            }),
+          });
+          return;
         } else if (gesture === "start") {
           nextPhrase = resizePhraseStart(phrase, phrase.start + delta);
         } else {
@@ -2218,7 +2586,14 @@ export function useBehavior(_: Record<string, never>) {
       window.addEventListener("pointerup", onFinish, { once: true });
       window.addEventListener("pointercancel", onFinish, { once: true });
     },
-    [persistProject, setLiveProject, timelineDuration]
+    [
+      persistProject,
+      selectedPhraseIds,
+      selectedTrackId,
+      setLiveProject,
+      setSelectedPhraseIds,
+      timelineDuration,
+    ]
   );
 
   const onStartPhraseGesture = useCallback(
@@ -2430,26 +2805,29 @@ export function useBehavior(_: Record<string, never>) {
   );
 
   const onCopyPhrase = useCallback(() => {
-    if (!selectedPhrase) return false;
-    phraseClipboardRef.current = {
-      ...selectedPhrase,
-      style: selectedPhrase.style ? { ...selectedPhrase.style } : undefined,
-      words: selectedPhrase.words.map((word) => ({
-        ...word,
-        style: word.style ? { ...word.style } : undefined,
-      })),
-    };
+    const phrases =
+      subtitleTrack?.phrases.filter((phrase) =>
+        selectedPhraseIds.includes(phrase.id)
+      ) ?? [];
+    if (!phrases.length) return false;
+    phraseClipboardRef.current = structuredClone(phrases);
     return true;
-  }, [selectedPhrase]);
+  }, [selectedPhraseIds, subtitleTrack]);
 
   const onPastePhrase = useCallback(() => {
     const currentProject = projectRef.current;
-    const copiedPhrase = phraseClipboardRef.current;
-    if (!currentProject || !subtitleTrack || !copiedPhrase) return false;
-    const phrase = duplicatePhraseAt(
-      copiedPhrase,
-      currentTimeRef.current,
-      timelineDuration
+    const copiedPhrases = phraseClipboardRef.current;
+    if (!currentProject || !subtitleTrack || !copiedPhrases.length)
+      return false;
+    const firstStart = Math.min(...copiedPhrases.map((phrase) => phrase.start));
+    const lastEnd = Math.max(...copiedPhrases.map((phrase) => phrase.end));
+    const delta = clamp(
+      currentTimeRef.current - firstStart,
+      -firstStart,
+      timelineDuration - lastEnd
+    );
+    const phrases = copiedPhrases.map((phrase) =>
+      duplicatePhraseAt(phrase, phrase.start + delta, timelineDuration)
     );
     const next: KaraokeProject = {
       ...currentProject,
@@ -2458,28 +2836,42 @@ export function useBehavior(_: Record<string, never>) {
         track.type === "subtitle" && track.id === subtitleTrack.id
           ? {
               ...track,
-              phrases: sortSubtitlePhrases([...track.phrases, phrase]),
+              phrases: sortSubtitlePhrases([...track.phrases, ...phrases]),
             }
           : track
       ),
     };
-    setSelectedPhraseId(phrase.id);
-    setSelectedWordId(phrase.words[0]?.id ?? null);
-    onSeek(phrase.start);
+    setSelectedPhraseId(phrases[0].id);
+    setSelectedPhraseIds(phrases.map((phrase) => phrase.id));
+    setPhraseSelectionAnchorId(phrases[0].id);
+    setSelectedWordId(phrases[0].words[0]?.id ?? null);
+    onSeek(phrases[0].start);
     persistProject(next, true);
     return true;
-  }, [onSeek, persistProject, subtitleTrack, timelineDuration]);
+  }, [
+    onSeek,
+    persistProject,
+    setPhraseSelectionAnchorId,
+    setSelectedPhraseIds,
+    subtitleTrack,
+    timelineDuration,
+  ]);
 
   const onUndo = useCallback(() => {
     const entry = historyRef.current.pop();
     if (!entry) return false;
-    const restored = { ...entry.project, updatedAt: String(Date.now()) };
+    const restored = {
+      ...snapshotProject(entry.project),
+      updatedAt: String(Date.now()),
+    };
     setSelectedTrackId(entry.selectedTrackId);
     setSelectedPhraseId(entry.selectedPhraseId);
+    setSelectedPhraseIds(entry.selectedPhraseIds);
+    setPhraseSelectionAnchorId(entry.phraseSelectionAnchorId);
     setSelectedWordId(entry.selectedWordId);
     applyProject(restored, true);
     return true;
-  }, [applyProject]);
+  }, [applyProject, setPhraseSelectionAnchorId, setSelectedPhraseIds]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -2489,8 +2881,14 @@ export function useBehavior(_: Record<string, never>) {
       }
       if (trackPendingDeletionId !== null) return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable='true']"))
-        return;
+      const input = target?.closest("input");
+      const isTextEditingTarget =
+        target?.closest("textarea, [contenteditable='true']") ||
+        (input &&
+          ["text", "search", "email", "password", "tel", "url"].includes(
+            input.type
+          ));
+      if (isTextEditingTarget) return;
       const commandKey = event.ctrlKey || event.metaKey;
       if (commandKey && !event.altKey && !event.shiftKey && !event.repeat) {
         const key = event.key.toLowerCase();
@@ -2624,13 +3022,17 @@ export function useBehavior(_: Record<string, never>) {
     const labels = timelineLabelsRef.current;
     if (!viewport || !labels) return;
     labels.scrollTop = viewport.scrollTop;
-  }, []);
+    updateTimelineVisibleRange();
+  }, [updateTimelineVisibleRange]);
 
-  const onInstrumentalTimeUpdate = useCallback(() => {
+  const updatePlaybackClock = useCallback(() => {
+    const profiler = playbackProfilerRef.current;
+    const frameStartedAt = profiler.enabled ? performance.now() : 0;
     const audio = instrumentalAudio.current;
     const vocals = vocalsAudio.current;
     if (!audio) return;
     if (vocals) {
+      const vocalsSyncStartedAt = profiler.enabled ? performance.now() : 0;
       const drift = vocals.currentTime - audio.currentTime;
       const now = performance.now();
 
@@ -2648,24 +3050,115 @@ export function useBehavior(_: Record<string, never>) {
           1.04
         );
       }
+      if (profiler.enabled) {
+        const duration = performance.now() - vocalsSyncStartedAt;
+        profiler.totalVocalsSync += duration;
+        profiler.maximumVocalsSync = Math.max(
+          profiler.maximumVocalsSync,
+          duration
+        );
+      }
     }
-    syncBackgroundVideoTime(audio.currentTime);
+    const now = performance.now();
+    if (now - lastMediaSyncRef.current >= MEDIA_SYNC_INTERVAL) {
+      const videoSyncStartedAt = profiler.enabled ? performance.now() : 0;
+      syncBackgroundVideoTime(audio.currentTime);
+      lastMediaSyncRef.current = now;
+      if (profiler.enabled) {
+        const duration = performance.now() - videoSyncStartedAt;
+        profiler.totalVideoSync += duration;
+        profiler.maximumVideoSync = Math.max(
+          profiler.maximumVideoSync,
+          duration
+        );
+      }
+    }
     const next = Math.round(audio.currentTime * 1000);
     currentTimeRef.current = next;
+    const playheadStartedAt = profiler.enabled ? performance.now() : 0;
     updateTimelinePlayhead(next);
+    if (profiler.enabled) {
+      const duration = performance.now() - playheadStartedAt;
+      profiler.totalPlayhead += duration;
+      profiler.maximumPlayhead = Math.max(profiler.maximumPlayhead, duration);
+    }
+    const timelineWordStartedAt = profiler.enabled ? performance.now() : 0;
+    updateTimelinePlaybackWord(next);
+    if (profiler.enabled) {
+      const duration = performance.now() - timelineWordStartedAt;
+      profiler.totalTimelineWord += duration;
+      profiler.maximumTimelineWord = Math.max(
+        profiler.maximumTimelineWord,
+        duration
+      );
+    }
     setCurrentTime(next);
+    const timelineFollowStartedAt = profiler.enabled ? performance.now() : 0;
     followTimelineAt(next);
-  }, [followTimelineAt, syncBackgroundVideoTime, updateTimelinePlayhead]);
+    if (!profiler.enabled) return;
+
+    const completedAt = performance.now();
+    const tickDuration = completedAt - frameStartedAt;
+    const frameInterval = profiler.previousFrameAt
+      ? completedAt - profiler.previousFrameAt
+      : 0;
+    profiler.previousFrameAt = completedAt;
+    profiler.frames += 1;
+    profiler.totalTick += tickDuration;
+    profiler.maximumTick = Math.max(profiler.maximumTick, tickDuration);
+    profiler.totalTimelineFollow += completedAt - timelineFollowStartedAt;
+    profiler.maximumTimelineFollow = Math.max(
+      profiler.maximumTimelineFollow,
+      completedAt - timelineFollowStartedAt
+    );
+    if (frameInterval > 0) {
+      profiler.totalFrameInterval += frameInterval;
+      profiler.maximumFrameInterval = Math.max(
+        profiler.maximumFrameInterval,
+        frameInterval
+      );
+      if (frameInterval > PLAYBACK_FRAME_BUDGET_MS) profiler.slowFrames += 1;
+      if (frameInterval > PLAYBACK_JANK_BUDGET_MS) profiler.droppedFrames += 1;
+    }
+    if (completedAt - profiler.windowStartedAt < 1_000) return;
+    const intervals = Math.max(1, profiler.frames - 1);
+    console.table({
+      fps: Number((1000 / (profiler.totalFrameInterval / intervals)).toFixed(1)),
+      frameAverageMs: Number(
+        (profiler.totalFrameInterval / intervals).toFixed(2)
+      ),
+      frameMaximumMs: Number(profiler.maximumFrameInterval.toFixed(2)),
+      tickAverageMs: Number((profiler.totalTick / profiler.frames).toFixed(2)),
+      tickMaximumMs: Number(profiler.maximumTick.toFixed(2)),
+      framesOver8_33ms: profiler.slowFrames,
+      framesOver16_67ms: profiler.droppedFrames,
+      vocalsSyncMaximumMs: Number(profiler.maximumVocalsSync.toFixed(2)),
+      videoSyncMaximumMs: Number(profiler.maximumVideoSync.toFixed(2)),
+      playheadMaximumMs: Number(profiler.maximumPlayhead.toFixed(2)),
+      timelineWordMaximumMs: Number(
+        profiler.maximumTimelineWord.toFixed(2)
+      ),
+      timelineFollowMaximumMs: Number(
+        profiler.maximumTimelineFollow.toFixed(2)
+      ),
+    });
+    resetPlaybackProfiler(profiler, completedAt);
+  }, [
+    followTimelineAt,
+    syncBackgroundVideoTime,
+    updateTimelinePlaybackWord,
+    updateTimelinePlayhead,
+  ]);
   useEffect(() => {
     if (!isPlaying) return;
     let frameId = 0;
-    const updatePlaybackClock = () => {
-      onInstrumentalTimeUpdate();
-      frameId = window.requestAnimationFrame(updatePlaybackClock);
+    const updateFrame = () => {
+      updatePlaybackClock();
+      frameId = window.requestAnimationFrame(updateFrame);
     };
-    frameId = window.requestAnimationFrame(updatePlaybackClock);
+    frameId = window.requestAnimationFrame(updateFrame);
     return () => window.cancelAnimationFrame(frameId);
-  }, [isPlaying, onInstrumentalTimeUpdate]);
+  }, [isPlaying, updatePlaybackClock]);
   const onPlaybackEnded = useCallback(() => {
     const audio = instrumentalAudio.current;
     if (audio) {
@@ -2695,7 +3188,7 @@ export function useBehavior(_: Record<string, never>) {
   }, []);
   const onBackgroundVideoLoadedMetadata = useCallback(() => {
     setBackgroundMediaReady(true);
-    syncBackgroundVideoTime(currentTimeRef.current / 1000);
+    syncBackgroundVideoTime(currentTimeRef.current / 1000, true);
     if (isPlaying) void backgroundVideo.current?.play().catch(() => undefined);
   }, [isPlaying, syncBackgroundVideoTime]);
   const onBackgroundImageLoaded = useCallback(
@@ -2809,6 +3302,8 @@ export function useBehavior(_: Record<string, never>) {
                     $fontStyle: word.fontStyle,
                     $textDecoration: word.textDecoration,
                     $verticalAlign: word.verticalAlign,
+                    $offsetX: word.offsetX,
+                    $offsetY: word.offsetY,
                     "data-subtitle-track-id": preview.id,
                     "data-subtitle-phrase-id":
                       preview.timing.primaryPhrase?.id ?? "",
@@ -2854,6 +3349,8 @@ export function useBehavior(_: Record<string, never>) {
                           $fontStyle: word.fontStyle,
                           $textDecoration: word.textDecoration,
                           $verticalAlign: word.verticalAlign,
+                          $offsetX: word.offsetX,
+                          $offsetY: word.offsetY,
                           "data-subtitle-track-id": preview.id,
                           "data-subtitle-phrase-id":
                             preview.timing.secondaryPhrase?.id ?? "",
@@ -2902,7 +3399,7 @@ export function useBehavior(_: Record<string, never>) {
             setSelectedTrackId(row.id);
             setSelectedPhraseId(null);
             setSelectedWordId(null);
-            setInspectorTab("properties");
+            setInspectorTab("track");
           },
         },
         createElement(row.Icon, { size: 15 }),
@@ -2927,19 +3424,6 @@ export function useBehavior(_: Record<string, never>) {
     (row: TimelineRow) => {
       if (row.track?.type === "subtitle") {
         const track = row.track;
-        const preview = subtitlePreviews.find((item) => item.id === track.id);
-        const trackPlaybackWordId =
-          preview?.playingPhrase?.words.find(
-            (word) =>
-              word.type !== "gap" &&
-              currentTime >= word.start &&
-              currentTime <= word.end
-          )?.id ?? null;
-        const selectedPhraseForTrack =
-          track.id === selectedTrackId
-            ? (track.phrases.find((phrase) => phrase.id === selectedPhraseId) ??
-              preview?.playingPhrase)
-            : preview?.playingPhrase;
         return createElement(
           TimelineLane,
           {
@@ -2949,27 +3433,36 @@ export function useBehavior(_: Record<string, never>) {
             onDoubleClick: (event: MouseEvent<HTMLDivElement>) =>
               onInsertPhrase(event, track),
           },
-          ...track.phrases.map((phrase) => {
+          ...track.phrases
+            .filter(
+              (phrase) =>
+                hasSubtitlePhraseTiming(phrase) &&
+                phrase.end >= timelineVisibleRange.start &&
+                phrase.start <= timelineVisibleRange.end
+            )
+            .map((phrase) => {
             const phraseDuration = Math.max(1, phrase.end - phrase.start);
             return createElement(PhraseClip, {
               key: phrase.id,
               phrase,
               left: `${(phrase.start / timelineDuration) * 100}%`,
               width: `${Math.max(0.12, (phraseDuration / timelineDuration) * 100)}%`,
-              selected: phrase.id === selectedPhraseForTrack?.id,
+              selected:
+                track.id === selectedTrackId &&
+                selectedPhraseIds.includes(phrase.id),
               splitting: timelineTool === "split",
               interactionKey: timelineInteractionKey,
               words: phrase.words.map((word) => ({
                 ...word,
                 left: `${((word.start - phrase.start) / phraseDuration) * 100}%`,
                 width: `${Math.max(0.4, ((word.end - word.start) / phraseDuration) * 100)}%`,
-                active: word.id === trackPlaybackWordId,
+                active: false,
                 selected:
                   track.id === selectedTrackId &&
-                  word.id === (selectedWordId ?? trackPlaybackWordId),
+                  word.id === selectedWordId,
               })),
-              onSelect: (selectedPhrase) =>
-                onSelectPhrase(track.id, selectedPhrase),
+              onSelect: (selectedPhrase, event) =>
+                onSelectPhrase(track.id, selectedPhrase, event),
               onSelectWord: (selectedPhrase, word) =>
                 onSelectWord(track.id, selectedPhrase, word),
               onHoverPhrase: (hoveredPhrase, clientX) =>
@@ -3007,7 +3500,6 @@ export function useBehavior(_: Record<string, never>) {
       );
     },
     [
-      currentTime,
       onInsertPhrase,
       onSelectPhrase,
       onSelectWord,
@@ -3017,13 +3509,14 @@ export function useBehavior(_: Record<string, never>) {
       onLeavePhrase,
       onSplitPhrase,
       selectedPhraseId,
+      selectedPhraseIds,
       selectedTrackId,
       selectedWordId,
-      subtitlePreviews,
       timelineDropTargetTrackId,
       timelineInteractionKey,
       timelineTool,
       timelineDuration,
+      timelineVisibleRange,
     ]
   );
   const renderWord = useCallback(
@@ -3065,6 +3558,7 @@ export function useBehavior(_: Record<string, never>) {
       t,
       timelineAutoFollow,
       timelineTool,
+      timelineVisibleRange,
       timelineZoom,
     ]
   );
@@ -3103,7 +3597,6 @@ export function useBehavior(_: Record<string, never>) {
     error,
     currentTime,
     duration: timelineDuration,
-    playheadPercent: (currentTime / Math.max(1, timelineDuration)) * 100,
     isPlaying,
     isAudioReady,
     instrumentalSource,
@@ -3120,6 +3613,9 @@ export function useBehavior(_: Record<string, never>) {
     timelinePlayheadRef,
     timelineContentStyle: { width: `${timelineZoom * 100}%` },
     timelineGridStyle,
+    hideTimelineGrid,
+    hideTimelineClips,
+    hideTimelinePlayhead,
     timelineAutoFollow,
     splitToolActive: timelineTool === "split",
     bpmInputValue,
@@ -3160,8 +3656,9 @@ export function useBehavior(_: Record<string, never>) {
     phrasePositionY: activePhrase?.style?.y ?? 0,
     wordPositionX: selectedWord?.style?.x ?? 0,
     wordPositionY: selectedWord?.style?.y ?? 0,
-    propertiesActive: inspectorTab === "properties",
-    mixerActive: inspectorTab === "mixer",
+    trackTabActive: inspectorTab === "track",
+    phraseTabActive: inspectorTab === "phrase",
+    wordTabActive: inspectorTab === "word",
     savedLabel: t("editor.saved"),
     backLabel: t("editor.back"),
     exportLabel: t("editor.export"),
@@ -3222,9 +3719,6 @@ export function useBehavior(_: Record<string, never>) {
     deleteTrackCancelLabel: t("editor.deleteTrackCancel"),
     deleteTrackCloseLabel: t("editor.deleteTrackClose"),
     aspectLabel: "16:9",
-    inspectorTitle:
-      inspectorTab === "mixer" ? t("editor.mixer") : t("editor.properties"),
-    propertiesLabel: t("editor.properties"),
     backgroundTrackSelected: backgroundTrack !== null,
     backgroundPreset,
     backgroundAsset,
@@ -3338,7 +3832,6 @@ export function useBehavior(_: Record<string, never>) {
       onSeek(Number(event.target.value)),
     onSkipBack,
     onSkipForward,
-    onInstrumentalTimeUpdate,
     onPlaybackEnded,
     onInstrumentalError,
     onInstrumentalCanPlay,
@@ -3441,8 +3934,9 @@ export function useBehavior(_: Record<string, never>) {
     onBpmKeyDown,
     onBeatOffsetInput: (event: ChangeEvent<HTMLInputElement>) =>
       updateTempo("offset", Number(event.target.value) * 1000),
-    onShowProperties: () => setInspectorTab("properties"),
-    onShowMixer: () => setInspectorTab("mixer"),
+    onShowTrackTab: () => setInspectorTab("track"),
+    onShowPhraseTab: () => setInspectorTab("phrase"),
+    onShowWordTab: () => setInspectorTab("word"),
   };
 }
 

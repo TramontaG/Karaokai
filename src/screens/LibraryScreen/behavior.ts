@@ -6,8 +6,10 @@ import {
   useMemo,
   useState,
 } from "react";
+import { type ProjectSort } from "../../config/userPreferences";
 import { useAppContext } from "../../hooks/useAppContext";
 import { useProjectViewMode } from "../../hooks/useProjectViewMode";
+import { useProjectSort } from "../../hooks/useProjectSort";
 import { useRecursiveState } from "../../hooks/useRecursiveState";
 import { useTranslation } from "../../hooks/useTranslation";
 import {
@@ -28,8 +30,14 @@ import {
   type ProjectItem,
 } from "./types";
 
+type ProjectSortOption = {
+  id: ProjectSort;
+  label: string;
+};
+
 interface LibraryState extends Record<string, unknown> {
   activeFilter: ProjectFilter;
+  searchQuery: string;
   openMenuProjectId: string | null;
   renameProjectId: string | null;
 }
@@ -57,13 +65,18 @@ const formatFileSize = (bytes: number) => {
 };
 const isRecent = (updatedAt: string) =>
   Date.now() - Number(updatedAt) < 7 * 24 * 60 * 60 * 1000;
+const projectTimestamp = (value: string) => {
+  const numericValue = Number(value);
+  if (Number.isFinite(numericValue)) return numericValue;
+  const parsedValue = Date.parse(value);
+  return Number.isFinite(parsedValue) ? parsedValue : 0;
+};
 
 function filterProjects(projects: ProjectItem[], filter: ProjectFilter) {
   if (filter === "recent")
     return projects.filter((project) => project.isRecent);
   if (filter === "favorites")
     return projects.filter((project) => project.isFavorite);
-  if (filter === "mine") return projects.filter((project) => project.isMine);
   return projects;
 }
 
@@ -72,9 +85,11 @@ export function useBehavior(_: Record<string, never>) {
   const navigate = useNavigate();
   const [data, setAppData] = useAppContext();
   const { projectViewMode, setProjectViewMode } = useProjectViewMode();
+  const { projectSort, setProjectSort } = useProjectSort();
   const [storedProjects, setStoredProjects] = useState<ProjectSummary[]>([]);
   const [state, setState] = useRecursiveState<LibraryState>({
     activeFilter: "all",
+    searchQuery: "",
     openMenuProjectId: null,
     renameProjectId: null,
   });
@@ -107,18 +122,42 @@ export function useBehavior(_: Record<string, never>) {
         updated: Number(project.updatedAt)
           ? new Date(Number(project.updatedAt)).toLocaleString()
           : t("projects.updated.now"),
+        updatedAt: project.updatedAt,
         cover: covers[index % covers.length],
         thumbnail: project.thumbnail ?? null,
         isFavorite: data.preferences.favoriteProjectIds.includes(project.id),
         isRecent: isRecent(project.updatedAt),
-        isMine: true,
       })),
     [data.preferences.favoriteProjectIds, storedProjects, t]
   );
-  const visibleProjects = filterProjects(projects, state.activeFilter);
+  const visibleProjects = useMemo(() => {
+    const query = state.searchQuery.trim().toLocaleLowerCase();
+    const filteredProjects = filterProjects(projects, state.activeFilter);
+    const searchedProjects = query
+      ? filteredProjects.filter((project) =>
+          [project.title, project.artist].some((value) =>
+            value.toLocaleLowerCase().includes(query)
+          )
+        )
+      : filteredProjects;
+    return [...searchedProjects].sort((left, right) => {
+      if (projectSort === "name-asc")
+        return left.title.localeCompare(right.title);
+      const difference =
+        projectTimestamp(left.updatedAt) - projectTimestamp(right.updatedAt);
+      return projectSort === "updated-asc" ? difference : -difference;
+    });
+  }, [projectSort, projects, state.activeFilter, state.searchQuery]);
   const setFilter = useCallback(
     (activeFilter: ProjectFilter) => setState({ activeFilter }),
     [setState]
+  );
+  const onSortChange = useCallback(
+    (value: string) => {
+      if (["updated-desc", "updated-asc", "name-asc"].includes(value))
+        setProjectSort(value as ProjectSort);
+    },
+    [setProjectSort]
   );
   const onToggleActions = useCallback(
     (projectId: string) =>
@@ -260,6 +299,11 @@ export function useBehavior(_: Record<string, never>) {
       setState,
     ]
   );
+  const sortOptions: ProjectSortOption[] = [
+    { id: "updated-desc", label: t("projects.sort.recent") },
+    { id: "updated-asc", label: t("projects.sort.oldest") },
+    { id: "name-asc", label: t("projects.sort.name") },
+  ];
 
   return {
     title: t("projects.title"),
@@ -269,9 +313,11 @@ export function useBehavior(_: Record<string, never>) {
     all: t("projects.filters.all"),
     recent: t("projects.filters.recent"),
     favorites: t("projects.filters.favorites"),
-    mine: t("projects.filters.mine"),
+    searchLabel: t("projects.search.label"),
+    searchPlaceholder: t("projects.search.placeholder"),
     sortLabel: t("projects.sort.label"),
-    sortRecent: t("projects.sort.recent"),
+    projectSort,
+    sortOptions,
     gridLabel: t("projects.view.grid"),
     listLabel: t("projects.view.list"),
     nameColumn: t("projects.table.name"),
@@ -293,13 +339,14 @@ export function useBehavior(_: Record<string, never>) {
     allActive: state.activeFilter === "all",
     recentActive: state.activeFilter === "recent",
     favoritesActive: state.activeFilter === "favorites",
-    mineActive: state.activeFilter === "mine",
     gridActive: projectViewMode === "grid",
     listActive: projectViewMode === "list",
     onShowAll: () => setFilter("all"),
     onShowRecent: () => setFilter("recent"),
     onShowFavorites: () => setFilter("favorites"),
-    onShowMine: () => setFilter("mine"),
+    searchQuery: state.searchQuery,
+    onSearchChange: (searchQuery: string) => setState({ searchQuery }),
+    onSortChange,
     onShowGrid: () => setProjectViewMode("grid"),
     onShowList: () => setProjectViewMode("list"),
     onNewProject,
@@ -311,6 +358,9 @@ export function useBehavior(_: Record<string, never>) {
     onCancelRename,
     onConfirmRename,
     getProjectId: (project: ProjectItem) => project.id,
+    getProjectSortOptionId: (option: ProjectSortOption) => option.id,
+    renderProjectSortOption: (option: ProjectSortOption) =>
+      createElement("option", { value: option.id }, option.label),
     renderGridProject,
     renderListProject,
   };

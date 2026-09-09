@@ -95,6 +95,16 @@ export interface SubtitlePhrase extends TimedElement {
   words: SubtitleWord[];
 }
 
+export function hasSubtitlePhraseTiming(
+  phrase: Pick<SubtitlePhrase, "start" | "end">
+) {
+  return (
+    Number.isFinite(phrase.start) &&
+    Number.isFinite(phrase.end) &&
+    phrase.end > phrase.start
+  );
+}
+
 export type SubtitleAnimationTemplate = "template-1";
 
 export interface SubtitleAnimation {
@@ -243,6 +253,7 @@ export function createProjectThumbnail(project: KaraokeProject) {
   const firstPhrase = project.tracks
     .filter((track): track is SubtitleTrack => track.type === "subtitle")
     .flatMap((track) => track.phrases)
+    .filter(hasSubtitlePhraseTiming)
     .sort((left, right) => left.start - right.start)[0];
   if (!firstPhrase) return null;
 

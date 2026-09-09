@@ -52,61 +52,75 @@ const identifier = (kind: "phrase" | "word") =>
   `${kind}-${Date.now()}-${crypto.randomUUID()}`;
 const DEFAULT_GAP_DURATION = 150;
 
+function lastPhraseStartingAtOrBefore(
+  phrases: SubtitlePhrase[],
+  currentTime: number
+) {
+  let low = 0;
+  let high = phrases.length - 1;
+  let result = -1;
+
+  while (low <= high) {
+    const middle = low + Math.floor((high - low) / 2);
+    if (phrases[middle].start <= currentTime) {
+      result = middle;
+      low = middle + 1;
+    } else high = middle - 1;
+  }
+
+  return result;
+}
+
 function templateOneSubtitlePreviewAt(
   phrases: SubtitlePhrase[],
   currentTime: number,
   fadeDuration = SUBTITLE_FADE_DURATION
 ) {
   const ordered = phrases;
+  const previousIndex = lastPhraseStartingAtOrBefore(ordered, currentTime);
+  const previousPhrase = ordered[previousIndex] ?? null;
   const currentPhrase =
-    [...ordered]
-      .reverse()
-      .find(
-        (phrase) => currentTime >= phrase.start && currentTime <= phrase.end
-      ) ?? null;
+    previousPhrase && currentTime <= previousPhrase.end ? previousPhrase : null;
+  const nextPhrase = ordered[previousIndex + 1] ?? null;
 
-  for (let index = 0; index < ordered.length - 1; index += 1) {
-    const previousPhrase = ordered[index];
-    const nextPhrase = ordered[index + 1];
+  if (previousPhrase && nextPhrase) {
     const gap = nextPhrase.start - previousPhrase.end;
-    if (gap >= NEXT_PHRASE_MAX_GAP) continue;
-    const transitionStartsAt =
-      gap >= FAST_PHRASE_FADE_DURATION
-        ? previousPhrase.end
-        : nextPhrase.start - FAST_PHRASE_FADE_DURATION;
-    const transitionEndsAt =
-      gap >= FAST_PHRASE_FADE_DURATION
-        ? previousPhrase.end + FAST_PHRASE_FADE_DURATION
-        : nextPhrase.start;
-    if (currentTime < transitionStartsAt || currentTime >= nextPhrase.start)
-      continue;
-    const transitionProgress = clamp(
-      (currentTime - transitionStartsAt) /
-        Math.max(1, transitionEndsAt - transitionStartsAt),
-      0,
-      1
-    );
-    return {
-      currentPhrase,
-      primaryPhrase: previousPhrase,
-      primaryOpacity: 1 - transitionProgress,
-      primaryFullyRead: currentTime >= previousPhrase.end,
-      secondaryPhrase: nextPhrase,
-      secondaryOpacity: 1,
-      secondaryOffset: 1 - transitionProgress,
-      secondaryScale:
-        SECONDARY_PHRASE_SCALE +
-        (1 - SECONDARY_PHRASE_SCALE) * transitionProgress,
-      suppressEntryCue: true,
-    };
+    if (gap < NEXT_PHRASE_MAX_GAP) {
+      const transitionStartsAt =
+        gap >= FAST_PHRASE_FADE_DURATION
+          ? previousPhrase.end
+          : nextPhrase.start - FAST_PHRASE_FADE_DURATION;
+      const transitionEndsAt =
+        gap >= FAST_PHRASE_FADE_DURATION
+          ? previousPhrase.end + FAST_PHRASE_FADE_DURATION
+          : nextPhrase.start;
+      if (currentTime >= transitionStartsAt && currentTime < nextPhrase.start) {
+        const transitionProgress = clamp(
+          (currentTime - transitionStartsAt) /
+            Math.max(1, transitionEndsAt - transitionStartsAt),
+          0,
+          1
+        );
+        return {
+          currentPhrase,
+          primaryPhrase: previousPhrase,
+          primaryOpacity: 1 - transitionProgress,
+          primaryFullyRead: currentTime >= previousPhrase.end,
+          secondaryPhrase: nextPhrase,
+          secondaryOpacity: 1,
+          secondaryOffset: 1 - transitionProgress,
+          secondaryScale:
+            SECONDARY_PHRASE_SCALE +
+            (1 - SECONDARY_PHRASE_SCALE) * transitionProgress,
+          suppressEntryCue: true,
+        };
+      }
+    }
   }
 
   if (currentPhrase) {
-    const currentIndex = ordered.findIndex(
-      (phrase) => phrase.id === currentPhrase.id
-    );
-    const previousCandidate = ordered[currentIndex - 1] ?? null;
-    const nextCandidate = ordered[currentIndex + 1] ?? null;
+    const previousCandidate = ordered[previousIndex - 1] ?? null;
+    const nextCandidate = nextPhrase;
     const followsContinuousPhrase =
       previousCandidate !== null &&
       currentPhrase.start - previousCandidate.end < NEXT_PHRASE_MAX_GAP;
@@ -146,16 +160,14 @@ function templateOneSubtitlePreviewAt(
     };
   }
 
-  const previousPhrase =
-    [...ordered].reverse().find((phrase) => phrase.end <= currentTime) ?? null;
-  const nextPhrase =
-    ordered.find((phrase) => phrase.start > currentTime) ?? null;
+  const nextPhraseAfterGap = nextPhrase;
+  const previousPhraseBeforeGap = previousPhrase;
   const fadeWindow = Math.max(1, fadeDuration);
-  const previousAge = previousPhrase
-    ? currentTime - previousPhrase.end
+  const previousAge = previousPhraseBeforeGap
+    ? currentTime - previousPhraseBeforeGap.end
     : Number.POSITIVE_INFINITY;
-  const nextLead = nextPhrase
-    ? nextPhrase.start - currentTime
+  const nextLead = nextPhraseAfterGap
+    ? nextPhraseAfterGap.start - currentTime
     : Number.POSITIVE_INFINITY;
   const showPrevious = previousAge <= fadeWindow;
   const showNext = nextLead <= fadeWindow;
@@ -163,10 +175,10 @@ function templateOneSubtitlePreviewAt(
   if (showPrevious) {
     return {
       currentPhrase: null,
-      primaryPhrase: previousPhrase,
+      primaryPhrase: previousPhraseBeforeGap,
       primaryOpacity: clamp(1 - previousAge / fadeWindow, 0, 1),
       primaryFullyRead: true,
-      secondaryPhrase: showNext ? nextPhrase : null,
+      secondaryPhrase: showNext ? nextPhraseAfterGap : null,
       secondaryOpacity: showNext ? clamp(1 - nextLead / fadeWindow, 0, 1) : 0,
       secondaryOffset: 1,
       secondaryScale: SECONDARY_PHRASE_SCALE,
@@ -176,7 +188,7 @@ function templateOneSubtitlePreviewAt(
 
   return {
     currentPhrase: null,
-    primaryPhrase: showNext ? nextPhrase : null,
+    primaryPhrase: showNext ? nextPhraseAfterGap : null,
     primaryOpacity: showNext ? clamp(1 - nextLead / fadeWindow, 0, 1) : 0,
     primaryFullyRead: false,
     secondaryPhrase: null,
