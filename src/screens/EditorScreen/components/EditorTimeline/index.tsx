@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { MousePointer2, Plus, Scissors } from "lucide-react";
+import { MousePointer2, Plus, Scissors, Trash2 } from "lucide-react";
 import { ForEach } from "../../../../components/ForEach";
 import { useEditorBehavior, useEditorState } from "../EditorState";
 import { TrackLabel } from "../TrackLabel";
@@ -10,6 +10,8 @@ import {
   TimelineContent,
   TimelineFollowToggle,
   TimelineLabels,
+  TimelineMarker,
+  TimelineMarkerDeleteButton,
   TimelinePanel,
   TimelinePlayhead,
   TimelineTempoField,
@@ -137,6 +139,30 @@ function EditorTimelineView() {
             {behavior.hideTimelinePlayhead ? null : (
               <TimelinePlayhead ref={behavior.timelinePlayheadRef} />
             )}
+            <ForEach
+              data={behavior.timelineMarkers}
+              idCompute={(marker) => marker.id}
+              render={(marker) => (
+                <TimelineMarker
+                  style={{
+                    left: `${(marker.time / behavior.duration) * 100}%`,
+                  }}
+                >
+                  <TimelineMarkerDeleteButton
+                    type="button"
+                    aria-label={behavior.timelineMarkerDeleteLabel}
+                    title={behavior.timelineMarkerDeleteLabel}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      behavior.onRemoveTimelineMarker(marker.id);
+                    }}
+                  >
+                    <Trash2 size={11} />
+                  </TimelineMarkerDeleteButton>
+                </TimelineMarker>
+              )}
+            />
           </TimelineContent>
         </TimelineViewport>
       </Timeline>

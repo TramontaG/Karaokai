@@ -698,6 +698,37 @@ export const TimelinePlayhead = styled.div`
     content: "";
   }
 `;
+export const TimelineMarker = styled.div`
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  pointer-events: none;
+  background: #ffbc5a;
+  box-shadow: 0 0 0.3rem rgb(255 188 90 / 75%);
+`;
+export const TimelineMarkerDeleteButton = styled.button`
+  position: absolute;
+  bottom: 0.28rem;
+  left: 50%;
+  display: grid;
+  width: 1.2rem;
+  height: 1.2rem;
+  padding: 0;
+  border: 1px solid rgb(255 188 90 / 80%);
+  border-radius: 0.25rem;
+  place-items: center;
+  transform: translateX(-50%);
+  color: #24170a;
+  background: #ffbc5a;
+  cursor: pointer;
+  pointer-events: auto;
+
+  &:hover {
+    background: #ffd28a;
+  }
+`;
 export const TimelineClip = styled.button<{
   $selected: boolean;
   $tone: "subtitle" | "audio" | "background";

@@ -141,6 +141,7 @@ type TimelineRow = {
   track: ProjectTrack | null;
 };
 type TimelineVisibleRange = { start: number; end: number };
+type TimelineMarker = { id: string; time: number };
 
 const HISTORY_LIMIT = 100;
 const DEFAULT_BPM = 120;
@@ -585,6 +586,7 @@ export function useBehavior(_: Record<string, never>) {
   const [timelineDropTargetTrackId, setTimelineDropTargetTrackId] = useState<
     string | null
   >(null);
+  const [timelineMarkers, setTimelineMarkers] = useState<TimelineMarker[]>([]);
   const [timelineVisibleRange, setTimelineVisibleRange] =
     useState<TimelineVisibleRange>({ start: 0, end: 0 });
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -2872,6 +2874,18 @@ export function useBehavior(_: Record<string, never>) {
     applyProject(restored, true);
     return true;
   }, [applyProject, setPhraseSelectionAnchorId, setSelectedPhraseIds]);
+  const addTimelineMarker = useCallback(() => {
+    const time = clamp(currentTimeRef.current, 0, timelineDuration);
+    setTimelineMarkers((markers) => [
+      ...markers,
+      { id: crypto.randomUUID(), time },
+    ]);
+  }, [timelineDuration]);
+  const removeTimelineMarker = useCallback((id: string) => {
+    setTimelineMarkers((markers) =>
+      markers.filter((marker) => marker.id !== id)
+    );
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -2907,6 +2921,17 @@ export function useBehavior(_: Record<string, never>) {
         return;
       }
       if (
+        event.key.toLowerCase() === "m" &&
+        !commandKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        !event.repeat
+      ) {
+        event.preventDefault();
+        addTimelineMarker();
+        return;
+      }
+      if (
         event.key.toLowerCase() === "s" &&
         !commandKey &&
         !event.altKey &&
@@ -2939,6 +2964,7 @@ export function useBehavior(_: Record<string, never>) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
+    addTimelineMarker,
     onCopyPhrase,
     onDeletePhrase,
     onPastePhrase,
@@ -3553,10 +3579,12 @@ export function useBehavior(_: Record<string, never>) {
       data.preferences.storageDirectory,
       project,
       selectedPhraseId,
+      selectedPhraseIds,
       selectedTrackId,
       selectedWordId,
       t,
       timelineAutoFollow,
+      timelineMarkers,
       timelineTool,
       timelineVisibleRange,
       timelineZoom,
@@ -3613,6 +3641,8 @@ export function useBehavior(_: Record<string, never>) {
     timelinePlayheadRef,
     timelineContentStyle: { width: `${timelineZoom * 100}%` },
     timelineGridStyle,
+    timelineMarkers,
+    timelineMarkerDeleteLabel: t("editor.timelineMarkerDelete"),
     hideTimelineGrid,
     hideTimelineClips,
     hideTimelinePlayhead,
@@ -3923,6 +3953,7 @@ export function useBehavior(_: Record<string, never>) {
     onAddSubtitleTrack,
     onTimelineClick,
     onTimelineScroll,
+    onRemoveTimelineMarker: removeTimelineMarker,
     onTimelineAutoFollowChange: (event: ChangeEvent<HTMLInputElement>) =>
       setTimelineAutoFollow(event.target.checked),
     onSelectPointerTool: () => setTimelineTool("pointer"),

@@ -223,6 +223,7 @@
   "editor.pointerTool": "Pointer",
   "editor.splitTool": "Split",
   "editor.timelineAutoFollow": "Follow playback",
+  "editor.timelineMarkerDelete": "Remove timeline marker",
   "editor.bpm": "BPM",
   "editor.beatOffset": "Offset (s)",
   "editor.zoomReset": "Reset timeline zoom",
