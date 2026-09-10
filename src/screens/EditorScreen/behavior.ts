@@ -689,10 +689,8 @@ export function useBehavior(_: Record<string, never>) {
       setSelectedPhraseIds([]);
       setPhraseSelectionAnchorId(null);
       setSelectedWordId(null);
-      setInspectorTab("track");
     },
     [
-      setInspectorTab,
       setSelectedPhraseId,
       setSelectedPhraseIds,
       setPhraseSelectionAnchorId,
@@ -2062,7 +2060,6 @@ export function useBehavior(_: Record<string, never>) {
     setSelectedTrackId(track.id);
     setSelectedPhraseId(null);
     setSelectedWordId(null);
-    setInspectorTab("track");
     persistProject(
       {
         ...currentProject,
@@ -2427,10 +2424,8 @@ export function useBehavior(_: Record<string, never>) {
       else if (!anchorId && nextIds.length)
         setPhraseSelectionAnchorId(phrase.id);
       setSelectedWordId(null);
-      setInspectorTab("phrase");
     },
     [
-      setInspectorTab,
       setSelectedPhraseId,
       setSelectedPhraseIds,
       setPhraseSelectionAnchorId,
@@ -2442,21 +2437,48 @@ export function useBehavior(_: Record<string, never>) {
     ]
   );
   const onSelectWord = useCallback(
-    (trackId: string, phrase: SubtitlePhrase, word: SubtitleWord) => {
+    (
+      trackId: string,
+      phrase: SubtitlePhrase,
+      word: SubtitleWord,
+      clientX?: number
+    ) => {
       setSelectedTrackId(trackId);
       setSelectedPhraseId(phrase.id);
+      setSelectedPhraseIds([phrase.id]);
+      setPhraseSelectionAnchorId(phrase.id);
       setSelectedWordId(word.id);
-      setInspectorTab("word");
-      onSeek(word.start);
+      if (clientX === undefined) return;
+      const bounds = timelineContentRef.current?.getBoundingClientRect();
+      if (!bounds) return;
+      onSeek(
+        timeAtTimelinePosition(
+          clientX,
+          bounds.left,
+          bounds.width,
+          timelineDuration
+        )
+      );
     },
     [
       onSeek,
-      setInspectorTab,
+      setPhraseSelectionAnchorId,
       setSelectedPhraseId,
+      setSelectedPhraseIds,
       setSelectedTrackId,
       setSelectedWordId,
+      timelineDuration,
     ]
   );
+  const clearPhraseSelection = useCallback(() => {
+    setSelectedPhraseId(null);
+    setSelectedPhraseIds([]);
+    setPhraseSelectionAnchorId(null);
+    setSelectedWordId(null);
+  }, [
+    setPhraseSelectionAnchorId,
+    setSelectedPhraseIds,
+  ]);
 
   const startGesture = useCallback(
     (
@@ -2465,7 +2487,8 @@ export function useBehavior(_: Record<string, never>) {
       phrase: SubtitlePhrase,
       gesture: PhraseGesture,
       word?: SubtitleWord,
-      wordEdge?: "start" | "end" | "move"
+      wordEdge?: "start" | "end" | "move",
+      initialClientX?: number
     ) => {
       event.preventDefault();
       event.stopPropagation();
@@ -2473,7 +2496,7 @@ export function useBehavior(_: Record<string, never>) {
       if (!sourceProject) return;
       const contentWidth =
         timelineContentRef.current?.getBoundingClientRect().width ?? 1;
-      const initialX = event.clientX;
+      const initialX = initialClientX ?? event.clientX;
       setSelectedTrackId(track.id);
       setSelectedPhraseId(phrase.id);
       const selectedPhrases =
@@ -2603,8 +2626,18 @@ export function useBehavior(_: Record<string, never>) {
       event: PointerEvent<HTMLElement>,
       track: SubtitleTrack,
       phrase: SubtitlePhrase,
-      gesture: PhraseGesture
-    ) => startGesture(event, track, phrase, gesture),
+      gesture: PhraseGesture,
+      initialClientX?: number
+    ) =>
+      startGesture(
+        event,
+        track,
+        phrase,
+        gesture,
+        undefined,
+        undefined,
+        initialClientX
+      ),
     [startGesture]
   );
 
@@ -2614,8 +2647,9 @@ export function useBehavior(_: Record<string, never>) {
       track: SubtitleTrack,
       phrase: SubtitlePhrase,
       word: SubtitleWord,
-      edge: "start" | "end" | "move"
-    ) => startGesture(event, track, phrase, "move", word, edge),
+      edge: "start" | "end" | "move",
+      initialClientX?: number
+    ) => startGesture(event, track, phrase, "move", word, edge, initialClientX),
     [startGesture]
   );
 
@@ -2721,22 +2755,25 @@ export function useBehavior(_: Record<string, never>) {
 
   const onDeletePhrase = useCallback(() => {
     const currentProject = projectRef.current;
-    if (!currentProject || !subtitleTrack || !activePhrase) return;
+    if (!currentProject || !subtitleTrack) return;
     const currentTrack = currentProject.tracks.find(
       (track): track is SubtitleTrack =>
         track.type === "subtitle" && track.id === subtitleTrack.id
     );
     if (!currentTrack) return;
 
-    const deletedIndex = currentTrack.phrases.findIndex(
-      (phrase) => phrase.id === activePhrase.id
+    const phraseIds = new Set(
+      selectedPhraseIds.length > 0
+        ? selectedPhraseIds
+        : activePhrase
+          ? [activePhrase.id]
+          : []
     );
-    if (deletedIndex < 0) return;
+    if (!phraseIds.size) return;
     const phrases = currentTrack.phrases.filter(
-      (phrase) => phrase.id !== activePhrase.id
+      (phrase) => !phraseIds.has(phrase.id)
     );
-    const nextSelection =
-      phrases[Math.min(deletedIndex, phrases.length - 1)] ?? null;
+    if (phrases.length === currentTrack.phrases.length) return;
     const next: KaraokeProject = {
       ...currentProject,
       updatedAt: String(Date.now()),
@@ -2746,10 +2783,19 @@ export function useBehavior(_: Record<string, never>) {
           : track
       ),
     };
-    setSelectedPhraseId(nextSelection?.id ?? null);
+    setSelectedPhraseId(null);
+    setSelectedPhraseIds([]);
+    setPhraseSelectionAnchorId(null);
     setSelectedWordId(null);
     persistProject(next, true);
-  }, [activePhrase, persistProject, subtitleTrack]);
+  }, [
+    activePhrase,
+    persistProject,
+    selectedPhraseIds,
+    setPhraseSelectionAnchorId,
+    setSelectedPhraseIds,
+    subtitleTrack,
+  ]);
 
   const deleteSubtitleTrack = useCallback(
     (trackId: string) => {
@@ -2903,6 +2949,17 @@ export function useBehavior(_: Record<string, never>) {
             input.type
           ));
       if (isTextEditingTarget) return;
+      if (event.key === "Escape") {
+        if (
+          selectedPhraseId !== null ||
+          selectedPhraseIds.length > 0 ||
+          selectedWordId !== null
+        ) {
+          event.preventDefault();
+          clearPhraseSelection();
+        }
+        return;
+      }
       const commandKey = event.ctrlKey || event.metaKey;
       if (commandKey && !event.altKey && !event.shiftKey && !event.repeat) {
         const key = event.key.toLowerCase();
@@ -2955,7 +3012,7 @@ export function useBehavior(_: Record<string, never>) {
       }
       if (
         (event.key === "Delete" || event.key === "Backspace") &&
-        selectedPhraseId !== null
+        (selectedPhraseId !== null || selectedPhraseIds.length > 0)
       ) {
         event.preventDefault();
         onDeletePhrase();
@@ -2965,6 +3022,7 @@ export function useBehavior(_: Record<string, never>) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
     addTimelineMarker,
+    clearPhraseSelection,
     onCopyPhrase,
     onDeletePhrase,
     onPastePhrase,
@@ -2972,6 +3030,8 @@ export function useBehavior(_: Record<string, never>) {
     onTogglePlayback,
     onUndo,
     selectedPhraseId,
+    selectedPhraseIds.length,
+    selectedWordId,
     trackPendingDeletionId,
   ]);
 
@@ -3030,6 +3090,8 @@ export function useBehavior(_: Record<string, never>) {
   const onTimelineClick = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
+      const target = event.target as HTMLElement;
+      if (!target.closest("[data-timeline-phrase]")) clearPhraseSelection();
       const bounds = timelineContentRef.current?.getBoundingClientRect();
       if (!bounds) return;
       onSeek(
@@ -3041,7 +3103,7 @@ export function useBehavior(_: Record<string, never>) {
         )
       );
     },
-    [onSeek, timelineDuration]
+    [clearPhraseSelection, onSeek, timelineDuration]
   );
   const onTimelineScroll = useCallback(() => {
     const viewport = timelineRef.current;
@@ -3425,7 +3487,6 @@ export function useBehavior(_: Record<string, never>) {
             setSelectedTrackId(row.id);
             setSelectedPhraseId(null);
             setSelectedWordId(null);
-            setInspectorTab("track");
           },
         },
         createElement(row.Icon, { size: 15 }),
@@ -3489,17 +3550,41 @@ export function useBehavior(_: Record<string, never>) {
               })),
               onSelect: (selectedPhrase, event) =>
                 onSelectPhrase(track.id, selectedPhrase, event),
-              onSelectWord: (selectedPhrase, word) =>
-                onSelectWord(track.id, selectedPhrase, word),
+              onSelectWord: (selectedPhrase, word, clientX) =>
+                onSelectWord(track.id, selectedPhrase, word, clientX),
               onHoverPhrase: (hoveredPhrase, clientX) =>
                 onHoverPhrase(track, hoveredPhrase, clientX),
               onLeavePhrase,
               onSplitPhrase: (selectedPhrase, clientX) =>
                 onSplitPhrase(track, selectedPhrase, clientX),
-              onStartPhraseGesture: (event, selectedPhrase, gesture) =>
-                onStartPhraseGesture(event, track, selectedPhrase, gesture),
-              onStartWordGesture: (event, selectedPhrase, word, edge) =>
-                onStartWordGesture(event, track, selectedPhrase, word, edge),
+              onStartPhraseGesture: (
+                event,
+                selectedPhrase,
+                gesture,
+                initialClientX
+              ) =>
+                onStartPhraseGesture(
+                  event,
+                  track,
+                  selectedPhrase,
+                  gesture,
+                  initialClientX
+                ),
+              onStartWordGesture: (
+                event,
+                selectedPhrase,
+                word,
+                edge,
+                initialClientX
+              ) =>
+                onStartWordGesture(
+                  event,
+                  track,
+                  selectedPhrase,
+                  word,
+                  edge,
+                  initialClientX
+                ),
             });
           })
         );
@@ -3515,11 +3600,6 @@ export function useBehavior(_: Record<string, never>) {
             $selected: row.id === selectedTrackId,
             $tone: row.type === "audio" ? "audio" : "background",
             style: { left: 0, width: "100%" },
-            onClick: () => {
-              setSelectedTrackId(row.id);
-              setSelectedPhraseId(null);
-              setSelectedWordId(null);
-            },
           },
           row.label
         )

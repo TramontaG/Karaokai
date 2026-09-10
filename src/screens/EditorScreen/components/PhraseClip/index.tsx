@@ -15,6 +15,7 @@ function PhraseClipView(props: PhraseClipProps) {
       $selected={behavior.selected}
       $splitting={behavior.splitting}
       data-splitting={behavior.splitting}
+      data-timeline-phrase="true"
       style={{ left: behavior.left, width: behavior.width }}
       onClick={behavior.onSelect}
       onDoubleClick={behavior.onDoubleClick}
