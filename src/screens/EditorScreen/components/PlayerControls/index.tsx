@@ -1,18 +1,26 @@
-import { memo } from "react";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { memo } from "react";
 import { Render } from "../../../../components/Render";
-import { MixerPanel } from "../MixerPanel";
+import type {
+  MixerPanelModel,
+  PlayerControlsModel,
+} from "../../../../hooks/editor/componentModels";
 import {
-  PlayerBar,
   PlayerControls as Controls,
+  PlayerBar,
   PlayerSeek,
   PlayerTools,
   Time,
 } from "../../styles";
-import { useBehavior } from "./behavior";
+import { MixerPanel } from "../MixerPanel";
 
-function PlayerControlsView() {
-  const behavior = useBehavior({});
+function PlayerControlsView({
+  model: behavior,
+  mixer,
+}: {
+  model: PlayerControlsModel;
+  mixer: MixerPanelModel;
+}) {
   return (
     <PlayerBar>
       <PlayerSeek>
@@ -46,7 +54,7 @@ function PlayerControlsView() {
         </button>
       </Controls>
       <PlayerTools>
-        <MixerPanel />
+        <MixerPanel model={mixer} />
       </PlayerTools>
     </PlayerBar>
   );

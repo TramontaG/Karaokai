@@ -1,8 +1,7 @@
-import { memo } from "react";
 import { MousePointer2, Plus, Scissors, Trash2 } from "lucide-react";
+import { memo } from "react";
 import { ForEach } from "../../../../components/ForEach";
-import { useEditorBehavior, useEditorState } from "../EditorState";
-import { TrackLabel } from "../TrackLabel";
+import type { EditorTimelineModel } from "../../../../hooks/editor/componentModels";
 import {
   Time,
   Timeline,
@@ -23,10 +22,13 @@ import {
   TimelineTrackHeader,
   TimelineViewport,
 } from "../../styles";
+import { TrackLabel } from "../TrackLabel";
 
-function EditorTimelineView() {
-  useEditorState((behavior) => behavior.timelineRenderKey);
-  const behavior = useEditorBehavior();
+function EditorTimelineView({
+  model: behavior,
+}: {
+  model: EditorTimelineModel;
+}) {
   return (
     <TimelinePanel>
       <TimelineToolbar>
@@ -112,6 +114,8 @@ function EditorTimelineView() {
                 label={row.label}
                 Icon={row.Icon}
                 selected={row.id === behavior.selectedTrackId}
+                onSelectTrack={behavior.onSelectTrack}
+                onRenameTrack={behavior.onRenameTrack}
               />
             )}
           />

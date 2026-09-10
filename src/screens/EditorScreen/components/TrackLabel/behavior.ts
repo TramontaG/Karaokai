@@ -7,11 +7,10 @@ import {
   type KeyboardEvent,
   type MouseEvent,
 } from "react";
-import { useEditorBehavior } from "../EditorState";
 import type { TrackLabelProps } from ".";
 
 export function useBehavior(props: TrackLabelProps) {
-  const editor = useEditorBehavior();
+  const editor = props;
   const inputRef = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(props.label);

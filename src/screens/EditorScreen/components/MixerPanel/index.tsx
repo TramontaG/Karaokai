@@ -1,11 +1,9 @@
-import { memo } from "react";
 import { Mic2, Volume2 } from "lucide-react";
+import { memo } from "react";
+import type { MixerPanelModel } from "../../../../hooks/editor/componentModels";
 import { InlineMixer, InlineMixerChannel } from "../../styles";
-import { useBehavior } from "./behavior";
 
-function MixerPanelView() {
-  const behavior = useBehavior({});
-
+function MixerPanelView({ model: behavior }: { model: MixerPanelModel }) {
   return (
     <InlineMixer aria-label={behavior.mixerLabel}>
       <InlineMixerChannel>

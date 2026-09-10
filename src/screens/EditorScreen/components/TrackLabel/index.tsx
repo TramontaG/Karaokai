@@ -8,6 +8,8 @@ export interface TrackLabelProps {
   label: string;
   Icon: LucideIcon;
   selected: boolean;
+  onSelectTrack: (id: string) => void;
+  onRenameTrack: (id: string, name: string) => void;
 }
 
 export function TrackLabel(props: TrackLabelProps) {

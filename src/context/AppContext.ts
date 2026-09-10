@@ -1,12 +1,13 @@
+import { createContext } from ".";
 import {
   defaultPreferences,
   getSystemTheme,
   loadUserPreferences,
   type UserPreferences,
 } from "../config/userPreferences";
-import { type ThemeName } from "../theme";
-import { createContext } from ".";
 import { type ModelStatus } from "../services/models";
+import { type ThemeName } from "../theme";
+import { initialEditorData, type EditorData } from "./EditorData";
 
 export interface BootstrapData {
   status: "waiting" | "running" | "ready" | "failed";
@@ -76,8 +77,18 @@ const initialData: AppData = {
   },
 };
 
-export const appContext = createContext(initialData, () => ({
-  preferencesLoaded: true,
-  systemTheme: getSystemTheme(),
-  preferences: loadUserPreferences(),
-}));
+interface ApplicationData extends Record<string, unknown> {
+  app: AppData;
+  editor: EditorData;
+}
+
+export const appContext = createContext<ApplicationData>(
+  { app: initialData, editor: initialEditorData },
+  () => ({
+    app: {
+      preferencesLoaded: true,
+      systemTheme: getSystemTheme(),
+      preferences: loadUserPreferences(),
+    },
+  })
+);

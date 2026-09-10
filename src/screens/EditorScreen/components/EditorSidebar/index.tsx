@@ -1,23 +1,17 @@
-import { memo, useState } from "react";
-import { FileUp, Plus, Trash2, Undo2, X } from "lucide-react";
+import { FileUp, Plus, Trash2, X } from "lucide-react";
+import { memo } from "react";
 import { DraggableNumberInput } from "../../../../components/DraggableNumberInput";
 import { ForEach } from "../../../../components/ForEach";
 import { Render } from "../../../../components/Render";
-import { useEditorBehavior, useEditorState } from "../EditorState";
+import type { EditorSidebarModel } from "../../../../hooks/editor/componentModels";
 import {
   AnimationDescription,
+  BackgroundAssetButton,
   BackgroundAssetName,
-  ColorFieldControl,
-  ColorField,
-  ColorInputValue,
   Field,
   FieldGrid,
-  FontStyleControls,
-  FullWidthField,
   InheritanceHint,
   Inspector,
-  InspectorEmpty,
-  BackgroundAssetButton,
   PhraseActions,
   PropertyAccordionContent,
   Tabs,
@@ -25,313 +19,12 @@ import {
   WordList,
   WordTimingRow,
 } from "../../styles";
-import { CubicBezierEditor } from "../CubicBezierEditor";
+import { ColorInput } from "../ColorInput";
 import { PhraseTextInput } from "../PhraseTextInput";
+import { SubtitleStyleFields } from "../SubtitleStyleFields";
 import { WordTextInput } from "../WordTextInput";
 
-type Scope = "Track" | "Phrase" | "Word";
-
-function normalizeHexColor(value: string) {
-  const compact = value.trim();
-  const shorthand = /^#([\da-f]{3})$/i.exec(compact);
-
-  if (shorthand) {
-    return `#${shorthand[1]
-      .split("")
-      .map((character) => character.repeat(2))
-      .join("")}`.toUpperCase();
-  }
-
-  return /^#[\da-f]{6}$/i.test(compact) ? compact.toUpperCase() : null;
-}
-
-function ColorInput({
-  color,
-  label,
-  onChange,
-  onPreviewChange,
-  onPreviewEnd,
-}: {
-  color: string;
-  label: string;
-  onChange: (color: string) => void;
-  onPreviewChange?: (color: string) => void;
-  onPreviewEnd?: () => void;
-}) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const value = draft ?? color;
-
-  const commit = () => {
-    const normalizedColor = normalizeHexColor(value);
-
-    if (normalizedColor && normalizedColor !== color) {
-      onChange(normalizedColor);
-    }
-
-    onPreviewEnd?.();
-    setDraft(null);
-  };
-
-  const updateDraft = (nextValue: string) => {
-    setDraft(nextValue);
-    const normalizedColor = normalizeHexColor(nextValue);
-    if (normalizedColor) onPreviewChange?.(normalizedColor);
-  };
-
-  return (
-    <ColorInputValue>
-      <input
-        type="color"
-        value={normalizeHexColor(value) ?? color}
-        aria-label={label}
-        onChange={(event) => updateDraft(event.target.value.toUpperCase())}
-        onBlur={commit}
-      />
-      <input
-        type="text"
-        value={value}
-        aria-label={`${label} hexadecimal`}
-        spellCheck="false"
-        onChange={(event) => updateDraft(event.target.value)}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.currentTarget.blur();
-          }
-
-          if (event.key === "Escape") {
-            setDraft(null);
-            onPreviewEnd?.();
-            event.currentTarget.blur();
-          }
-        }}
-      />
-    </ColorInputValue>
-  );
-}
-
-function StyleFields({ scope }: { scope: Scope }) {
-  const behavior = useEditorBehavior();
-  const lower = scope.toLowerCase() as "track" | "phrase" | "word";
-  const style = behavior[`${lower}Style`];
-  const onStyleChange = behavior[`on${scope}StyleChange`];
-  const onColorPreview = behavior[`on${scope}ColorPreview`];
-  const onColorPreviewEnd = behavior.onColorPreviewEnd;
-  const onColorInherit =
-    scope === "Track" ? null : behavior[`on${scope}ColorInherit`];
-  const onStyleInherit =
-    scope === "Track" ? null : behavior[`on${scope}StyleInherit`];
-  const positionX = behavior[`${lower}PositionX`] ?? behavior.trackPositionX;
-  const positionY = behavior[`${lower}PositionY`] ?? behavior.trackPositionY;
-  const scale = behavior[`${lower}ScaleInputValue`];
-  const inheritedScale =
-    scope === "Track"
-      ? undefined
-      : behavior[`inherited${scope}ScalePlaceholder`];
-  const onScaleInput = behavior[`on${scope}ScaleInput`];
-  const onScaleBlur = behavior[`on${scope}ScaleBlur`];
-  const curve = behavior[`${lower}Curve`];
-  const curveOptions = behavior[`${lower}CurveOptions`];
-  const onCurveChange = behavior[`on${scope}CurveChange`];
-  const showBezier = behavior[`show${scope}BezierEditor`];
-  const onBezierChange = behavior[`on${scope}BezierChange`];
-
-  return (
-    <>
-      <FieldGrid>
-        <Field>
-          <span>{behavior.positionXLabel}</span>
-          <DraggableNumberInput
-            value={positionX}
-            onValueChange={(value) => onStyleChange("x", Number(value))}
-          />
-        </Field>
-        <Field>
-          <span>{behavior.positionYLabel}</span>
-          <DraggableNumberInput
-            value={positionY}
-            onValueChange={(value) => onStyleChange("y", Number(value))}
-          />
-        </Field>
-        <Field>
-          <span>{behavior.scaleLabel}</span>
-          <DraggableNumberInput
-            min="25"
-            max="400"
-            step="1"
-            value={scale}
-            placeholder={inheritedScale}
-            onValueChange={onScaleInput}
-            onBlur={onScaleBlur}
-          />
-        </Field>
-        <Field>
-          <span>{behavior.readAnimationLabel}</span>
-          <select value={curve} onChange={onCurveChange}>
-            <ForEach
-              data={curveOptions}
-              idCompute={behavior.getCurveOptionId}
-              render={behavior.renderCurveOption}
-            />
-          </select>
-        </Field>
-        <FullWidthField>
-          <span>{behavior.fontFamilyLabel}</span>
-          <select
-            value={style.fontFamily}
-            onChange={(event) =>
-              onStyleChange("fontFamily", event.target.value)
-            }
-          >
-            <ForEach
-              data={behavior.fontOptions}
-              idCompute={behavior.getFontOptionId}
-              render={(font) => <option value={font.id}>{font.name}</option>}
-            />
-          </select>
-        </FullWidthField>
-        <FullWidthField>
-          <span>{behavior.fontStyleLabel}</span>
-          <FontStyleControls $withInheritance={onStyleInherit !== null}>
-            <button
-              type="button"
-              data-active={style.fontWeight === "bold"}
-              aria-label={behavior.boldLabel}
-              aria-pressed={style.fontWeight === "bold"}
-              onClick={() =>
-                onStyleChange(
-                  "fontWeight",
-                  style.fontWeight === "bold" ? "normal" : "bold"
-                )
-              }
-            >
-              <strong>B</strong>
-            </button>
-            <button
-              type="button"
-              data-active={style.fontStyle === "italic"}
-              aria-label={behavior.italicLabel}
-              aria-pressed={style.fontStyle === "italic"}
-              onClick={() =>
-                onStyleChange(
-                  "fontStyle",
-                  style.fontStyle === "italic" ? "normal" : "italic"
-                )
-              }
-            >
-              <em>I</em>
-            </button>
-            <button
-              type="button"
-              data-active={style.textDecoration === "underline"}
-              aria-label={behavior.underlineLabel}
-              aria-pressed={style.textDecoration === "underline"}
-              onClick={() =>
-                onStyleChange(
-                  "textDecoration",
-                  style.textDecoration === "underline" ? "none" : "underline"
-                )
-              }
-            >
-              <u>U</u>
-            </button>
-            <button
-              type="button"
-              data-active={style.verticalAlign === "super"}
-              aria-label={behavior.superscriptLabel}
-              aria-pressed={style.verticalAlign === "super"}
-              onClick={() =>
-                onStyleChange(
-                  "verticalAlign",
-                  style.verticalAlign === "super" ? "baseline" : "super"
-                )
-              }
-            >
-              x<sup>2</sup>
-            </button>
-            <button
-              type="button"
-              data-active={style.verticalAlign === "sub"}
-              aria-label={behavior.subscriptLabel}
-              aria-pressed={style.verticalAlign === "sub"}
-              onClick={() =>
-                onStyleChange(
-                  "verticalAlign",
-                  style.verticalAlign === "sub" ? "baseline" : "sub"
-                )
-              }
-            >
-              x<sub>2</sub>
-            </button>
-            <Render when={onStyleInherit !== null}>
-              <button
-                type="button"
-                aria-label={behavior.inheritLabel}
-                title={behavior.inheritLabel}
-                onClick={() => onStyleInherit?.("typography")}
-              >
-                <Undo2 size={14} aria-hidden="true" />
-              </button>
-            </Render>
-          </FontStyleControls>
-        </FullWidthField>
-        <ColorField>
-          <span>{behavior.unreadLabel}</span>
-          <ColorFieldControl>
-            <ColorInput
-              color={style.unreadColor}
-              label={behavior.unreadLabel}
-              onChange={(color) => onStyleChange("unreadColor", color)}
-              onPreviewChange={(color) => onColorPreview("unreadColor", color)}
-              onPreviewEnd={onColorPreviewEnd}
-            />
-            <Render when={onColorInherit !== null}>
-              <button
-                type="button"
-                aria-label={`${behavior.inheritLabel} ${behavior.unreadLabel}`}
-                onClick={() => onColorInherit?.("unreadColor")}
-              >
-                {behavior.inheritLabel}
-              </button>
-            </Render>
-          </ColorFieldControl>
-        </ColorField>
-        <ColorField>
-          <span>{behavior.readLabel}</span>
-          <ColorFieldControl>
-            <ColorInput
-              color={style.readColor}
-              label={behavior.readLabel}
-              onChange={(color) => onStyleChange("readColor", color)}
-              onPreviewChange={(color) => onColorPreview("readColor", color)}
-              onPreviewEnd={onColorPreviewEnd}
-            />
-            <Render when={onColorInherit !== null}>
-              <button
-                type="button"
-                aria-label={`${behavior.inheritLabel} ${behavior.readLabel}`}
-                onClick={() => onColorInherit?.("readColor")}
-              >
-                {behavior.inheritLabel}
-              </button>
-            </Render>
-          </ColorFieldControl>
-        </ColorField>
-      </FieldGrid>
-      <Render when={showBezier}>
-        <CubicBezierEditor
-          value={curve}
-          labels={behavior.bezierLabels}
-          onChange={onBezierChange}
-        />
-      </Render>
-    </>
-  );
-}
-
-function EditorSidebarView() {
-  useEditorState((behavior) => behavior.sidebarRenderKey);
-  const behavior = useEditorBehavior();
+function EditorSidebarView({ model: behavior }: { model: EditorSidebarModel }) {
   return (
     <Inspector>
       <Render when={behavior.backgroundTrackSelected}>
@@ -506,7 +199,7 @@ function EditorSidebarView() {
         </Tabs>
         <Render when={behavior.trackTabActive}>
           <PropertyAccordionContent>
-            <StyleFields scope="Track" />
+            <SubtitleStyleFields scope="Track" model={behavior} />
             <Field>
               <span>{behavior.animationTemplateLabel}</span>
               <select
@@ -560,7 +253,7 @@ function EditorSidebarView() {
                   />
                 </Field>
               </FieldGrid>
-              <StyleFields scope="Phrase" />
+              <SubtitleStyleFields scope="Phrase" model={behavior} />
               <Field>
                 <span>{behavior.wordsLabel}</span>
                 <WordList>
@@ -667,7 +360,7 @@ function EditorSidebarView() {
                   />
                 </Field>
               </FieldGrid>
-              <StyleFields scope="Word" />
+              <SubtitleStyleFields scope="Word" model={behavior} />
             </PropertyAccordionContent>
           </Render>
         </Render>

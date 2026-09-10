@@ -1,6 +1,6 @@
+import { Check, Download, Minus, Square, X } from "lucide-react";
 import { memo } from "react";
-import { Check, ChevronLeft, Download, Minus, Square, X } from "lucide-react";
-import { useEditorBehavior, useEditorState } from "../EditorState";
+import type { EditorHeaderModel } from "../../../../hooks/editor/componentModels";
 import {
   EditorHeader as Header,
   HeaderActions,
@@ -11,10 +11,7 @@ import {
   SavedState,
 } from "../../styles";
 
-function EditorHeaderView() {
-  useEditorState((behavior) => behavior.headerRenderKey);
-  const behavior = useEditorBehavior();
-
+function EditorHeaderView({ model: behavior }: { model: EditorHeaderModel }) {
   return (
     <Header>
       <ProjectTitle>

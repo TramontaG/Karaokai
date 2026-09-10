@@ -8,7 +8,7 @@
     "email": "tramontano.guilherme@yahoo.com.br"
   },
   "private": true,
-  "version": "0.1.0-rc.2",
+  "version": "0.1.0-rc.3",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
