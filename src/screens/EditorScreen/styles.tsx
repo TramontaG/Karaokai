@@ -252,12 +252,12 @@ export const SubtitlePreview = styled.div`
   font-weight: 800;
   line-height: 1.3;
 `;
-export const CurrentPhrase = styled.p`
+export const CurrentPhrase = styled.div`
   position: relative;
   margin: 0;
   transform: translate(
     var(--phrase-offset-x, 0),
-    calc(-50% + 0.18em + var(--phrase-offset-y, 0))
+    calc(-50% + var(--phrase-offset-y, 0))
   );
   transform-origin: center;
   will-change: opacity, transform;
@@ -341,7 +341,7 @@ export const EntryCueBarFill = styled.div`
   background: var(--entry-cue-fill-color);
   will-change: transform;
 `;
-export const NextPhrase = styled.p`
+export const NextPhrase = styled.div`
   position: absolute;
   z-index: 1;
   left: 50%;
@@ -425,9 +425,10 @@ export const PlayerTools = styled.div`
 `;
 export const TimelinePanel = styled.section`
   display: grid;
+  min-width: 0;
   min-height: 0;
   border-top: 1px solid ${({ theme }) => theme.colors.border};
-  grid-template-rows: 2.8rem minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   background: color-mix(
     in srgb,
     ${({ theme }) => theme.colors.surface} 72%,
@@ -436,6 +437,8 @@ export const TimelinePanel = styled.section`
 `;
 export const TimelineToolbar = styled.div`
   display: grid;
+  min-width: 0;
+  min-height: 2.8rem;
   grid-template-columns: 8.5rem minmax(0, 1fr);
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   align-items: center;
@@ -480,33 +483,55 @@ export const TimelineTrackHeader = styled.div`
   }
 `;
 export const TimelineToolbarMain = styled.div`
+  container-type: inline-size;
   display: flex;
   min-width: 0;
-  padding: 0 0.9rem;
+  padding: 0.5rem 0.7rem;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
 `;
 export const TimelineToolbarOptions = styled.div`
+  --toolbar-gap: clamp(0.4rem, 1.5cqw, 0.9rem);
   display: flex;
+  flex: 1;
+  flex-wrap: nowrap;
   min-width: 0;
   align-items: center;
-  gap: 0.75rem;
+  justify-content: flex-start;
+  gap: var(--toolbar-gap);
   overflow-x: auto;
-  scrollbar-width: none;
+  scrollbar-width: thin;
 
-  &::-webkit-scrollbar {
-    display: none;
+  @container (max-width: 32rem) {
+    --toolbar-gap: 0.35rem;
   }
 `;
 export const TimelineToolGroup = styled.div`
   display: flex;
   flex: 0 0 auto;
-  gap: 0.2rem;
-  padding-right: 0.7rem;
+  gap: clamp(0.25rem, 0.75cqw, 0.5rem);
+  align-items: center;
+  justify-content: flex-start;
+  padding-right: var(--toolbar-gap);
   border-right: 1px solid ${({ theme }) => theme.colors.border};
+
+  &:last-child {
+    padding-right: 0;
+    border-right: 0;
+  }
+
+  & > label + label {
+    margin-left: var(--toolbar-gap);
+  }
+
+  @container (max-width: 32rem) {
+    gap: 0.2rem;
+  }
 `;
 export const TimelineToolButton = styled.button<{ $active: boolean }>`
   display: inline-flex;
+  flex: 0 0 auto;
+  justify-content: center;
   height: 1.7rem;
   padding: 0 0.48rem;
   border: 1px solid
@@ -524,7 +549,12 @@ export const TimelineToolButton = styled.button<{ $active: boolean }>`
   font-size: 0.62rem;
   white-space: nowrap;
 
-  &:hover {
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  &:hover:not(:disabled) {
     background: color-mix(
       in srgb,
       ${({ theme }) => theme.colors.accent} 12%,
@@ -534,6 +564,8 @@ export const TimelineToolButton = styled.button<{ $active: boolean }>`
 `;
 export const TimelineFollowToggle = styled.label`
   display: flex;
+  flex: 0 0 auto;
+  min-height: 1.7rem;
   align-items: center;
   gap: 0.4rem;
   color: ${({ theme }) => theme.colors.textMuted};
@@ -551,13 +583,15 @@ export const TimelineFollowToggle = styled.label`
 `;
 export const TimelineTempoField = styled.label`
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 0.35rem;
   color: ${({ theme }) => theme.colors.textMuted};
   font-size: 0.64rem;
   white-space: nowrap;
 
-  input {
+  input,
+  select {
     box-sizing: border-box;
     width: 3.9rem;
     height: 1.7rem;
@@ -601,14 +635,19 @@ export const TimelineBeatGrid = styled.div`
   inset: 0;
   width: 100%;
   pointer-events: none;
-  transform: translateX(var(--timeline-grid-offset));
-  background-image:
-    linear-gradient(90deg, rgb(211 137 255 / 30%) 0 1px, transparent 1px),
-    linear-gradient(90deg, rgb(255 255 255 / 10%) 0 1px, transparent 1px);
-  background-repeat: repeat-x;
-  background-size:
-    var(--timeline-bar-size) 100%,
-    var(--timeline-beat-size) 100%;
+
+  span {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgb(255 255 255 / 10%);
+    transform: translateX(-0.5px);
+  }
+
+  span[data-bar="true"] {
+    background: rgb(211 137 255 / 30%);
+  }
 `;
 export const TimelineLabels = styled.div`
   z-index: 2;

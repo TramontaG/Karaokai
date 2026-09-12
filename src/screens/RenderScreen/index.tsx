@@ -13,11 +13,13 @@ import {
   SubtitlePreview,
 } from "../EditorScreen/styles";
 import { useBehavior } from "./behavior";
+import { FrameStamp } from "./styles";
 
 export function RenderScreen() {
   const behavior = useBehavior({});
   return (
     <PreviewCanvas
+      style={behavior.canvasStyle}
       data-render-preview="true"
       data-render-video-overlay={behavior.videoCompositedByEncoder}
     >
@@ -122,6 +124,7 @@ export function RenderScreen() {
           </SubtitlePreview>
         )}
       />
+      <FrameStamp style={behavior.frameStampStyle} aria-hidden="true" />
     </PreviewCanvas>
   );
 }

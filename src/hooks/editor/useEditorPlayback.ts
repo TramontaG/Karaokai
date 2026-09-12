@@ -117,7 +117,7 @@ export function useEditorPlayback({
       try {
         await instrumentalPlayback;
         setIsPlaying(true);
-        void backgroundVideo.current?.play().catch(() => undefined);
+        syncBackgroundVideoTime(instrumental.currentTime);
         await vocalsPlayback;
       } catch (reason) {
         instrumental.pause();
@@ -127,7 +127,14 @@ export function useEditorPlayback({
         setIsPlaying(false);
       }
     })();
-  }, [instrumentalSource, isPlaying, t, updateMediaTime, vocalsSource]);
+  }, [
+    instrumentalSource,
+    isPlaying,
+    t,
+    updateMediaTime,
+    vocalsSource,
+    syncBackgroundVideoTime,
+  ]);
 
   const onSeek = useCallback(
     (value: number) => {

@@ -1,7 +1,7 @@
 import type { KaraokeProject } from "../domain/project";
 
 export type EditorInspectorTab = "track" | "phrase" | "word";
-export type TimelineTool = "pointer" | "split";
+export type TimelineTool = "pointer" | "split" | "marker";
 
 export interface EditorData extends Record<string, unknown> {
   project: KaraokeProject | null;

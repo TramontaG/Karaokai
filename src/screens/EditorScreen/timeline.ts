@@ -270,6 +270,37 @@ export function wordsForText(phrase: SubtitlePhrase, text: string) {
   });
 }
 
+export function joinSubtitlePhrases(phrases: SubtitlePhrase[]) {
+  if (phrases.length < 2) return null;
+  const ordered = [...phrases].sort(
+    (left, right) => left.start - right.start || left.end - right.end
+  );
+  const words: SubtitleWord[] = [];
+  ordered.forEach((phrase) => {
+    const previous = words.at(-1);
+    if (previous && phrase.start > previous.end) {
+      words.push({
+        id: `gap-${previous.id}-${phrase.id}`,
+        type: "gap",
+        text: "",
+        start: previous.end,
+        end: phrase.start,
+      });
+    }
+    words.push(...phrase.words.map((word) => ({ ...word })));
+  });
+  return {
+    ...ordered[0],
+    text: ordered
+      .map((phrase) => phrase.text.trim())
+      .filter(Boolean)
+      .join(" "),
+    start: ordered[0].start,
+    end: ordered.at(-1)?.end ?? ordered[0].end,
+    words,
+  };
+}
+
 /**
  * Replaces a single token's text. Multiple whitespace-delimited terms become
  * consecutive words that retain the source token's time span, apportioned by

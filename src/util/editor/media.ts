@@ -23,21 +23,6 @@ export function drawMediaBackground(
   );
 }
 
-export function waitForVideoSeek(video: HTMLVideoElement, seconds: number) {
-  return new Promise<void>((resolve) => {
-    if (Math.abs(video.currentTime - seconds) < 0.01) {
-      resolve();
-      return;
-    }
-    const finish = () => {
-      video.removeEventListener("seeked", finish);
-      resolve();
-    };
-    video.addEventListener("seeked", finish, { once: true });
-    video.currentTime = seconds;
-  });
-}
-
 export function jpegBlob(canvas: HTMLCanvasElement) {
   return new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, "image/jpeg", 0.9)

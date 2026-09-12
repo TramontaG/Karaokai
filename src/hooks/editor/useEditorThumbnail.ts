@@ -2,11 +2,7 @@ import { useEffect, useLayoutEffect } from "react";
 import { resolveSubtitleStyle, subtitleFontStack } from "../../domain/project";
 import { isDesktop } from "../../services/desktop";
 import { saveProjectThumbnail } from "../../services/projects";
-import {
-  drawMediaBackground,
-  jpegBlob,
-  waitForVideoSeek,
-} from "../../util/editor/media";
+import { drawMediaBackground, jpegBlob } from "../../util/editor/media";
 import { subtitlePreviewView } from "../../util/editor/subtitlePreview";
 import type { EditorBackground } from "./useEditorBackground";
 import type { EditorDataState } from "./useEditorDataState";
@@ -110,16 +106,13 @@ export function useEditorThumbnail({
 
       if (backgroundPreset === "video" && backgroundVideo.current) {
         const video = backgroundVideo.current;
-        const previousTime = video.currentTime;
-        const duration = video.duration;
-        const targetTime =
-          Number.isFinite(duration) && duration > 0
-            ? (firstPhraseStart / 1000) % duration
-            : firstPhraseStart / 1000;
-        await waitForVideoSeek(video, targetTime);
-        if (disposed && !allowAfterDispose) return;
-        drawMediaBackground(context, video, backgroundFit);
-        void waitForVideoSeek(video, previousTime);
+        // This is the same element used by the live preview. Seeking it to
+        // capture a thumbnail races with timeline seeks and can leave Chromium's
+        // decoder stuck, which also blocks navigation while capture is awaited.
+        // Drawing the currently decoded frame keeps thumbnail creation isolated
+        // from playback.
+        if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA)
+          drawMediaBackground(context, video, backgroundFit);
       }
       if (
         ["album-art", "image"].includes(backgroundPreset) &&

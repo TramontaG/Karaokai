@@ -8,6 +8,7 @@ import {
 import {
   createPhraseAt,
   duplicatePhraseAt,
+  joinSubtitlePhrases,
   splitPhraseAtClosestWordBoundary,
   timeAtTimelinePosition,
 } from "../../screens/EditorScreen/timeline";
@@ -164,6 +165,7 @@ export function useSubtitlePhraseActions({
       (track): track is SubtitleTrack =>
         track.type === "subtitle" && track.id === subtitleTrack.id
     );
+
     if (!currentTrack) return;
 
     const phraseIds = new Set(
@@ -194,6 +196,54 @@ export function useSubtitlePhraseActions({
     persistProject(next, true);
   }, [
     activePhrase,
+    persistProject,
+    selectedPhraseIds,
+    setPhraseSelectionAnchorId,
+    setSelectedPhraseIds,
+    subtitleTrack,
+  ]);
+
+  const onJoinPhrases = useCallback(() => {
+    const currentProject = projectRef.current;
+    if (!currentProject || !subtitleTrack || selectedPhraseIds.length < 2)
+      return false;
+    const currentTrack = currentProject.tracks.find(
+      (track): track is SubtitleTrack =>
+        track.type === "subtitle" && track.id === subtitleTrack.id
+    );
+    if (!currentTrack) return false;
+    const selectedIds = new Set(selectedPhraseIds);
+    const selectedPhrases = currentTrack.phrases.filter((phrase) =>
+      selectedIds.has(phrase.id)
+    );
+    const joined = joinSubtitlePhrases(selectedPhrases);
+    if (!joined) return false;
+    const next: KaraokeProject = {
+      ...currentProject,
+      updatedAt: String(Date.now()),
+      tracks: currentProject.tracks.map((track) =>
+        track.type === "subtitle" && track.id === currentTrack.id
+          ? {
+              ...track,
+              phrases: sortSubtitlePhrases([
+                ...track.phrases.filter(
+                  (phrase) => !selectedIds.has(phrase.id)
+                ),
+                joined,
+              ]),
+            }
+          : track
+      ),
+    };
+    setSelectedPhraseId(joined.id);
+    setSelectedPhraseIds([joined.id]);
+    setPhraseSelectionAnchorId(joined.id);
+    setSelectedWordId(joined.words[0]?.id ?? null);
+    onSeek(joined.start);
+    persistProject(next, true);
+    return true;
+  }, [
+    onSeek,
     persistProject,
     selectedPhraseIds,
     setPhraseSelectionAnchorId,
@@ -258,6 +308,7 @@ export function useSubtitlePhraseActions({
     onPastePhrase,
     onSplitPhrase,
     onDeletePhrase,
+    onJoinPhrases,
     onInsertPhrase,
   };
 }

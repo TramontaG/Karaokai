@@ -179,7 +179,7 @@ export function useTimelineRendering({
                 key: phrase.id,
                 phrase,
                 left: `${(phrase.start / timelineDuration) * 100}%`,
-                width: `${Math.max(0.12, (phraseDuration / timelineDuration) * 100)}%`,
+                width: `${(phraseDuration / timelineDuration) * 100}%`,
                 selected:
                   track.id === selectedTrackId &&
                   selectedPhraseIds.includes(phrase.id),
@@ -188,7 +188,7 @@ export function useTimelineRendering({
                 words: phrase.words.map((word) => ({
                   ...word,
                   left: `${((word.start - phrase.start) / phraseDuration) * 100}%`,
-                  width: `${Math.max(0.4, ((word.end - word.start) / phraseDuration) * 100)}%`,
+                  width: `${((word.end - word.start) / phraseDuration) * 100}%`,
                   active: false,
                   selected:
                     track.id === selectedTrackId && word.id === selectedWordId,
@@ -275,6 +275,8 @@ export function useTimelineRendering({
     () => ({}),
     [
       bpmInputValue,
+      data.preferences.timelineSubdivision,
+      data.preferences.timelineSnapToGrid,
       data.preferences.storageDirectory,
       project,
       selectedPhraseId,

@@ -1,9 +1,16 @@
-import { MousePointer2, Plus, Scissors, Trash2 } from "lucide-react";
+import {
+  Grid2X2,
+  MapPin,
+  MousePointer2,
+  Plus,
+  Scissors,
+  Trash2,
+  Merge,
+} from "lucide-react";
 import { memo } from "react";
 import { ForEach } from "../../../../components/ForEach";
 import type { EditorTimelineModel } from "../../../../hooks/editor/componentModels";
 import {
-  Time,
   Timeline,
   TimelineBeatGrid,
   TimelineContent,
@@ -13,7 +20,6 @@ import {
   TimelineMarkerDeleteButton,
   TimelinePanel,
   TimelinePlayhead,
-  TimelineTempoField,
   TimelineToolbar,
   TimelineToolbarMain,
   TimelineToolbarOptions,
@@ -22,6 +28,7 @@ import {
   TimelineTrackHeader,
   TimelineViewport,
 } from "../../styles";
+import { TimelineTempoControl } from "../TimelineTempoControl";
 import { TrackLabel } from "../TrackLabel";
 
 function EditorTimelineView({
@@ -48,59 +55,91 @@ function EditorTimelineView({
             <TimelineToolGroup aria-label={behavior.timelineToolsLabel}>
               <TimelineToolButton
                 type="button"
-                $active={!behavior.splitToolActive}
-                aria-pressed={!behavior.splitToolActive}
+                $active={
+                  !behavior.splitToolActive && !behavior.markerToolActive
+                }
+                aria-pressed={
+                  !behavior.splitToolActive && !behavior.markerToolActive
+                }
+                aria-label={behavior.pointerToolLabel}
                 title={behavior.pointerToolLabel}
                 onClick={behavior.onSelectPointerTool}
               >
                 <MousePointer2 size={14} />
-                <span>{behavior.pointerToolLabel}</span>
               </TimelineToolButton>
               <TimelineToolButton
                 type="button"
                 $active={behavior.splitToolActive}
                 aria-pressed={behavior.splitToolActive}
+                aria-label={behavior.splitToolLabel}
                 title={behavior.splitToolLabel}
                 onClick={behavior.onToggleSplitTool}
               >
                 <Scissors size={14} />
-                <span>{behavior.splitToolLabel}</span>
+              </TimelineToolButton>
+              <TimelineToolButton
+                type="button"
+                $active={behavior.markerToolActive}
+                aria-pressed={behavior.markerToolActive}
+                aria-label={behavior.markerToolLabel}
+                title={behavior.markerToolLabel}
+                onClick={behavior.onToggleMarkerTool}
+              >
+                <MapPin size={14} />
+              </TimelineToolButton>
+              <TimelineToolButton
+                type="button"
+                $active={false}
+                aria-label={behavior.joinPhrasesLabel}
+                title={behavior.joinPhrasesLabel}
+                disabled={behavior.joinPhrasesDisabled}
+                onClick={behavior.onJoinPhrases}
+              >
+                <Merge size={14} />
               </TimelineToolButton>
             </TimelineToolGroup>
-            <TimelineFollowToggle>
-              <input
-                type="checkbox"
-                checked={behavior.timelineAutoFollow}
-                onChange={behavior.onTimelineAutoFollowChange}
-              />
-              <span>{behavior.timelineAutoFollowLabel}</span>
-            </TimelineFollowToggle>
-            <TimelineTempoField>
-              <span>{behavior.bpmLabel}</span>
-              <input
-                type="number"
-                min="20"
-                max="400"
-                step="0.1"
-                value={behavior.bpmInputValue}
-                onChange={behavior.onBpmInput}
-                onBlur={behavior.onBpmBlur}
-                onKeyDown={behavior.onBpmKeyDown}
-              />
-            </TimelineTempoField>
-            <TimelineTempoField>
-              <span>{behavior.beatOffsetLabel}</span>
-              <input
-                type="number"
-                min="0"
-                max={behavior.maximumTempoOffsetSeconds}
-                step="0.01"
-                value={behavior.tempoOffsetSeconds}
-                onChange={behavior.onBeatOffsetInput}
-              />
-            </TimelineTempoField>
+            <TimelineToolGroup>
+              <TimelineFollowToggle>
+                <input
+                  type="checkbox"
+                  checked={behavior.timelineAutoFollow}
+                  onChange={behavior.onTimelineAutoFollowChange}
+                />
+                <span>{behavior.timelineAutoFollowLabel}</span>
+              </TimelineFollowToggle>
+              <TimelineFollowToggle>
+                <input
+                  type="checkbox"
+                  checked={behavior.timelineSnapToGrid}
+                  onChange={behavior.onSnapToGridChange}
+                />
+                <span>{behavior.snapToGridLabel}</span>
+              </TimelineFollowToggle>
+            </TimelineToolGroup>
+            <TimelineToolGroup>
+              <TimelineTempoControl model={behavior} />
+              <TimelineToolButton
+                type="button"
+                $active={false}
+                title={behavior.subdivisionLabel}
+                aria-label={behavior.subdivisionLabel}
+                onClick={behavior.onSubdivisionChange}
+              >
+                <Grid2X2 size={14} />
+                <span aria-live="polite">{behavior.timelineSubdivision}</span>
+              </TimelineToolButton>
+            </TimelineToolGroup>
+            <TimelineToolButton
+              type="button"
+              $active={false}
+              title={behavior.removeAllTimelineMarkersLabel}
+              aria-label={behavior.removeAllTimelineMarkersLabel}
+              disabled={behavior.removeAllTimelineMarkersDisabled}
+              onClick={behavior.onRemoveAllTimelineMarkers}
+            >
+              <Trash2 size={14} />
+            </TimelineToolButton>
           </TimelineToolbarOptions>
-          <Time>{behavior.formattedDuration}</Time>
         </TimelineToolbarMain>
       </TimelineToolbar>
       <Timeline>
@@ -131,7 +170,20 @@ function EditorTimelineView({
             onClick={behavior.onTimelineClick}
           >
             {behavior.hideTimelineGrid ? null : (
-              <TimelineBeatGrid style={behavior.timelineGridStyle} />
+              <TimelineBeatGrid>
+                <ForEach
+                  data={behavior.timelineGridLines}
+                  idCompute={(line) => String(line.time)}
+                  render={(line) => (
+                    <span
+                      data-bar={line.isBar || undefined}
+                      style={{
+                        left: `${(line.time / behavior.duration) * 100}%`,
+                      }}
+                    />
+                  )}
+                />
+              </TimelineBeatGrid>
             )}
             {behavior.hideTimelineClips ? null : (
               <ForEach

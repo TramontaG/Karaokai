@@ -6,7 +6,6 @@ import type { EditorPlayback } from "./useEditorPlayback";
 import type { EditorRuntime } from "./useEditorRuntime";
 import type { EditorSelection } from "./useEditorSelection";
 import type { SubtitlePhraseActions } from "./useSubtitlePhraseActions";
-import type { TimelineTempo } from "./useTimelineTempo";
 
 interface Options {
   editorRuntime: Pick<
@@ -19,15 +18,20 @@ interface Options {
     | "selectedPhraseId"
     | "selectedPhraseIds"
     | "selectedWordId"
+    | "timelineTool"
+    | "setTimelineTool"
   >;
   editorSelection: Pick<EditorSelection, "clearPhraseSelection">;
   subtitlePhraseActions: Pick<
     SubtitlePhraseActions,
-    "onCopyPhrase" | "onPastePhrase" | "onSplitPhrase" | "onDeletePhrase"
+    | "onCopyPhrase"
+    | "onPastePhrase"
+    | "onSplitPhrase"
+    | "onDeletePhrase"
+    | "onJoinPhrases"
   >;
   editorHistory: Pick<EditorHistory, "onUndo">;
   editorPlayback: Pick<EditorPlayback, "onTogglePlayback">;
-  timelineTempo: Pick<TimelineTempo, "addTimelineMarker">;
 }
 
 export function useEditorShortcuts({
@@ -37,7 +41,6 @@ export function useEditorShortcuts({
   subtitlePhraseActions,
   editorHistory,
   editorPlayback,
-  timelineTempo,
 }: Options) {
   const { exportLockRef, hoveredPhraseRef, projectRef } = editorRuntime;
   const {
@@ -45,13 +48,19 @@ export function useEditorShortcuts({
     selectedPhraseId,
     selectedPhraseIds,
     selectedWordId,
+    timelineTool,
+    setTimelineTool,
   } = editorDataState;
   const { clearPhraseSelection } = editorSelection;
-  const { onCopyPhrase, onPastePhrase, onSplitPhrase, onDeletePhrase } =
-    subtitlePhraseActions;
+  const {
+    onCopyPhrase,
+    onPastePhrase,
+    onSplitPhrase,
+    onDeletePhrase,
+    onJoinPhrases,
+  } = subtitlePhraseActions;
   const { onUndo } = editorHistory;
   const { onTogglePlayback } = editorPlayback;
-  const { addTimelineMarker } = timelineTempo;
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (exportLockRef.current) {
@@ -104,7 +113,7 @@ export function useEditorShortcuts({
         !event.repeat
       ) {
         event.preventDefault();
-        addTimelineMarker();
+        setTimelineTool(timelineTool === "marker" ? "pointer" : "marker");
         return;
       }
       if (
@@ -130,6 +139,16 @@ export function useEditorShortcuts({
         return;
       }
       if (
+        event.key.toLowerCase() === "j" &&
+        !commandKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        !event.repeat
+      ) {
+        if (onJoinPhrases()) event.preventDefault();
+        return;
+      }
+      if (
         (event.key === "Delete" || event.key === "Backspace") &&
         (selectedPhraseId !== null || selectedPhraseIds.length > 0)
       ) {
@@ -140,11 +159,11 @@ export function useEditorShortcuts({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
-    addTimelineMarker,
     clearPhraseSelection,
     onCopyPhrase,
     onDeletePhrase,
     onPastePhrase,
+    onJoinPhrases,
     onSplitPhrase,
     onTogglePlayback,
     onUndo,
@@ -152,6 +171,8 @@ export function useEditorShortcuts({
     selectedPhraseIds.length,
     selectedWordId,
     trackPendingDeletionId,
+    timelineTool,
+    setTimelineTool,
   ]);
   return {};
 }

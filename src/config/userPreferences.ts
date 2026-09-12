@@ -2,6 +2,7 @@ import { languages, type Language } from "../i18n/languagePacks";
 import { type ThemeName, type ThemePreference } from "../theme";
 
 const STORAGE_KEY = "karaokai.user-preferences";
+export type TimelineSubdivision = 4 | 8 | 16 | 32;
 export type ProjectViewMode = "grid" | "list";
 export type ProjectSort = "updated-desc" | "updated-asc" | "name-asc";
 
@@ -21,6 +22,8 @@ export interface UserPreferences {
   projectSort: ProjectSort;
   favoriteProjectIds: string[];
   timelineAutoFollow: boolean;
+  timelineSubdivision: TimelineSubdivision;
+  timelineSnapToGrid: boolean;
   defaultWhisperModelId: string;
   defaultDemucsModelId: string;
   customFonts: CustomFontPreference[];
@@ -35,6 +38,8 @@ export const defaultPreferences: UserPreferences = {
   projectSort: "updated-desc",
   favoriteProjectIds: [],
   timelineAutoFollow: true,
+  timelineSubdivision: 4,
+  timelineSnapToGrid: false,
   defaultWhisperModelId: "whisper-large-v3",
   defaultDemucsModelId: "demucs-htdemucs",
   customFonts: [],
@@ -89,6 +94,15 @@ export function loadUserPreferences(): UserPreferences {
         typeof stored.timelineAutoFollow === "boolean"
           ? stored.timelineAutoFollow
           : defaultPreferences.timelineAutoFollow,
+      timelineSubdivision: [4, 8, 16, 32].includes(
+        stored.timelineSubdivision ?? 0
+      )
+        ? (stored.timelineSubdivision as TimelineSubdivision)
+        : defaultPreferences.timelineSubdivision,
+      timelineSnapToGrid:
+        typeof stored.timelineSnapToGrid === "boolean"
+          ? stored.timelineSnapToGrid
+          : defaultPreferences.timelineSnapToGrid,
       defaultWhisperModelId:
         typeof stored.defaultWhisperModelId === "string"
           ? stored.defaultWhisperModelId

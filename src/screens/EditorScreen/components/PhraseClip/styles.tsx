@@ -6,14 +6,14 @@ export const Clip = styled.button<{ $selected: boolean; $splitting: boolean }>`
   height: 2.08rem;
   overflow: hidden;
   padding: 0;
-  border: 1px solid
-    ${({ $selected, theme }) =>
-      $selected ? theme.colors.accent : "rgb(255 255 255 / 18%)"};
+  border: 0;
   border-radius: 0.28rem;
   color: #fff;
   background: linear-gradient(100deg, #603383, #9149bd);
   box-shadow: ${({ $selected, theme }) =>
-    $selected ? `0 0 0 1px ${theme.colors.accent}` : "none"};
+    $selected
+      ? `inset 0 0 0 1px ${theme.colors.accent}, 0 0 0 1px ${theme.colors.accent}`
+      : "inset 0 0 0 1px rgb(255 255 255 / 18%)"};
   font: inherit;
   cursor: ${({ $splitting }) => ($splitting ? "crosshair" : "grab")};
   touch-action: none;
@@ -25,7 +25,7 @@ export const Clip = styled.button<{ $selected: boolean; $splitting: boolean }>`
 
 export const Words = styled.span`
   position: absolute;
-  inset: 0 0.35rem;
+  inset: 0;
 `;
 
 export const WordSegment = styled.span<{
@@ -39,7 +39,8 @@ export const WordSegment = styled.span<{
   top: 0;
   bottom: 0;
   display: flex;
-  min-width: 1px;
+  box-sizing: border-box;
+  min-width: 0;
   overflow: hidden;
   border-right: 1px solid rgb(255 255 255 / 24%);
   align-items: center;

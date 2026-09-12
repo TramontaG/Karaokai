@@ -1,3 +1,10 @@
+import { useTimelineGridPreferences } from "../useTimelineGridPreferences";
+import {
+  DEFAULT_BPM,
+  MINIMUM_BPM,
+  MAXIMUM_BPM,
+} from "../../util/editor/constants";
+import { snapTimeToGrid } from "../../util/editor/tempoGrid";
 import { useCallback, type PointerEvent } from "react";
 import {
   sortSubtitlePhrases,
@@ -54,6 +61,8 @@ export function useTimelineGestures({
   editorProjectChanges,
   editorHistory,
 }: Options) {
+  const { timelineSubdivision, timelineSnapToGrid } =
+    useTimelineGridPreferences();
   const { projectRef, timelineContentRef } = editorRuntime;
   const {
     setSelectedTrackId,
@@ -97,9 +106,31 @@ export function useTimelineGestures({
       if (word) setSelectedWordId(word.id);
 
       const onMove = (moveEvent: globalThis.PointerEvent) => {
-        const delta = Math.round(
+        let delta = Math.round(
           ((moveEvent.clientX - initialX) / contentWidth) * timelineDuration
         );
+        if (timelineSnapToGrid) {
+          const anchor = word
+            ? wordEdge === "end"
+              ? word.end
+              : word.start
+            : gesture === "end"
+              ? phrase.end
+              : phrase.start;
+          const bpm = clamp(
+            sourceProject.tempo?.bpm ?? DEFAULT_BPM,
+            MINIMUM_BPM,
+            MAXIMUM_BPM
+          );
+          const offset = clamp(
+            sourceProject.tempo?.offset ?? 0,
+            0,
+            timelineDuration
+          );
+          delta =
+            snapTimeToGrid(anchor + delta, bpm, offset, timelineSubdivision) -
+            anchor;
+        }
         let nextPhrase = phrase;
         const targetTrackId =
           gesture === "move" && !word
@@ -200,6 +231,8 @@ export function useTimelineGestures({
     },
     [
       persistProject,
+      timelineSubdivision,
+      timelineSnapToGrid,
       selectedPhraseIds,
       selectedTrackId,
       setLiveProject,

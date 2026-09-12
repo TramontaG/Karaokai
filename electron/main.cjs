@@ -5,6 +5,8 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const projects = require("./projects.cjs");
 const runtime = require("./runtime.cjs");
+const { frameBitmap } = require("./render-frames.cjs");
+const { stampHeight } = require("./render-frame-format.json");
 
 const PROJECT_COMMANDS = new Set([
   "create_local_project",
@@ -28,7 +30,6 @@ const PROJECT_COMMANDS = new Set([
   "start_project_render",
   "cancel_project_render",
   "render_job_data",
-  "render_frame_complete",
   "youtube_cookies_status",
   "save_youtube_cookies",
   "remove_youtube_cookies",
@@ -94,6 +95,7 @@ function failRenderJob(job, error) {
   job.cancelled = true;
   for (const worker of job.workers ?? [job]) {
     worker.finished = true;
+    clearTimeout(worker.frameTimeout);
     worker.ffmpeg.stdin.destroy();
     worker.ffmpeg.kill();
     if (!worker.window.isDestroyed()) worker.window.destroy();
@@ -313,9 +315,9 @@ function createRenderWorker(parent, frameStart, frameEnd, index) {
   ]);
   const window = new BrowserWindow({
     width: parent.args.width,
-    height: parent.args.height,
+    height: parent.args.height + stampHeight,
     // The renderer uses viewport-relative positions. Its content area must be
-    // exactly the export size, rather than the outer window minus OS chrome.
+    // exactly the export size plus the frame stamp outside the video area.
     useContentSize: true,
     frame: false,
     transparent: Boolean(parent.videoBackground),
@@ -350,6 +352,7 @@ function createRenderWorker(parent, frameStart, frameEnd, index) {
     encoderFailure: null,
     ffmpegError: "",
     awaitingFrame: null,
+    frameTimeout: null,
   };
   let ffmpegError = "";
   ffmpeg.stderr.on("data", (chunk) => {
@@ -359,10 +362,26 @@ function createRenderWorker(parent, frameStart, frameEnd, index) {
   renderJobs.set(jobId, worker);
   window.webContents.setFrameRate(RENDER_FRAME_RATE);
   window.webContents.on("paint", (_event, _dirty, image) => {
-    const frame = worker.awaitingFrame;
-    if (frame === null || worker.finished) return;
-    worker.awaitingFrame = null;
-    void encodeRenderFrame(worker, frame, image);
+    if (
+      !worker.ready ||
+      worker.finished ||
+      worker.cancelled ||
+      worker.awaitingFrame !== null ||
+      worker.frame >= worker.frameEnd
+    )
+      return;
+    try {
+      const bitmap = frameBitmap(image, worker.args, worker.frame);
+      if (!bitmap) return;
+      clearTimeout(worker.frameTimeout);
+      worker.awaitingFrame = worker.frame;
+      void encodeRenderFrame(worker, worker.frame, bitmap);
+    } catch (error) {
+      failRenderJob(
+        parent,
+        error instanceof Error ? error.message : String(error)
+      );
+    }
   });
   window.webContents.once("did-fail-load", (_event, _code, description) =>
     failRenderJob(parent, `Worker ${index + 1} failed to load: ${description}`)
@@ -375,6 +394,7 @@ function createRenderWorker(parent, frameStart, frameEnd, index) {
     )
   );
   ffmpeg.once("close", (code, signal) => {
+    clearTimeout(worker.frameTimeout);
     if (worker.finished) return;
     worker.finished = true;
     renderJobs.delete(worker.jobId);
@@ -526,6 +546,13 @@ function requestRenderFrame(job) {
     job.ffmpeg.stdin.end();
     return;
   }
+  job.frameTimeout = setTimeout(() => {
+    if (!job.finished && !job.cancelled)
+      failRenderJob(
+        job.parent,
+        `Timed out waiting for render frame ${job.frame}`
+      );
+  }, 30_000);
   job.window.webContents.send("karaokai:event:render-frame", {
     jobId: job.jobId,
     frame: job.frame,
@@ -533,36 +560,15 @@ function requestRenderFrame(job) {
   });
 }
 
-async function encodeRenderFrame(job, frame, image) {
+async function encodeRenderFrame(job, frame, bitmap) {
   try {
-    const capturedSize = image.getSize();
-    const normalizedImage =
-      capturedSize.width === job.args.width &&
-      capturedSize.height === job.args.height
-        ? image
-        : image.resize({
-            width: job.args.width,
-            height: job.args.height,
-            quality: "good",
-          });
-    const size = normalizedImage.getSize();
-    const bitmap = normalizedImage.toBitmap();
-    const expectedBytes = job.args.width * job.args.height * 4;
-    if (
-      size.width !== job.args.width ||
-      size.height !== job.args.height ||
-      bitmap.byteLength !== expectedBytes
-    ) {
-      throw new Error(
-        `Captured frame ${frame} has ${size.width}x${size.height} (${bitmap.byteLength} BGRA bytes); expected ${job.args.width}x${job.args.height} (${expectedBytes} bytes).`
-      );
-    }
     await new Promise((resolve, reject) => {
       job.ffmpeg.stdin.write(bitmap, (error) =>
         error ? reject(error) : resolve()
       );
     });
     if (job.finished || frame !== job.frame) return;
+    job.awaitingFrame = null;
     job.frame += 1;
     const completedFrames = job.parent.workers.reduce(
       (total, worker) => total + worker.frame - worker.frameStart,
@@ -688,6 +694,7 @@ ipcMain.handle("karaokai:invoke", async (_event, command, args = {}) => {
     job.finished = true;
     for (const worker of job.workers ?? [job]) {
       worker.finished = true;
+      clearTimeout(worker.frameTimeout);
       worker.ffmpeg.stdin.destroy();
       worker.ffmpeg.kill();
       if (!worker.window.isDestroyed()) worker.window.destroy();
@@ -713,24 +720,6 @@ ipcMain.handle("karaokai:invoke", async (_event, command, args = {}) => {
           ),
         }
       : null;
-  }
-  if (command === "render_frame_complete") {
-    const job = renderJobs.get(args.jobId);
-    if (
-      !job ||
-      job.finished ||
-      job.awaitingFrame !== null ||
-      args.frame !== job.frame
-    )
-      return null;
-    job.window.webContents.stopPainting();
-    setImmediate(() => {
-      if (job.finished || args.frame !== job.frame) return;
-      job.awaitingFrame = args.frame;
-      job.window.webContents.startPainting();
-      job.window.webContents.invalidate();
-    });
-    return null;
   }
   if (PROJECT_COMMANDS.has(command))
     return projects.run(command, args, nativeContext());

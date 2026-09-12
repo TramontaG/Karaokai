@@ -188,6 +188,8 @@ export function useBehavior(_: Record<string, never>) {
     editorSelection,
     editorPlayback,
     editorProjectValues,
+    editorDataState,
+    timelineTempo,
   });
   useEditorShortcuts({
     editorRuntime,
@@ -196,7 +198,6 @@ export function useBehavior(_: Record<string, never>) {
     subtitlePhraseActions,
     editorHistory,
     editorPlayback,
-    timelineTempo,
   });
   const timelineRendering = useTimelineRendering({
     editorDataState,
@@ -268,6 +269,7 @@ export function useBehavior(_: Record<string, never>) {
     editorEnvironment,
     editorProjectValues,
     timelineRendering,
+    subtitlePhraseActions,
     timelineInteractions,
     timelineViewport,
   });

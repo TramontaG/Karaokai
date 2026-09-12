@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
+import frameFormat from "../../../electron/render-frame-format.json";
 import {
   resolveSubtitleStyle,
   resolveTimingCurve,
@@ -138,11 +139,10 @@ export function useBehavior(_: Record<string, never>) {
   const jobId = renderJobId();
   const [data] = useAppContext();
   const [job, setJob] = useState<RenderJobData | null>(null);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [renderFrame, setRenderFrame] = useState({ frame: -1, time: 0 });
+  const currentTime = renderFrame.time;
   const [backgroundUrl, setBackgroundUrl] = useState<string | null>(null);
   const [backgroundReady, setBackgroundReady] = useState(false);
-  const [pendingFrame, setPendingFrame] = useState<number | null>(null);
-  const completionFrame = useRef<number | null>(null);
   const project = job?.project ?? null;
   const background = project?.tracks.find(
     (track) => track.type === "background"
@@ -187,8 +187,8 @@ export function useBehavior(_: Record<string, never>) {
       "render-frame",
       ({ payload }) => {
         if (payload.jobId !== jobId) return;
-        setPendingFrame(payload.frame);
-        setCurrentTime(payload.time);
+        // The timestamp and pixel stamp must belong to the same React commit.
+        setRenderFrame({ frame: payload.frame, time: payload.time });
       }
     ).then((dispose) => {
       if (disposed) dispose();
@@ -199,26 +199,6 @@ export function useBehavior(_: Record<string, never>) {
       unlisten();
     };
   }, [jobId]);
-
-  const completeFrame = useCallback(() => {
-    const frame = pendingFrame;
-    if (!jobId || frame === null || completionFrame.current !== null) return;
-    completionFrame.current = requestAnimationFrame(() => {
-      completionFrame.current = null;
-      setPendingFrame(null);
-      void invokeDesktop("render_frame_complete", { jobId, frame });
-    });
-  }, [jobId, pendingFrame]);
-
-  useEffect(() => {
-    if (pendingFrame === null) return;
-    completeFrame();
-    return () => {
-      if (completionFrame.current === null) return;
-      cancelAnimationFrame(completionFrame.current);
-      completionFrame.current = null;
-    };
-  }, [completeFrame, pendingFrame]);
 
   useEffect(() => {
     if (!project) {
@@ -273,7 +253,21 @@ export function useBehavior(_: Record<string, never>) {
     "--background-fit": background?.fit ?? "cover",
   } as CSSProperties;
 
+  const stamp = renderFrame.frame + 1;
+  const stampStops = Array.from({ length: frameFormat.stampBits }, (_, bit) => {
+    const color = (stamp >>> bit) & 1 ? "#fff" : "#000";
+    return `${color} ${bit * frameFormat.stampCellWidth}px ${(bit + 1) * frameFormat.stampCellWidth}px`;
+  });
+  const frameStampStyle = {
+    background: `linear-gradient(90deg, ${stampStops.join(", ")})`,
+    width: frameFormat.stampBits * frameFormat.stampCellWidth,
+    height: frameFormat.stampHeight,
+  };
+  const canvasStyle = { height: `calc(100vh - ${frameFormat.stampHeight}px)` };
+
   return {
+    canvasStyle,
+    frameStampStyle,
     backgroundSource: backgroundUrl ?? undefined,
     backgroundStyle,
     hasBackgroundImage: backgroundUrl !== null,

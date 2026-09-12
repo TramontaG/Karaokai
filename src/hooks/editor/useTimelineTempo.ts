@@ -1,7 +1,8 @@
+import { useTimelineGridPreferences } from "../useTimelineGridPreferences";
 import {
   useCallback,
   useEffect,
-  type CSSProperties,
+  useMemo,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import {
@@ -10,6 +11,7 @@ import {
   MINIMUM_BPM,
 } from "../../util/editor/constants";
 import { clamp } from "../../util/editor/numbers";
+import { tempoGridLines } from "../../util/editor/tempoGrid";
 import type { EditorDataState } from "./useEditorDataState";
 import type { EditorHistory } from "./useEditorHistory";
 import type { EditorProjectValues } from "./useEditorProjectValues";
@@ -22,7 +24,7 @@ interface Options {
     "project" | "setBpmInputValue" | "bpmInputValue"
   >;
   editorProjectValues: Pick<EditorProjectValues, "timelineDuration">;
-  editorRuntime: Pick<EditorRuntime, "projectRef" | "currentTimeRef">;
+  editorRuntime: Pick<EditorRuntime, "projectRef">;
   editorHistory: Pick<EditorHistory, "persistProject">;
   editorTransientState: Pick<EditorTransientState, "setTimelineMarkers">;
 }
@@ -36,7 +38,7 @@ export function useTimelineTempo({
 }: Options) {
   const { project, setBpmInputValue, bpmInputValue } = editorDataState;
   const { timelineDuration } = editorProjectValues;
-  const { projectRef, currentTimeRef } = editorRuntime;
+  const { projectRef } = editorRuntime;
   const { persistProject } = editorHistory;
   const { setTimelineMarkers } = editorTransientState;
   const tempoBpm = clamp(
@@ -47,13 +49,18 @@ export function useTimelineTempo({
 
   const tempoOffset = clamp(project?.tempo?.offset ?? 0, 0, timelineDuration);
 
-  const beatDuration = 60_000 / tempoBpm;
+  const { timelineSubdivision } = useTimelineGridPreferences();
 
-  const timelineGridStyle = {
-    "--timeline-beat-size": `${(beatDuration / timelineDuration) * 100}%`,
-    "--timeline-bar-size": `${((beatDuration * 4) / timelineDuration) * 100}%`,
-    "--timeline-grid-offset": `${(tempoOffset / timelineDuration) * 100}%`,
-  } as CSSProperties;
+  const timelineGridLines = useMemo(
+    () =>
+      tempoGridLines(
+        timelineDuration,
+        tempoBpm,
+        tempoOffset,
+        timelineSubdivision
+      ),
+    [tempoBpm, tempoOffset, timelineDuration, timelineSubdivision]
+  );
 
   useEffect(() => setBpmInputValue(String(tempoBpm)), [tempoBpm]);
 
@@ -104,22 +111,29 @@ export function useTimelineTempo({
     [tempoBpm]
   );
 
-  const addTimelineMarker = useCallback(() => {
-    const time = clamp(currentTimeRef.current, 0, timelineDuration);
-    setTimelineMarkers((markers) => [
-      ...markers,
-      { id: crypto.randomUUID(), time },
-    ]);
-  }, [timelineDuration]);
-
+  const addTimelineMarkerAt = useCallback(
+    (value: number) => {
+      const time = clamp(value, 0, timelineDuration);
+      setTimelineMarkers((markers) => [
+        ...markers,
+        { id: crypto.randomUUID(), time },
+      ]);
+    },
+    [timelineDuration]
+  );
   const removeTimelineMarker = useCallback((id: string) => {
     setTimelineMarkers((markers) =>
       markers.filter((marker) => marker.id !== id)
     );
   }, []);
+  const removeAllTimelineMarkers = useCallback(() => {
+    setTimelineMarkers([]);
+  }, [setTimelineMarkers]);
+
   return {
-    addTimelineMarker,
-    timelineGridStyle,
+    removeAllTimelineMarkers,
+    addTimelineMarkerAt,
+    timelineGridLines,
     tempoOffset,
     removeTimelineMarker,
     commitBpmInput,

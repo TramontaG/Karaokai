@@ -1,4 +1,5 @@
-import { useCallback, useEffect } from "react";
+import { createBackgroundVideoSync } from "../../util/editor/backgroundVideoSync";
+import { useCallback, useEffect, useMemo } from "react";
 import { projectAudioSources, readProjectAudio } from "../../services/projects";
 import { clamp } from "../../util/editor/numbers";
 import type { EditorDataState } from "./useEditorDataState";
@@ -20,11 +21,7 @@ interface Options {
   editorHistory: Pick<EditorHistory, "persistProject">;
   editorDataState: Pick<
     EditorDataState,
-    | "setIsAudioReady"
-    | "setAudioSources"
-    | "setError"
-    | "audioSources"
-    | "isPlaying"
+    "setIsAudioReady" | "setAudioSources" | "setError" | "audioSources"
   >;
   editorEnvironment: Pick<EditorEnvironment, "projectId" | "data">;
   editorProjectValues: Pick<EditorProjectValues, "audioTrack">;
@@ -47,13 +44,8 @@ export function useEditorMedia({
     currentTimeRef,
   } = editorRuntime;
   const { persistProject } = editorHistory;
-  const {
-    setIsAudioReady,
-    setAudioSources,
-    setError,
-    audioSources,
-    isPlaying,
-  } = editorDataState;
+  const { setIsAudioReady, setAudioSources, setError, audioSources } =
+    editorDataState;
   const { projectId, data } = editorEnvironment;
   const { audioTrack } = editorProjectValues;
   const { setBackgroundMediaReady } = editorTransientState;
@@ -125,25 +117,20 @@ export function useEditorMedia({
     100
   );
 
+  const syncVideo = useMemo(() => createBackgroundVideoSync(), []);
   const syncBackgroundVideoTime = useCallback(
     (seconds: number, force = false) => {
       const video = backgroundVideo.current;
+      const audio = instrumentalAudio.current;
       if (!video) return;
-      const duration = video.duration;
-      const videoTime =
-        Number.isFinite(duration) && duration > 0
-          ? seconds % duration
-          : seconds;
-
-      if (!force && Math.abs(video.currentTime - videoTime) < 0.12) return;
-      try {
-        video.currentTime = videoTime;
-        video.playbackRate = 1;
-      } catch {
-        // Metadata may still be loading; onLoadedMetadata will apply the position.
-      }
+      syncVideo(
+        video,
+        seconds,
+        Boolean(audio && !audio.paused && !audio.ended),
+        force
+      );
     },
-    []
+    [syncVideo]
   );
 
   const updateMediaTime = useCallback(
@@ -181,8 +168,7 @@ export function useEditorMedia({
   const onBackgroundVideoLoadedMetadata = useCallback(() => {
     setBackgroundMediaReady(true);
     syncBackgroundVideoTime(currentTimeRef.current / 1000, true);
-    if (isPlaying) void backgroundVideo.current?.play().catch(() => undefined);
-  }, [isPlaying, syncBackgroundVideoTime]);
+  }, [syncBackgroundVideoTime]);
   return {
     instrumentalSource,
     updateMediaTime,
