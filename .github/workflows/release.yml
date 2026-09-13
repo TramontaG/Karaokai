@@ -58,8 +58,7 @@ jobs:
       - name: Build Windows installer
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-          ELECTRON_BUILDER_PUBLISH: never
-        run: npm run build:windows
+        run: npm run build && npx electron-builder --win nsis --x64 --publish never
 
       - name: Generate SHA-256 checksum
         shell: pwsh

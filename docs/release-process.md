@@ -13,7 +13,9 @@ KaraokAI release candidates are created from annotated source tags matching
 The installer name includes the package version. The tag and `package.json`
 version must match, except that the tag has the leading `v`.
 
-The packaging command uses `--publish never`. `electron-builder` only creates
+The workflow invokes `electron-builder` with `--publish never` explicitly.
+This applies even when publishing an existing tag whose historical
+`package.json` predates the release workflow. `electron-builder` only creates
 the installer; the workflow publishes release assets explicitly with the GitHub
 CLI after checksums have been generated. This prevents CI auto-detection from
 making `electron-builder` attempt to publish with a separate GitHub token.
