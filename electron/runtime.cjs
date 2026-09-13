@@ -10,11 +10,15 @@ const UV_VERSION = "0.12.9";
 const PYTHON_VERSION = "3.11.16";
 const WORKER_VERSION = "0.4.11";
 const WORKER_FINGERPRINT_FILE = "worker-source.sha256";
-const WORKER_COPY_FILTER = (source) => !source.split(path.sep).some(
-  (part) =>
-    ["build", "__pycache__", ".pytest_cache", ".mypy_cache"].includes(part) ||
-    part.endsWith(".egg-info")
-);
+const WORKER_COPY_FILTER = (source) =>
+  !source
+    .split(path.sep)
+    .some(
+      (part) =>
+        ["build", "__pycache__", ".pytest_cache", ".mypy_cache"].includes(
+          part
+        ) || part.endsWith(".egg-info")
+    );
 const WHISPER_FILES = [
   "config.json",
   "model.bin",
@@ -121,7 +125,9 @@ function commandWorksAsync(command, args = ["--version"], options = {}) {
 async function workerSourceFingerprint(workerSource) {
   const files = [];
   async function collect(directory) {
-    for (const entry of await fs.promises.readdir(directory, { withFileTypes: true })) {
+    for (const entry of await fs.promises.readdir(directory, {
+      withFileTypes: true,
+    })) {
       const target = path.join(directory, entry.name);
       if (!WORKER_COPY_FILTER(target)) continue;
       if (entry.isDirectory()) await collect(target);
@@ -145,18 +151,34 @@ async function synchronizeWorkerSource(dataRoot, appPath) {
   const runtimeDirectory = path.dirname(destination);
   const sourceFingerprint = await workerSourceFingerprint(source);
   const fingerprintFile = path.join(runtimeDirectory, WORKER_FINGERPRINT_FILE);
-  const previousFingerprint = await fs.promises.readFile(fingerprintFile, "utf8").catch(() => "");
-  if (previousFingerprint.trim() === sourceFingerprint && fs.existsSync(destination)) {
-    return { directory: destination, fingerprint: sourceFingerprint, changed: false };
+  const previousFingerprint = await fs.promises
+    .readFile(fingerprintFile, "utf8")
+    .catch(() => "");
+  if (
+    previousFingerprint.trim() === sourceFingerprint &&
+    fs.existsSync(destination)
+  ) {
+    return {
+      directory: destination,
+      fingerprint: sourceFingerprint,
+      changed: false,
+    };
   }
   const temporary = `${destination}.${process.pid}-${crypto.randomBytes(4).toString("hex")}.tmp`;
   await fs.promises.mkdir(runtimeDirectory, { recursive: true });
   await fs.promises.rm(temporary, { recursive: true, force: true });
-  await fs.promises.cp(source, temporary, { recursive: true, filter: WORKER_COPY_FILTER });
+  await fs.promises.cp(source, temporary, {
+    recursive: true,
+    filter: WORKER_COPY_FILTER,
+  });
   await fs.promises.rm(destination, { recursive: true, force: true });
   await fs.promises.rename(temporary, destination);
   await fs.promises.writeFile(fingerprintFile, sourceFingerprint, "utf8");
-  return { directory: destination, fingerprint: sourceFingerprint, changed: true };
+  return {
+    directory: destination,
+    fingerprint: sourceFingerprint,
+    changed: true,
+  };
 }
 
 async function installedWorkerMatchesSource(dataRoot, appPath) {
@@ -186,7 +208,10 @@ async function workerVersionMatches(dataRoot, appPath) {
         .filter((line) => line.startsWith("{"))
         .at(-1) ?? ""
     );
-    return report.workerVersion === WORKER_VERSION && await installedWorkerMatchesSource(dataRoot, appPath);
+    return (
+      report.workerVersion === WORKER_VERSION &&
+      (await installedWorkerMatchesSource(dataRoot, appPath))
+    );
   } catch {
     return false;
   }
@@ -672,7 +697,9 @@ async function run(command, args, context) {
     ).map((model) => model.id);
     let workerReady = await workerVersionMatches(dataRoot, context.appPath);
     if (!workerReady && installedWhisperModelIds.length > 0) {
-      const model = MODELS.find((entry) => entry.id === installedWhisperModelIds[0]);
+      const model = MODELS.find(
+        (entry) => entry.id === installedWhisperModelIds[0]
+      );
       if (model) {
         await ensureRuntime(dataRoot, model, context.emit, context.appPath);
         workerReady = await workerVersionMatches(dataRoot, context.appPath);

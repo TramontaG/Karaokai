@@ -115,6 +115,7 @@ This command starts Vite and the Electron window.
 | `npm run dev`                 | Runs Electron with Vite in development mode              |
 | `npm run dev:web`             | Runs only the Vite frontend                              |
 | `npm run build`               | Type-checks and generates the web bundle                 |
+| `npm test`                    | Runs the automated unit tests                            |
 | `npm run build:desktop`       | Packages targets for the current platform                |
 | `npm run build:windows`       | Builds the Windows x64 NSIS installer                    |
 | `npm run build:windows:store` | Builds the Microsoft Store AppX package on Windows 10/11 |
@@ -128,11 +129,44 @@ Artifacts are written to `release/`.
 | Platform        | Current target      | Status                                                                                   |
 | --------------- | ------------------- | ---------------------------------------------------------------------------------------- |
 | Linux           | AppImage and `.deb` | Packaging validated                                                                      |
-| Windows x64     | NSIS `.exe`         | Packaging validated; unsigned for closed RC distribution                                 |
+| Windows x64     | NSIS `.exe`         | Public RC releases are built by GitHub Actions; signing is being set up with SignPath    |
 | Microsoft Store | AppX                | Configured; requires a Partner Center account and reserved identity                      |
 | macOS           | DMG                 | Configured; requires a macOS build, signing, and notarization before public distribution |
 
 Before submitting to the Microsoft Store, reserve the app name in Partner Center and replace `appx.identityName` in `electron-builder.yml` with the exact value supplied by Microsoft. The `appx` target is the Store package format supported by electron-builder; Microsoft signs the published package.
+
+Release candidates are published from `v*-rc.*` tags by GitHub Actions. Each
+release includes the Windows installer and a `checksums.txt` file. Until the
+SignPath integration is enabled, Windows installers are explicitly marked as
+unsigned in their release notes. See [the release process](docs/release-process.md).
+
+## Code signing policy
+
+Free code signing provided by SignPath.io, certificate by SignPath Foundation.
+
+### Team roles
+
+- Author, committer, reviewer, and approver: [Guilherme Tramontano
+  (@TramontaG)](https://github.com/TramontaG)
+
+Changes proposed by non-committers are reviewed before being merged. Each code
+signing request is manually approved by the approver before signing.
+
+### Security controls
+
+The project maintainer uses multi-factor authentication for GitHub and
+SignPath access. Release artifacts are built from tagged source code by the
+repository's GitHub Actions workflow. The unsigned build artifact is retained
+by GitHub Actions before it is submitted to SignPath. Once the SignPath
+integration is enabled, only the signed artifact returned by SignPath will be
+published as a signed Windows release.
+
+### Privacy
+
+KaraokAI does not include telemetry, advertising, analytics, user accounts, or
+a KaraokAI-operated cloud service. Network requests occur only when explicitly
+initiated by the user, including runtime/model downloads and YouTube imports.
+See [PRIVACY.md](PRIVACY.md) for details.
 
 ## Privacy
 
