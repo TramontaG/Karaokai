@@ -53,7 +53,7 @@ jobs:
           }
 
       - name: Run tests
-        run: npm test
+        run: node --test tests/*.test.mjs
 
       - name: Build Windows installer
         env:
