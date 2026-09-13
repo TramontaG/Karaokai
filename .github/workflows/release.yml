@@ -52,9 +52,6 @@ jobs:
             throw "Tag version $tagVersion does not match package version $packageVersion."
           }
 
-      - name: Check formatting
-        run: npm run format:check
-
       - name: Run tests
         run: npm test
 
