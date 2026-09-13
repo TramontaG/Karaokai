@@ -23,6 +23,8 @@ This applies even when publishing an existing tag whose historical
 the installer; the workflow publishes release assets explicitly with the GitHub
 CLI after checksums have been generated. This prevents CI auto-detection from
 making `electron-builder` attempt to publish with a separate GitHub token.
+The publication job sets `GH_REPO` explicitly because it only downloads build
+artifacts and does not check out a Git repository.
 
 ## Current signing status
 
