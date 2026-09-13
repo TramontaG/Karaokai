@@ -3,7 +3,7 @@
 A local-first desktop application that turns songs into karaoke projects: it separates vocals and instrumental tracks, transcribes lyrics with word-level timestamps, provides a visual timeline editor, and exports the result as a video.
 
 > [!NOTE]
-> Current version: `0.1.0-rc.4` — release candidate. The main workflow is functional; public Windows and macOS distribution still require their respective publishing and signing steps.
+> Current version: `1.0.0`. Windows and Linux releases are published through GitHub Actions. Windows code signing is being set up through SignPath Foundation; macOS distribution still requires signing and notarization.
 
 ## What KaraokAI does
 
@@ -129,16 +129,17 @@ Artifacts are written to `release/`.
 | Platform        | Current target      | Status                                                                                   |
 | --------------- | ------------------- | ---------------------------------------------------------------------------------------- |
 | Linux           | AppImage and `.deb` | Packaging validated                                                                      |
-| Windows x64     | NSIS `.exe`         | Public RC releases are built by GitHub Actions; signing is being set up with SignPath    |
+| Windows x64     | NSIS `.exe`         | Releases are built by GitHub Actions; signing is being set up with SignPath              |
 | Microsoft Store | AppX                | Configured; requires a Partner Center account and reserved identity                      |
 | macOS           | DMG                 | Configured; requires a macOS build, signing, and notarization before public distribution |
 
 Before submitting to the Microsoft Store, reserve the app name in Partner Center and replace `appx.identityName` in `electron-builder.yml` with the exact value supplied by Microsoft. The `appx` target is the Store package format supported by electron-builder; Microsoft signs the published package.
 
-Release candidates are published from `v*-rc.*` tags by GitHub Actions. Each
-release includes the Windows installer and a `checksums.txt` file. Until the
-SignPath integration is enabled, Windows installers are explicitly marked as
-unsigned in their release notes. See [the release process](docs/release-process.md).
+Stable releases are published from `vX.Y.Z` tags by GitHub Actions. Each
+release includes the Windows x64 installer, Linux x64 AppImage and Debian
+package, and a `checksums.txt` file. Until the SignPath integration is enabled,
+Windows installers are explicitly marked as unsigned in their release notes.
+See [the release process](docs/release-process.md).
 
 ## Code signing policy
 

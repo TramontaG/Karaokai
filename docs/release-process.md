@@ -1,16 +1,20 @@
 # Release process
 
-KaraokAI release candidates are created from annotated source tags matching
-`v*-rc.*`. The release workflow runs on a GitHub-hosted Windows runner and:
+KaraokAI stable releases are created from annotated source tags matching
+`vX.Y.Z`, such as `v1.0.0`. The release workflow builds artifacts on
+GitHub-hosted Windows and Ubuntu runners and:
 
 1. installs dependencies from `package-lock.json` with `npm ci`;
-2. runs formatting checks, automated tests, and the TypeScript/Vite build;
-3. packages the x64 NSIS installer with `npm run build:windows`;
-4. generates `checksums.txt` with the SHA-256 hash of the installer;
-5. retains the unsigned installer as a GitHub Actions artifact; and
-6. creates a prerelease containing the installer and checksum file.
+2. runs automated tests and the TypeScript/Vite build;
+3. packages the x64 Windows NSIS installer, Linux x64 AppImage, and Linux x64
+   Debian package;
+4. retains the unsigned Windows installer as a GitHub Actions artifact;
+5. generates one `checksums.txt` file with the SHA-256 hash of every release
+   asset; and
+6. creates or updates a release containing all platform assets and the
+   checksum file.
 
-The installer name includes the package version. The tag and `package.json`
+Every artifact name includes the package version. The tag and `package.json`
 version must match, except that the tag has the leading `v`.
 
 The workflow invokes `electron-builder` with `--publish never` explicitly.

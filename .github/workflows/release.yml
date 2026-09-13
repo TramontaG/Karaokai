@@ -1,13 +1,13 @@
-name: Publish release candidate
+name: Publish release
 
 on:
   push:
     tags:
-      - "v*-rc.*"
+      - "v*"
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing v*-rc.* tag to publish
+        description: Existing stable vX.Y.Z tag to publish or update
         required: true
         type: string
 
@@ -19,8 +19,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Build and publish Windows release candidate
+  build-windows:
+    name: Build Windows x64 installer
     runs-on: windows-latest
     timeout-minutes: 45
 
@@ -44,31 +44,18 @@ jobs:
         run: |
           $packageVersion = node -p "require('./package.json').version"
           $tagName = "${{ inputs.release_tag || github.ref_name }}"
-          if ($tagName -notmatch '^v.+-rc\..+$') {
-            throw "Release tag $tagName must match v*-rc.*."
+          if ($tagName -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "Release tag $tagName must match vX.Y.Z (for example, v1.0.0)."
           }
           $tagVersion = $tagName.TrimStart("v")
           if ($packageVersion -ne $tagVersion) {
             throw "Tag version $tagVersion does not match package version $packageVersion."
           }
 
-      - name: Run tests
-        run: node --test tests/*.test.mjs
-
       - name: Build Windows installer
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run build && npx electron-builder --win nsis --x64 --publish never
-
-      - name: Generate SHA-256 checksum
-        shell: pwsh
-        run: |
-          $installer = Get-ChildItem release -Filter "KaraokAI-*-win-x64.exe" | Select-Object -First 1
-          if ($null -eq $installer) {
-            throw "Windows installer was not produced."
-          }
-          $hash = Get-FileHash -Algorithm SHA256 $installer.FullName
-          "{0}  {1}" -f $hash.Hash.ToLowerInvariant(), $installer.Name | Set-Content -NoNewline release/checksums.txt
 
       # SignPath verifies that the signing input was first retained by GitHub.
       # Keep this artifact name stable when adding SignPath after approval.
@@ -77,33 +64,104 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: unsigned-windows-installer
-          path: |
-            release/KaraokAI-*-win-x64.exe
-            release/checksums.txt
+          path: release/KaraokAI-*-win-x64.exe
           if-no-files-found: error
           retention-days: 90
 
-      - name: Create unsigned prerelease
+      - name: Upload Windows release asset
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-assets-windows
+          path: release/KaraokAI-*-win-x64.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  build-linux:
+    name: Build Linux x64 packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: node --test tests/*.test.mjs
+
+      - name: Build Linux packages
+        run: npm run build && npx electron-builder --linux AppImage deb --x64 --publish never
+
+      - name: Upload Linux release assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-assets-linux
+          path: |
+            release/KaraokAI-*-linux-x86_64.AppImage
+            release/KaraokAI-*-linux-amd64.deb
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish release
+    needs:
+      - build-windows
+      - build-linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          pattern: release-assets-*
+          path: release
+          merge-multiple: true
+
+      - name: Generate SHA-256 checksums
+        run: |
+          cd release
+          sha256sum KaraokAI-*-win-x64.exe \
+            KaraokAI-*-linux-x86_64.AppImage \
+            KaraokAI-*-linux-amd64.deb > checksums.txt
+
+      - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ inputs.release_tag || github.ref_name }}
-        shell: pwsh
         run: |
-          @"
+          cat > release-notes.md <<'EOF'
+          ## Downloads
+
+          - Windows x64: NSIS installer
+          - Linux x64: AppImage and Debian package
+
           ## Windows signing status
 
           The Windows installer in this release is currently unsigned. Code
           signing is being set up through SignPath Foundation.
 
-          Verify downloads using `checksums.txt`.
+          Verify all downloads using `checksums.txt`.
 
           Code signing policy:
           https://github.com/TramontaG/Karaokai#code-signing-policy
-          "@ | Set-Content release-notes.md
+          EOF
 
-          gh release create $env:TAG_NAME `
-            release/KaraokAI-*-win-x64.exe `
-            release/checksums.txt `
-            --title "KaraokAI $env:TAG_NAME" `
-            --notes-file release-notes.md `
-            --prerelease
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" release/* --clobber
+            gh release edit "$TAG_NAME" --title "KaraokAI $TAG_NAME" \
+              --notes-file release-notes.md --latest
+          else
+            gh release create "$TAG_NAME" release/* --title "KaraokAI $TAG_NAME" \
+              --notes-file release-notes.md --latest
+          fi
