@@ -16,6 +16,8 @@ export interface UserPreferences {
   language: Language;
   themePreference: ThemePreference;
   soundEnabled: boolean;
+  metronomeEnabled: boolean;
+  metronomeVolume: number;
   onboardingCompleted: boolean;
   storageDirectory: string | null;
   projectViewMode: ProjectViewMode;
@@ -32,6 +34,8 @@ export const defaultPreferences: UserPreferences = {
   language: "pt-BR",
   themePreference: "system",
   soundEnabled: true,
+  metronomeEnabled: false,
+  metronomeVolume: 50,
   onboardingCompleted: false,
   storageDirectory: null,
   projectViewMode: "grid",
@@ -68,6 +72,15 @@ export function loadUserPreferences(): UserPreferences {
         typeof stored.soundEnabled === "boolean"
           ? stored.soundEnabled
           : defaultPreferences.soundEnabled,
+      metronomeEnabled:
+        typeof stored.metronomeEnabled === "boolean"
+          ? stored.metronomeEnabled
+          : defaultPreferences.metronomeEnabled,
+      metronomeVolume:
+        typeof stored.metronomeVolume === "number" &&
+        Number.isFinite(stored.metronomeVolume)
+          ? Math.max(0, Math.min(100, stored.metronomeVolume))
+          : defaultPreferences.metronomeVolume,
       onboardingCompleted:
         typeof stored.onboardingCompleted === "boolean"
           ? stored.onboardingCompleted

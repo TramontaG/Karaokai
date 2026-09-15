@@ -8,7 +8,7 @@ const { pythonBinary, ffmpegBinary } = require("./projects.cjs");
 
 const UV_VERSION = "0.12.9";
 const PYTHON_VERSION = "3.11.16";
-const WORKER_VERSION = "0.4.11";
+const WORKER_VERSION = "0.4.12";
 const WORKER_FINGERPRINT_FILE = "worker-source.sha256";
 const WORKER_COPY_FILTER = (source) =>
   !source
@@ -196,10 +196,11 @@ async function installedWorkerMatchesSource(dataRoot, appPath) {
 
 async function workerVersionMatches(dataRoot, appPath) {
   try {
+    await verifyInstalledPackages(dataRoot);
     const output = await runCommand(
       pythonBinary(dataRoot),
       ["-m", "karaoke_worker", "--healthcheck"],
-      { env: runtimeEnvironment(dataRoot) }
+      { env: runtimeEnvironment(dataRoot), timeoutMs: 30_000 }
     );
     const report = JSON.parse(
       output
@@ -235,26 +236,76 @@ function runtimeEnvironment(dataRoot) {
   };
 }
 
+// Check wheel metadata without importing native libraries, which can crash if
+// an interrupted installation or damaged cache left a shared library truncated.
+const PACKAGE_INTEGRITY_CHECK = `
+from importlib.metadata import distributions
+import csv
+import io
+import sys
+damaged = set()
+for distribution in distributions():
+    for file, checksum, size in csv.reader(io.StringIO(distribution.read_text('RECORD') or '')):
+        if not size:
+            continue
+        target = distribution.locate_file(file)
+        if not target.is_file() or target.stat().st_size != int(size):
+            damaged.add(distribution.metadata['Name'])
+if damaged:
+    sys.exit('Incomplete Python packages: ' + ', '.join(sorted(damaged)))
+`;
+
+async function verifyInstalledPackages(dataRoot) {
+  await runCommand(pythonBinary(dataRoot), ["-c", PACKAGE_INTEGRITY_CHECK], {
+    env: runtimeEnvironment(dataRoot),
+    timeoutMs: 30_000,
+  });
+}
+
 function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, options);
+    const { timeoutMs, ...spawnOptions } = options;
+    const child = spawn(command, args, spawnOptions);
     let output = "";
     let errorOutput = "";
+    let settled = false;
+    const finish = (error, result) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) clearTimeout(timeout);
+      if (error) reject(error);
+      else resolve(result);
+    };
+    const timeout = timeoutMs
+      ? setTimeout(() => {
+          finish(
+            new Error(
+              `${command} did not finish within ${Math.round(timeoutMs / 1000)} seconds`
+            )
+          );
+          child.kill();
+        }, timeoutMs)
+      : null;
     child.stdout?.on("data", (chunk) => {
       output += chunk.toString();
     });
     child.stderr?.on("data", (chunk) => {
       errorOutput += chunk.toString();
     });
-    child.once("error", reject);
-    child.once("close", (code) => {
-      if (code === 0) resolve(output.trim());
+    child.once("error", (error) => finish(error));
+    child.once("close", (code, signal) => {
+      if (code === 0) finish(null, output.trim());
       else
-        reject(
+        finish(
           new Error(
-            errorOutput.trim() ||
-              output.trim() ||
-              `${command} exited with ${code}`
+            [
+              signal
+                ? `${command} terminated by ${signal}`
+                : `${command} exited with code ${code}`,
+              errorOutput.trim() || output.trim(),
+            ]
+              .filter(Boolean)
+              .join("\n")
           )
         );
     });
@@ -497,11 +548,24 @@ async function ensureRuntime(dataRoot, model, emit, appPath) {
       "--python",
       python,
       "--reinstall",
+      // A damaged uv cache can otherwise reproduce the same truncated files.
+      "--no-cache",
+      "--link-mode",
+      "copy",
       workerSource.directory,
       "--extra-index-url",
       torchIndex,
       "--index-strategy",
       "unsafe-best-match",
+    ],
+    { env }
+  );
+  await verifyInstalledPackages(dataRoot);
+  await runCommand(
+    python,
+    [
+      "-c",
+      "import torch; import torchaudio; from demucs.pretrained import get_model",
     ],
     { env }
   );
@@ -854,4 +918,4 @@ async function run(command, args, context) {
   return undefined;
 }
 
-module.exports = { run };
+module.exports = { run, runCommand, PACKAGE_INTEGRITY_CHECK };

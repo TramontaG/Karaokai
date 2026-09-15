@@ -1,3 +1,6 @@
+import { useTempoChanges } from "../../hooks/editor/useTempoChanges";
+import { useTimeSignatures } from "../../hooks/editor/useTimeSignatures";
+import { useEditorMetronome } from "../../hooks/editor/useEditorMetronome";
 import { useEditorBackground } from "../../hooks/editor/useEditorBackground";
 import { useEditorBackgroundView } from "../../hooks/editor/useEditorBackgroundView";
 import { useEditorComponentModels } from "../../hooks/editor/useEditorComponentModels";
@@ -89,6 +92,18 @@ export function useBehavior(_: Record<string, never>) {
     editorRuntime,
     editorEnvironment,
   });
+  const tempoChanges = useTempoChanges({
+    editorDataState,
+    editorRuntime,
+    editorHistory,
+    duration: editorProjectValues.timelineDuration,
+  });
+  const timeSignatures = useTimeSignatures({
+    editorDataState,
+    editorRuntime,
+    editorHistory,
+    duration: editorProjectValues.timelineDuration,
+  });
   const timelineTempo = useTimelineTempo({
     editorDataState,
     editorProjectValues,
@@ -104,6 +119,11 @@ export function useBehavior(_: Record<string, never>) {
     editorProjectValues,
     editorTransientState,
   });
+  useEditorMetronome(
+    editorRuntime.instrumentalAudio,
+    timelineTempo.timelineGridLines,
+    editorMedia.instrumentalSource
+  );
   const timelineViewport = useTimelineViewport({
     editorEnvironment,
     editorRuntime,
@@ -262,6 +282,8 @@ export function useBehavior(_: Record<string, never>) {
     subtitleRendering,
   });
   const editorTimelineView = useEditorTimelineView({
+    timeSignatures,
+    tempoChanges,
     editorRuntime,
     editorDataState,
     timelineTempo,

@@ -42,7 +42,6 @@ export const WordSegment = styled.span<{
   box-sizing: border-box;
   min-width: 0;
   overflow: hidden;
-  border-right: 1px solid rgb(255 255 255 / 24%);
   align-items: center;
   justify-content: center;
   color: ${({ $active }) => ($active ? "#fff" : "rgb(255 255 255 / 78%)")};
@@ -60,6 +59,17 @@ export const WordSegment = styled.span<{
   }
   cursor: ${({ $splitting }) => ($splitting ? "crosshair" : "pointer")};
   pointer-events: auto;
+`;
+
+// Match the grid's centered one-pixel stroke without shrinking word content.
+export const WordDivider = styled.span`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-0.5px);
+  background: rgb(255 255 255 / 24%);
+  pointer-events: none;
 `;
 
 export const WordLabel = styled.span`

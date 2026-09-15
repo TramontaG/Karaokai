@@ -1,3 +1,5 @@
+import type { TempoChangesModel } from "./useTempoChanges";
+import type { TimeSignaturesModel } from "./useTimeSignatures";
 import { useTimelineGridPreferences } from "../useTimelineGridPreferences";
 import { type ChangeEvent } from "react";
 import type { EditorDataState } from "./useEditorDataState";
@@ -12,6 +14,8 @@ import type { TimelineViewport } from "./useTimelineViewport";
 import type { SubtitlePhraseActions } from "./useSubtitlePhraseActions";
 
 interface Options {
+  timeSignatures: TimeSignaturesModel;
+  tempoChanges: TempoChangesModel;
   editorRuntime: Pick<
     EditorRuntime,
     | "timelineRef"
@@ -60,6 +64,8 @@ interface Options {
 }
 
 export function useEditorTimelineView({
+  timeSignatures,
+  tempoChanges,
   editorRuntime,
   editorDataState,
   timelineTempo,
@@ -113,6 +119,8 @@ export function useEditorTimelineView({
   const { onTimelineClick } = timelineInteractions;
   const { onTimelineScroll } = timelineViewport;
   return {
+    timeSignatures,
+    tempoChanges,
     timelineRef,
     timelineLabelsRef,
     timelineContentRef,
@@ -157,7 +165,11 @@ export function useEditorTimelineView({
     removeAllTimelineMarkersDisabled: timelineMarkers.length === 0,
     onTimelineAutoFollowChange: (event: ChangeEvent<HTMLInputElement>) =>
       setTimelineAutoFollow(event.target.checked),
-    onSelectPointerTool: () => setTimelineTool("pointer"),
+    onSelectPointerTool: () => {
+      timeSignatures.cancel();
+      tempoChanges.cancel();
+      setTimelineTool("pointer");
+    },
     onToggleSplitTool: () =>
       setTimelineTool(timelineTool === "split" ? "pointer" : "split"),
     onToggleMarkerTool: () =>

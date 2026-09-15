@@ -38,7 +38,7 @@ def healthcheck() -> None:
     emit(
         {
             "status": "ready",
-            "workerVersion": "0.4.11",
+            "workerVersion": "0.4.12",
             "dependencies": packages,
         }
     )

@@ -1,3 +1,4 @@
+import type { EditorHistoryEntry } from "../../util/editor/types";
 import { useCallback } from "react";
 import { type KaraokeProject } from "../../domain/project";
 import { HISTORY_LIMIT } from "../../util/editor/constants";
@@ -9,7 +10,11 @@ import type { EditorRuntime } from "./useEditorRuntime";
 interface Options {
   editorRuntime: Pick<
     EditorRuntime,
-    "projectRef" | "exportLockRef" | "selectionRef" | "historyRef"
+    | "projectRef"
+    | "exportLockRef"
+    | "selectionRef"
+    | "historyRef"
+    | "redoHistoryRef"
   >;
   editorProjectChanges: Pick<EditorProjectChanges, "applyProject">;
   editorDataState: Pick<
@@ -27,7 +32,13 @@ export function useEditorHistory({
   editorProjectChanges,
   editorDataState,
 }: Options) {
-  const { projectRef, exportLockRef, selectionRef, historyRef } = editorRuntime;
+  const {
+    projectRef,
+    exportLockRef,
+    selectionRef,
+    historyRef,
+    redoHistoryRef,
+  } = editorRuntime;
   const { applyProject } = editorProjectChanges;
   const {
     setSelectedTrackId,
@@ -44,6 +55,7 @@ export function useEditorHistory({
     ) => {
       if (exportLockRef.current) return;
       if (historySource && historySource !== next) {
+        redoHistoryRef.current = [];
         const selection = selectionRef.current;
         historyRef.current.push({
           // Keep a real snapshot: a later edit must never mutate the state that
@@ -67,22 +79,39 @@ export function useEditorHistory({
     [applyProject]
   );
 
-  const onUndo = useCallback(() => {
-    const entry = historyRef.current.pop();
-    if (!entry) return false;
-    const restored = {
-      ...snapshotProject(entry.project),
-      updatedAt: String(Date.now()),
-    };
-    setSelectedTrackId(entry.selectedTrackId);
-    setSelectedPhraseId(entry.selectedPhraseId);
-    setSelectedPhraseIds(entry.selectedPhraseIds);
-    setPhraseSelectionAnchorId(entry.phraseSelectionAnchorId);
-    setSelectedWordId(entry.selectedWordId);
-    applyProject(restored, true);
-    return true;
-  }, [applyProject, setPhraseSelectionAnchorId, setSelectedPhraseIds]);
-  return { persistProject, onUndo };
+  const restoreHistory = useCallback(
+    (from: EditorHistoryEntry[], to: EditorHistoryEntry[]) => {
+      if (exportLockRef.current || !projectRef.current) return false;
+      const entry = from.pop();
+      if (!entry) return false;
+      to.push({
+        project: snapshotProject(projectRef.current),
+        ...structuredClone(selectionRef.current),
+      });
+      if (to.length > HISTORY_LIMIT) to.shift();
+      const restored = {
+        ...snapshotProject(entry.project),
+        updatedAt: String(Date.now()),
+      };
+      setSelectedTrackId(entry.selectedTrackId);
+      setSelectedPhraseId(entry.selectedPhraseId);
+      setSelectedPhraseIds(entry.selectedPhraseIds);
+      setPhraseSelectionAnchorId(entry.phraseSelectionAnchorId);
+      setSelectedWordId(entry.selectedWordId);
+      applyProject(restored, true);
+      return true;
+    },
+    [applyProject, setPhraseSelectionAnchorId, setSelectedPhraseIds]
+  );
+  const onUndo = useCallback(
+    () => restoreHistory(historyRef.current, redoHistoryRef.current),
+    [restoreHistory]
+  );
+  const onRedo = useCallback(
+    () => restoreHistory(redoHistoryRef.current, historyRef.current),
+    [restoreHistory]
+  );
+  return { persistProject, onUndo, onRedo };
 }
 
 export type EditorHistory = ReturnType<typeof useEditorHistory>;

@@ -213,9 +213,27 @@ export interface ProjectStage {
   progress?: number;
 }
 
+export interface TimeSignature {
+  numerator: number;
+  denominator: number;
+}
+
+export interface TimeSignatureMarker extends TimeSignature {
+  id: string;
+  time: number;
+}
+
+export interface TempoChangeMarker {
+  id: string;
+  time: number;
+  bpm: number;
+}
+
 export interface ProjectTempo {
   bpm: number;
   offset: number;
+  timeSignatures?: TimeSignatureMarker[];
+  changes?: TempoChangeMarker[];
 }
 
 export interface KaraokeProject {

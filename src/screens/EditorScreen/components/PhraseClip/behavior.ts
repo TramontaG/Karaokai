@@ -1,12 +1,13 @@
 import {
   createElement,
+  Fragment,
   useCallback,
   type MouseEvent,
   type PointerEvent,
 } from "react";
 import type { SubtitlePhrase, SubtitleWord } from "../../../../domain/project";
 import { usePhraseClipGestures } from "../../../../hooks/editor/usePhraseClipGestures";
-import { WordEdge, WordLabel, WordSegment } from "./styles";
+import { WordDivider, WordEdge, WordLabel, WordSegment } from "./styles";
 
 export interface PhraseWordView extends SubtitleWord {
   left: string;
@@ -80,58 +81,68 @@ export function useBehavior(props: PhraseClipProps) {
   const renderWord = useCallback(
     (word: PhraseWordView) =>
       createElement(
-        WordSegment,
-        {
-          $active: word.active,
-          $selected: word.selected,
-          $splitting: props.splitting,
-          $gap: word.type === "gap",
-          "data-timeline-word-id": word.id,
-          style: { left: word.left, width: word.width },
-          onPointerDown: (event: PointerEvent<HTMLElement>) => {
-            suppressWordTimingClickRef.current = false;
-            if (props.splitting) {
+        Fragment,
+        null,
+        createElement(
+          WordSegment,
+          {
+            $active: word.active,
+            $selected: word.selected,
+            $splitting: props.splitting,
+            $gap: word.type === "gap",
+            "data-timeline-word-id": word.id,
+            style: { left: word.left, width: word.width },
+            onPointerDown: (event: PointerEvent<HTMLElement>) => {
+              suppressWordTimingClickRef.current = false;
+              if (props.splitting) {
+                event.stopPropagation();
+                return;
+              }
+              if (event.shiftKey || event.metaKey) return;
+              if (event.ctrlKey) {
+                startWordTimingDrag(event, word, "move");
+                return;
+              }
               event.stopPropagation();
-              return;
-            }
-            if (event.shiftKey || event.metaKey) return;
-            if (event.ctrlKey) {
-              startWordTimingDrag(event, word, "move");
-              return;
-            }
-            event.stopPropagation();
-            startPhraseDrag(event);
+              startPhraseDrag(event);
+            },
+            onClick: (event: MouseEvent<HTMLElement>) => {
+              if (event.ctrlKey || event.metaKey || event.shiftKey) return;
+              onWordClick(event);
+              if (!event.defaultPrevented)
+                props.onSelectWord(props.phrase, word, event.clientX);
+              event.stopPropagation();
+            },
+            onDoubleClick: (event: MouseEvent<HTMLElement>) =>
+              event.stopPropagation(),
           },
-          onClick: (event: MouseEvent<HTMLElement>) => {
-            if (event.ctrlKey || event.metaKey || event.shiftKey) return;
-            onWordClick(event);
-            if (!event.defaultPrevented)
-              props.onSelectWord(props.phrase, word, event.clientX);
-            event.stopPropagation();
-          },
-          onDoubleClick: (event: MouseEvent<HTMLElement>) =>
-            event.stopPropagation(),
-        },
-        createElement(WordLabel, undefined, word.text),
-        createElement(WordEdge, {
-          $side: "start",
-          $visible: word.selected,
-          $splitting: props.splitting,
-          onPointerDown: (event: PointerEvent<HTMLElement>) => {
-            event.stopPropagation();
-            if (!props.splitting) startWordTimingDrag(event, word, "start");
-          },
-          onClick: (event: MouseEvent<HTMLElement>) => event.stopPropagation(),
-        }),
-        createElement(WordEdge, {
-          $side: "end",
-          $visible: word.selected,
-          $splitting: props.splitting,
-          onPointerDown: (event: PointerEvent<HTMLElement>) => {
-            event.stopPropagation();
-            if (!props.splitting) startWordTimingDrag(event, word, "end");
-          },
-          onClick: (event: MouseEvent<HTMLElement>) => event.stopPropagation(),
+          createElement(WordLabel, undefined, word.text),
+          createElement(WordEdge, {
+            $side: "start",
+            $visible: word.selected,
+            $splitting: props.splitting,
+            onPointerDown: (event: PointerEvent<HTMLElement>) => {
+              event.stopPropagation();
+              if (!props.splitting) startWordTimingDrag(event, word, "start");
+            },
+            onClick: (event: MouseEvent<HTMLElement>) =>
+              event.stopPropagation(),
+          }),
+          createElement(WordEdge, {
+            $side: "end",
+            $visible: word.selected,
+            $splitting: props.splitting,
+            onPointerDown: (event: PointerEvent<HTMLElement>) => {
+              event.stopPropagation();
+              if (!props.splitting) startWordTimingDrag(event, word, "end");
+            },
+            onClick: (event: MouseEvent<HTMLElement>) =>
+              event.stopPropagation(),
+          })
+        ),
+        createElement(WordDivider, {
+          "aria-hidden": true,
+          style: { left: `calc(${word.left} + ${word.width})` },
         })
       ),
     [onWordClick, props, startPhraseDrag, startWordTimingDrag]

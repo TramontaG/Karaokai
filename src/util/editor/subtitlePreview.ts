@@ -1,3 +1,4 @@
+import { withSubtitleWordStyles } from "./subtitleWordStyles";
 import { type CSSProperties } from "react";
 import {
   resolveSubtitleStyle,
@@ -118,8 +119,8 @@ export function subtitlePreviewView(track: SubtitleTrack, currentTime: number) {
     timing,
     playingPhrase,
     entryCuePhrase,
-    words,
-    secondaryWords,
+    words: words.map(withSubtitleWordStyles),
+    secondaryWords: secondaryWords.map(withSubtitleWordStyles),
     visible:
       track.visible && (words.length > 0 || timing.secondaryPhrase !== null),
     containerStyle: {

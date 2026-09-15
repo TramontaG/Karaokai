@@ -15,6 +15,7 @@ export function useOnboarding() {
 
   useEffect(() => {
     if (!isDesktop()) return;
+    let disposed = false;
     let dispose: (() => void) | undefined;
     void listenDesktop<InstallProgress>("runtime-install-progress", (event) => {
       const progress = event.payload;
@@ -64,9 +65,13 @@ export function useOnboarding() {
         });
       }
     }).then((unlisten) => {
-      dispose = unlisten;
+      if (disposed) unlisten();
+      else dispose = unlisten;
     });
-    return () => dispose?.();
+    return () => {
+      disposed = true;
+      dispose?.();
+    };
   }, [data.onboarding.selectedModelId, refresh, setData]);
 
   const getStarted = useCallback(

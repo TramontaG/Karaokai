@@ -1,3 +1,4 @@
+import { withSubtitleWordStyles } from "../../util/editor/subtitleWordStyles";
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import frameFormat from "../../../electron/render-frame-format.json";
@@ -98,8 +99,8 @@ function subtitlePreview(track: SubtitleTrack, currentTime: number) {
     id: track.id,
     timing,
     entryCuePhraseId: entryCuePhrase?.id ?? null,
-    words,
-    secondaryWords,
+    words: words.map(withSubtitleWordStyles),
+    secondaryWords: secondaryWords.map(withSubtitleWordStyles),
     containerStyle: {
       left: `calc(50% + ${((track.style.x ?? 0) / positionReferenceWidth) * 100}%)`,
       top: `calc(50% + ${((track.style.y ?? 0) / positionReferenceHeight) * 100}%)`,

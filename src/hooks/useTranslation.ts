@@ -17,10 +17,14 @@ export function useTranslation() {
     (next: Language) => setData({ preferences: { language: next } }),
     [setData]
   );
+  const t = useCallback(
+    (key: TranslationKey, values?: Record<string, string>) =>
+      translate(language, key, values),
+    [language]
+  );
   return {
     language,
     setLanguage,
-    t: (key: TranslationKey, values?: Record<string, string>) =>
-      translate(language, key, values),
+    t,
   };
 }

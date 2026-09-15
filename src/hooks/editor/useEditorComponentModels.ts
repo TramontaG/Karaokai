@@ -55,6 +55,8 @@ export function useEditorComponentModels(view: EditorView) {
   );
   const editorTimelineModel = useMemo<EditorTimelineModel>(
     () => ({
+      timeSignatures: view.timeSignatures,
+      tempoChanges: view.tempoChanges,
       timelineRenderKey: view.timelineRenderKey,
       tracksLabel: view.tracksLabel,
       addSubtitleTrackLabel: view.addSubtitleTrackLabel,
@@ -115,7 +117,7 @@ export function useEditorComponentModels(view: EditorView) {
       onSelectTrack: view.onSelectTrack,
       onRenameTrack: view.onRenameTrack,
     }),
-    [view.timelineRenderKey]
+    [view.timelineRenderKey, view.timeSignatures, view.tempoChanges]
   );
   const editorSidebarModel = useMemo<EditorSidebarModel>(
     () => ({

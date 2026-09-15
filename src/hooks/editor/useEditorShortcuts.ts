@@ -1,3 +1,4 @@
+import { handleEditorInputKeyDown } from "../../util/editor/inputShortcuts";
 import { useEffect } from "react";
 import { type SubtitleTrack } from "../../domain/project";
 import type { EditorDataState } from "./useEditorDataState";
@@ -10,7 +11,7 @@ import type { SubtitlePhraseActions } from "./useSubtitlePhraseActions";
 interface Options {
   editorRuntime: Pick<
     EditorRuntime,
-    "exportLockRef" | "hoveredPhraseRef" | "projectRef"
+    "exportLockRef" | "hoveredPhraseRef" | "projectRef" | "currentTimeRef"
   >;
   editorDataState: Pick<
     EditorDataState,
@@ -30,8 +31,8 @@ interface Options {
     | "onDeletePhrase"
     | "onJoinPhrases"
   >;
-  editorHistory: Pick<EditorHistory, "onUndo">;
-  editorPlayback: Pick<EditorPlayback, "onTogglePlayback">;
+  editorHistory: Pick<EditorHistory, "onUndo" | "onRedo">;
+  editorPlayback: Pick<EditorPlayback, "onTogglePlayback" | "onSeek">;
 }
 
 export function useEditorShortcuts({
@@ -42,7 +43,8 @@ export function useEditorShortcuts({
   editorHistory,
   editorPlayback,
 }: Options) {
-  const { exportLockRef, hoveredPhraseRef, projectRef } = editorRuntime;
+  const { exportLockRef, hoveredPhraseRef, projectRef, currentTimeRef } =
+    editorRuntime;
   const {
     trackPendingDeletionId,
     selectedPhraseId,
@@ -59,8 +61,8 @@ export function useEditorShortcuts({
     onDeletePhrase,
     onJoinPhrases,
   } = subtitlePhraseActions;
-  const { onUndo } = editorHistory;
-  const { onTogglePlayback } = editorPlayback;
+  const { onUndo, onRedo } = editorHistory;
+  const { onTogglePlayback, onSeek } = editorPlayback;
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (exportLockRef.current) {
@@ -68,15 +70,9 @@ export function useEditorShortcuts({
         return;
       }
       if (trackPendingDeletionId !== null) return;
-      const target = event.target as HTMLElement | null;
-      const input = target?.closest("input");
-      const isTextEditingTarget =
-        target?.closest("textarea, [contenteditable='true']") ||
-        (input &&
-          ["text", "search", "email", "password", "tel", "url"].includes(
-            input.type
-          ));
-      if (isTextEditingTarget) return;
+      if (event.defaultPrevented || event.isComposing || event.keyCode === 229)
+        return;
+      if (handleEditorInputKeyDown(event)) return;
       if (event.key === "Escape") {
         if (
           selectedPhraseId !== null ||
@@ -89,6 +85,34 @@ export function useEditorShortcuts({
         return;
       }
       const commandKey = event.ctrlKey || event.metaKey;
+      if (!commandKey && !event.altKey && !event.shiftKey) {
+        const duration = projectRef.current?.duration;
+        const seekTarget =
+          event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? duration
+              : event.key === "PageUp"
+                ? currentTimeRef.current + 15_000
+                : event.key === "PageDown"
+                  ? currentTimeRef.current - 15_000
+                  : undefined;
+        if (duration !== undefined && seekTarget !== undefined) {
+          event.preventDefault();
+          onSeek(Math.max(0, Math.min(duration, seekTarget)));
+          return;
+        }
+      }
+      if (
+        commandKey &&
+        !event.altKey &&
+        !event.repeat &&
+        ((event.shiftKey && event.key.toLowerCase() === "z") ||
+          (!event.shiftKey && event.key.toLowerCase() === "y"))
+      ) {
+        if (onRedo()) event.preventDefault();
+        return;
+      }
       if (commandKey && !event.altKey && !event.shiftKey && !event.repeat) {
         const key = event.key.toLowerCase();
         const handled =
@@ -166,7 +190,9 @@ export function useEditorShortcuts({
     onJoinPhrases,
     onSplitPhrase,
     onTogglePlayback,
+    onSeek,
     onUndo,
+    onRedo,
     selectedPhraseId,
     selectedPhraseIds.length,
     selectedWordId,

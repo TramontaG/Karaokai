@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useLayoutEffect } from "react";
+import {
+  createTimelineFollowScroll,
+  timelineRangeContainsViewport,
+} from "../../util/editor/timelineFollow";
+import { useCallback, useEffect, useLayoutEffect, useMemo } from "react";
 import { flushSync } from "react-dom";
 import {
   subtitlePreviewAt,
   timelineFollowScrollLeft,
 } from "../../screens/EditorScreen/timeline";
-import {
-  TIMELINE_FOLLOW_INTERVAL,
-  TIMELINE_VIRTUALIZATION_MARGIN,
-} from "../../util/editor/constants";
+import { TIMELINE_VIRTUALIZATION_MARGIN } from "../../util/editor/constants";
 import { clamp } from "../../util/editor/numbers";
 import type { EditorDataState } from "./useEditorDataState";
 import type { EditorEnvironment } from "./useEditorEnvironment";
@@ -20,7 +21,6 @@ interface Options {
   editorRuntime: Pick<
     EditorRuntime,
     | "timelineZoomingUntilRef"
-    | "lastTimelineFollowRef"
     | "timelineRef"
     | "timelineContentRef"
     | "timelineContentWidthRef"
@@ -49,7 +49,6 @@ export function useTimelineViewport({
   const { timelineAutoFollow } = editorEnvironment;
   const {
     timelineZoomingUntilRef,
-    lastTimelineFollowRef,
     timelineRef,
     timelineContentRef,
     timelineContentWidthRef,
@@ -63,15 +62,23 @@ export function useTimelineViewport({
   const { timelineDuration, subtitleTracks } = editorProjectValues;
   const { setTimelineVisibleRange } = editorTransientState;
   const { timelineZoom, setEditorData } = editorDataState;
+  const followScroll = useMemo(
+    () =>
+      createTimelineFollowScroll({
+        read: () => timelineRef.current?.scrollLeft ?? 0,
+        write: (position) => {
+          if (timelineRef.current) timelineRef.current.scrollLeft = position;
+        },
+        requestFrame: (callback) => window.requestAnimationFrame(callback),
+        cancelFrame: (id) => window.cancelAnimationFrame(id),
+      }),
+    [timelineRef]
+  );
   const followTimelineAt = useCallback(
     (milliseconds: number) => {
       if (!timelineAutoFollow) return;
       const now = performance.now();
-      if (
-        now < timelineZoomingUntilRef.current ||
-        now - lastTimelineFollowRef.current < TIMELINE_FOLLOW_INTERVAL
-      )
-        return;
+      if (now < timelineZoomingUntilRef.current) return;
       const viewport = timelineRef.current;
       const content = timelineContentRef.current;
       if (!viewport || !content) return;
@@ -83,11 +90,9 @@ export function useTimelineViewport({
         viewport.clientWidth,
         viewport.scrollWidth
       );
-      if (Math.abs(viewport.scrollLeft - nextScrollLeft) < 1) return;
-      lastTimelineFollowRef.current = now;
-      viewport.scrollLeft = nextScrollLeft;
+      followScroll.follow(nextScrollLeft);
     },
-    [timelineAutoFollow, timelineDuration]
+    [timelineAutoFollow, timelineDuration, followScroll]
   );
 
   const updateTimelinePlayhead = useCallback(
@@ -123,12 +128,13 @@ export function useTimelineViewport({
     );
     const visibleDuration = Math.max(1, visibleEnd - visibleStart);
     const current = timelineVisibleRangeRef.current;
-    const safeStart = current.start + visibleDuration * 0.5;
-    const safeEnd = current.end - visibleDuration * 0.5;
     if (
-      current.end > current.start &&
-      visibleStart >= safeStart &&
-      visibleEnd <= safeEnd
+      timelineRangeContainsViewport(
+        current,
+        visibleStart,
+        visibleEnd,
+        timelineDuration
+      )
     )
       return;
 
@@ -181,13 +187,19 @@ export function useTimelineViewport({
 
   useEffect(() => {
     if (timelineAutoFollow) followTimelineAt(currentTimeRef.current);
-  }, [followTimelineAt, timelineAutoFollow]);
+    return () => followScroll.cancel();
+  }, [followTimelineAt, timelineAutoFollow, followScroll]);
 
   useLayoutEffect(() => {
     const content = timelineContentRef.current;
     if (!content) return;
     const updateContentWidth = () => {
-      timelineContentWidthRef.current = content.clientWidth;
+      const width = content.clientWidth;
+      if (width !== timelineContentWidthRef.current) {
+        // Zoom must also shrink a previously wider virtualized range.
+        timelineVisibleRangeRef.current = { start: 0, end: 0 };
+      }
+      timelineContentWidthRef.current = width;
       updateTimelinePlayhead(currentTimeRef.current);
       updateTimelineVisibleRange();
     };
@@ -223,6 +235,7 @@ export function useTimelineViewport({
         0,
         1
       );
+      followScroll.cancel();
       timelineZoomRef.current = nextZoom;
       timelineZoomingUntilRef.current = performance.now() + 150;
       flushSync(() => setEditorData({ timelineZoom: nextZoom }));
@@ -238,7 +251,7 @@ export function useTimelineViewport({
         maximumScrollLeft
       );
     },
-    [setEditorData]
+    [setEditorData, followScroll]
   );
 
   useEffect(() => {

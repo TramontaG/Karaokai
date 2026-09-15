@@ -23,6 +23,7 @@ interface Options {
   editorRuntime: Pick<
     EditorRuntime,
     | "historyRef"
+    | "redoHistoryRef"
     | "phraseClipboardRef"
     | "errorTimerRef"
     | "saveTimerRef"
@@ -44,6 +45,7 @@ export function useEditorSession({
   const { setError, project } = editorDataState;
   const {
     historyRef,
+    redoHistoryRef,
     phraseClipboardRef,
     errorTimerRef,
     saveTimerRef,
@@ -79,6 +81,7 @@ export function useEditorSession({
 
   useEffect(() => {
     historyRef.current = [];
+    redoHistoryRef.current = [];
     phraseClipboardRef.current = [];
   }, [projectId]);
 
@@ -162,6 +165,7 @@ export function useEditorSession({
 
   useEffect(() => {
     if (!isDesktop()) return;
+    let disposed = false;
     let unlisten: (() => void) | undefined;
     void listenDesktop<{ projectId: string }>(
       "project-processing-progress",
@@ -169,9 +173,13 @@ export function useEditorSession({
         if (event.payload.projectId === projectId) void refresh();
       }
     ).then((stop) => {
-      unlisten = stop;
+      if (disposed) stop();
+      else unlisten = stop;
     });
-    return () => unlisten?.();
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
   }, [projectId, refresh]);
 
   const onBack = useCallback(

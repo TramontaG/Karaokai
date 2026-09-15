@@ -1,3 +1,5 @@
+import { TempoChangeLayer } from "../TempoChangeLayer";
+import { TimeSignatureLayer } from "../TimeSignatureLayer";
 import {
   Grid2X2,
   MapPin,
@@ -219,6 +221,8 @@ function EditorTimelineView({
                 </TimelineMarker>
               )}
             />
+            <TimeSignatureLayer model={behavior.timeSignatures} />
+            <TempoChangeLayer model={behavior.tempoChanges} />
           </TimelineContent>
         </TimelineViewport>
       </Timeline>

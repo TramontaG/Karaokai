@@ -31,3 +31,15 @@ KaraokAI/
 ```
 
 The installer never updates the user's `PATH`, never uses the system Python, and never registers its managed Python globally. Removing downloaded data deletes the runtime, models, and caches under this directory.
+
+## Incomplete Python installations
+
+Setup checks installed package files against the sizes recorded in wheel metadata
+before accepting the worker as ready. Missing or truncated libraries trigger
+repair. Worker installation downloads fresh packages without reusing uv's cache
+and copies their files into the environment, then checks file sizes and imports
+PyTorch, TorchAudio, and Demucs before recording a successful worker installation.
+This requires fresh downloads when reinstalling the worker.
+
+If a subprocess crashes, the setup error includes its termination signal (such as
+`SIGBUS`) and any output instead of reporting an exit code of `null`.

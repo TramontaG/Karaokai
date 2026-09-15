@@ -18,8 +18,6 @@ export const VOCALS_SYNC_RATE_ADJUSTMENT = 0.04;
 
 export const MEDIA_SYNC_INTERVAL = 125;
 
-export const TIMELINE_FOLLOW_INTERVAL = 33;
-
 export const TIMELINE_VIRTUALIZATION_MARGIN = 2;
 
 export const PLAYBACK_PROFILER_STORAGE_KEY = "karaokai.debug.playback-profiler";

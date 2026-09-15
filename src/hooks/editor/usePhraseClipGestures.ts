@@ -1,10 +1,18 @@
-import { useCallback, useRef, type MouseEvent, type PointerEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type MouseEvent,
+  type PointerEvent,
+} from "react";
 import type {
   PhraseClipProps,
   PhraseWordView,
 } from "../../screens/EditorScreen/components/PhraseClip/behavior";
 
 export function usePhraseClipGestures(props: PhraseClipProps) {
+  const gestureController = useRef<AbortController | null>(null);
+  useEffect(() => () => gestureController.current?.abort(), []);
   const suppressWordTimingClickRef = useRef(false);
   const startWordTimingDrag = useCallback(
     (
@@ -12,6 +20,9 @@ export function usePhraseClipGestures(props: PhraseClipProps) {
       word: PhraseWordView,
       edge: "start" | "end" | "move"
     ) => {
+      gestureController.current?.abort();
+      const controller = new AbortController();
+      gestureController.current = controller;
       const pointerId = event.pointerId;
       const startX = event.clientX;
       const startY = event.clientY;
@@ -36,19 +47,23 @@ export function usePhraseClipGestures(props: PhraseClipProps) {
       };
       const onFinish = (finishEvent: globalThis.PointerEvent) => {
         if (finishEvent.pointerId !== pointerId) return;
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onFinish);
-        window.removeEventListener("pointercancel", onFinish);
+        controller.abort();
+        gestureController.current = null;
         if (started) suppressWordTimingClickRef.current = true;
       };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onFinish);
-      window.addEventListener("pointercancel", onFinish);
+      const options = { signal: controller.signal };
+      window.addEventListener("pointermove", onMove, options);
+      window.addEventListener("pointerup", onFinish, options);
+      window.addEventListener("pointercancel", onFinish, options);
+      window.addEventListener("blur", () => controller.abort(), options);
     },
     [props]
   );
   const startPhraseDrag = useCallback(
     (event: PointerEvent<HTMLElement>) => {
+      gestureController.current?.abort();
+      const controller = new AbortController();
+      gestureController.current = controller;
       const pointerId = event.pointerId;
       const startX = event.clientX;
       const startY = event.clientY;
@@ -71,14 +86,15 @@ export function usePhraseClipGestures(props: PhraseClipProps) {
       };
       const onFinish = (finishEvent: globalThis.PointerEvent) => {
         if (finishEvent.pointerId !== pointerId) return;
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onFinish);
-        window.removeEventListener("pointercancel", onFinish);
+        controller.abort();
+        gestureController.current = null;
         if (started) suppressWordTimingClickRef.current = true;
       };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onFinish);
-      window.addEventListener("pointercancel", onFinish);
+      const options = { signal: controller.signal };
+      window.addEventListener("pointermove", onMove, options);
+      window.addEventListener("pointerup", onFinish, options);
+      window.addEventListener("pointercancel", onFinish, options);
+      window.addEventListener("blur", () => controller.abort(), options);
     },
     [props]
   );

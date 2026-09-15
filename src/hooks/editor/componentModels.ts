@@ -43,6 +43,8 @@ export type MixerPanelModel = Pick<
 
 export type EditorTimelineModel = Pick<
   EditorView,
+  | "timeSignatures"
+  | "tempoChanges"
   | "timelineRenderKey"
   | "tracksLabel"
   | "addSubtitleTrackLabel"

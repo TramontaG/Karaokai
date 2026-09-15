@@ -134,6 +134,10 @@ export function useBehavior(_: Record<string, never>) {
                 progress: String(Math.round(stage.progress ?? 0)),
               })
             : t(statusKey[stage.status]),
+        failureDetails:
+          stage.status === "failed" && stage.message?.trim()
+            ? stage.message
+            : null,
         Icon: statusIcon[stage.status],
       })),
     [stages, t]
@@ -149,6 +153,13 @@ export function useBehavior(_: Record<string, never>) {
           undefined,
           createElement("strong", undefined, stage.label),
           createElement("span", undefined, stage.statusLabel),
+          stage.failureDetails
+            ? createElement(
+                "span",
+                { "data-error-details": true, role: "alert" },
+                stage.failureDetails
+              )
+            : null,
           createElement(
             StageProgress,
             undefined,

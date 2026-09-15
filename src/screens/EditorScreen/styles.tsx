@@ -1,8 +1,4 @@
 import styled from "@emotion/styled";
-import {
-  subtitleFontStack,
-  type SubtitleFontFamily,
-} from "../../domain/project";
 
 export const EditorPage = styled.main`
   display: grid;
@@ -270,49 +266,17 @@ type SubtitlePreviewDataAttributes = {
   "data-subtitle-color-source"?: "track" | "phrase" | "word" | "default";
 };
 
-export const PreviewWord = styled.span<
-  {
-    $unreadColor: string;
-    $scale: number;
-    $fontFamily: SubtitleFontFamily;
-    $fontWeight: "normal" | "bold";
-    $fontStyle: "normal" | "italic";
-    $textDecoration: "none" | "underline";
-    $verticalAlign: "baseline" | "super" | "sub";
-    $offsetX: number;
-    $offsetY: number;
-  } & SubtitlePreviewDataAttributes
->`
+export const PreviewWord = styled.span<SubtitlePreviewDataAttributes>`
   position: relative;
   display: inline-block;
   margin-right: 0.25em;
-  transform: translate(
-    ${({ $offsetX }) => `${$offsetX}cqw`},
-    ${({ $offsetY }) => `${$offsetY}cqw`}
-  );
-  color: ${({ $unreadColor }) => $unreadColor};
-  font-family: ${({ $fontFamily }) => subtitleFontStack($fontFamily)};
-  font-size: ${({ $scale, $verticalAlign }) =>
-    `${$scale * ($verticalAlign === "baseline" ? 1 : 0.75)}em`};
-  font-weight: ${({ $fontWeight }) => $fontWeight};
-  font-style: ${({ $fontStyle }) => $fontStyle};
-  text-decoration: ${({ $textDecoration }) => $textDecoration};
-  vertical-align: ${({ $verticalAlign }) => $verticalAlign};
 `;
-export const PreviewWordFill = styled.span<
-  {
-    $progress: number;
-    $readColor: string;
-  } & SubtitlePreviewDataAttributes
->`
+export const PreviewWordFill = styled.span<SubtitlePreviewDataAttributes>`
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
-  width: ${({ $progress }) =>
-    `${Math.min(100, Math.max(0, $progress * 100))}%`};
   overflow: hidden;
-  color: ${({ $readColor }) => $readColor};
   text-shadow: none;
   white-space: nowrap;
   pointer-events: none;

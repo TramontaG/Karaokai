@@ -57,9 +57,18 @@ export function useTimelineTempo({
         timelineDuration,
         tempoBpm,
         tempoOffset,
-        timelineSubdivision
+        timelineSubdivision,
+        project?.tempo?.timeSignatures,
+        project?.tempo?.changes
       ),
-    [tempoBpm, tempoOffset, timelineDuration, timelineSubdivision]
+    [
+      tempoBpm,
+      tempoOffset,
+      timelineDuration,
+      timelineSubdivision,
+      project?.tempo?.timeSignatures,
+      project?.tempo?.changes,
+    ]
   );
 
   useEffect(() => setBpmInputValue(String(tempoBpm)), [tempoBpm]);

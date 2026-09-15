@@ -94,8 +94,6 @@ export function useEditorRuntime({
 
   const lastMediaSyncRef = useRef(Number.NEGATIVE_INFINITY);
 
-  const lastTimelineFollowRef = useRef(Number.NEGATIVE_INFINITY);
-
   const playbackTimelineWordIdRef = useRef<string | null>(null);
 
   const playbackProfilerRef = useRef<PlaybackProfiler>(
@@ -109,6 +107,7 @@ export function useEditorRuntime({
   const phraseClipboardRef = useRef<SubtitlePhrase[]>([]);
 
   const historyRef = useRef<EditorHistoryEntry[]>([]);
+  const redoHistoryRef = useRef<EditorHistoryEntry[]>([]);
 
   const thumbnailCaptureKeyRef = useRef<string | null>(null);
 
@@ -128,6 +127,7 @@ export function useEditorRuntime({
     saveTimerRef,
     selectionRef,
     historyRef,
+    redoHistoryRef,
     phraseClipboardRef,
     thumbnailCaptureRef,
     closingWindowRef,
@@ -139,7 +139,6 @@ export function useEditorRuntime({
     instrumentalAudio,
     vocalsAudio,
     timelineZoomingUntilRef,
-    lastTimelineFollowRef,
     timelineRef,
     timelineContentRef,
     timelineContentWidthRef,

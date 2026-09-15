@@ -43,22 +43,9 @@ export function RenderScreen() {
                   data={preview.words}
                   idCompute={(word) => word.id}
                   render={(word) => (
-                    <PreviewWord
-                      $unreadColor={word.unreadColor}
-                      $scale={word.scale}
-                      $fontFamily={word.fontFamily}
-                      $fontWeight={word.fontWeight}
-                      $fontStyle={word.fontStyle}
-                      $textDecoration={word.textDecoration}
-                      $verticalAlign={word.verticalAlign}
-                      $offsetX={word.offsetX}
-                      $offsetY={word.offsetY}
-                    >
+                    <PreviewWord style={word.previewStyle}>
                       {word.text}
-                      <PreviewWordFill
-                        $progress={word.progress}
-                        $readColor={word.readColor}
-                      >
+                      <PreviewWordFill style={word.fillStyle}>
                         {word.text}
                       </PreviewWordFill>
                     </PreviewWord>
@@ -85,22 +72,9 @@ export function RenderScreen() {
                   data={preview.secondaryWords}
                   idCompute={(word) => word.id}
                   render={(word) => (
-                    <PreviewWord
-                      $unreadColor={word.unreadColor}
-                      $scale={word.scale}
-                      $fontFamily={word.fontFamily}
-                      $fontWeight={word.fontWeight}
-                      $fontStyle={word.fontStyle}
-                      $textDecoration={word.textDecoration}
-                      $verticalAlign={word.verticalAlign}
-                      $offsetX={word.offsetX}
-                      $offsetY={word.offsetY}
-                    >
+                    <PreviewWord style={word.previewStyle}>
                       {word.text}
-                      <PreviewWordFill
-                        $progress={word.progress}
-                        $readColor={word.readColor}
-                      >
+                      <PreviewWordFill style={word.fillStyle}>
                         {word.text}
                       </PreviewWordFill>
                     </PreviewWord>

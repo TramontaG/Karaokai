@@ -131,6 +131,12 @@ export const PreparationStage = styled.article<{ $status: string }>`
     color: ${({ theme }) => theme.colors.textMuted};
     font-size: 0.7rem;
   }
+  span[data-error-details] {
+    margin-top: 0.35rem;
+    overflow-wrap: anywhere;
+    color: #ff839a;
+    line-height: 1.35;
+  }
   ${({ $status, theme }) =>
     $status === "running" &&
     `svg { color: ${theme.colors.accent}; animation: spin 1s linear infinite; }`}

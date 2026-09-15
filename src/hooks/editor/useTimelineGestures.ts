@@ -4,8 +4,8 @@ import {
   MINIMUM_BPM,
   MAXIMUM_BPM,
 } from "../../util/editor/constants";
-import { snapTimeToGrid } from "../../util/editor/tempoGrid";
-import { useCallback, type PointerEvent } from "react";
+import { nearestGridTime, tempoGridLines } from "../../util/editor/tempoGrid";
+import { useCallback, useEffect, useRef, type PointerEvent } from "react";
 import {
   sortSubtitlePhrases,
   type SubtitlePhrase,
@@ -76,6 +76,8 @@ export function useTimelineGestures({
   const { setTimelineDropTargetTrackId } = editorTransientState;
   const { setLiveProject } = editorProjectChanges;
   const { persistProject } = editorHistory;
+  const gestureController = useRef<AbortController | null>(null);
+  useEffect(() => () => gestureController.current?.abort(), []);
   const startGesture = useCallback(
     (
       event: PointerEvent<HTMLElement>,
@@ -90,6 +92,9 @@ export function useTimelineGestures({
       event.stopPropagation();
       const sourceProject = projectRef.current;
       if (!sourceProject) return;
+      gestureController.current?.abort();
+      const controller = new AbortController();
+      gestureController.current = controller;
       const contentWidth =
         timelineContentRef.current?.getBoundingClientRect().width ?? 1;
       const initialX = initialClientX ?? event.clientX;
@@ -105,6 +110,20 @@ export function useTimelineGestures({
       setSelectedPhraseIds(selectedPhrases.map((item) => item.id));
       if (word) setSelectedWordId(word.id);
 
+      const grid = timelineSnapToGrid
+        ? tempoGridLines(
+            timelineDuration,
+            clamp(
+              sourceProject.tempo?.bpm ?? DEFAULT_BPM,
+              MINIMUM_BPM,
+              MAXIMUM_BPM
+            ),
+            clamp(sourceProject.tempo?.offset ?? 0, 0, timelineDuration),
+            timelineSubdivision,
+            sourceProject.tempo?.timeSignatures,
+            sourceProject.tempo?.changes
+          )
+        : [];
       const onMove = (moveEvent: globalThis.PointerEvent) => {
         let delta = Math.round(
           ((moveEvent.clientX - initialX) / contentWidth) * timelineDuration
@@ -117,19 +136,7 @@ export function useTimelineGestures({
             : gesture === "end"
               ? phrase.end
               : phrase.start;
-          const bpm = clamp(
-            sourceProject.tempo?.bpm ?? DEFAULT_BPM,
-            MINIMUM_BPM,
-            MAXIMUM_BPM
-          );
-          const offset = clamp(
-            sourceProject.tempo?.offset ?? 0,
-            0,
-            timelineDuration
-          );
-          delta =
-            snapTimeToGrid(anchor + delta, bpm, offset, timelineSubdivision) -
-            anchor;
+          delta = nearestGridTime(grid, anchor + delta) - anchor;
         }
         let nextPhrase = phrase;
         const targetTrackId =
@@ -218,16 +225,17 @@ export function useTimelineGestures({
         );
       };
       const onFinish = () => {
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onFinish);
-        window.removeEventListener("pointercancel", onFinish);
+        controller.abort();
+        gestureController.current = null;
         setTimelineDropTargetTrackId(null);
         const changedProject = projectRef.current;
         if (changedProject) persistProject(changedProject, true, sourceProject);
       };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onFinish, { once: true });
-      window.addEventListener("pointercancel", onFinish, { once: true });
+      const options = { signal: controller.signal };
+      window.addEventListener("pointermove", onMove, options);
+      window.addEventListener("pointerup", onFinish, options);
+      window.addEventListener("pointercancel", onFinish, options);
+      window.addEventListener("blur", onFinish, options);
     },
     [
       persistProject,

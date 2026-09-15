@@ -64,15 +64,7 @@ export function useSubtitleRendering({
                   PreviewWord,
                   {
                     key: word.id,
-                    $unreadColor: word.unreadColor,
-                    $scale: word.scale,
-                    $fontFamily: word.fontFamily,
-                    $fontWeight: word.fontWeight,
-                    $fontStyle: word.fontStyle,
-                    $textDecoration: word.textDecoration,
-                    $verticalAlign: word.verticalAlign,
-                    $offsetX: word.offsetX,
-                    $offsetY: word.offsetY,
+                    style: word.previewStyle,
                     "data-subtitle-track-id": preview.id,
                     "data-subtitle-phrase-id":
                       preview.timing.primaryPhrase?.id ?? "",
@@ -84,8 +76,7 @@ export function useSubtitleRendering({
                   createElement(
                     PreviewWordFill,
                     {
-                      $progress: word.progress,
-                      $readColor: word.readColor,
+                      style: word.fillStyle,
                       "data-subtitle-track-id": preview.id,
                       "data-subtitle-phrase-id":
                         preview.timing.primaryPhrase?.id ?? "",
@@ -111,15 +102,7 @@ export function useSubtitleRendering({
                         PreviewWord,
                         {
                           key: word.id,
-                          $unreadColor: word.unreadColor,
-                          $scale: word.scale,
-                          $fontFamily: word.fontFamily,
-                          $fontWeight: word.fontWeight,
-                          $fontStyle: word.fontStyle,
-                          $textDecoration: word.textDecoration,
-                          $verticalAlign: word.verticalAlign,
-                          $offsetX: word.offsetX,
-                          $offsetY: word.offsetY,
+                          style: word.previewStyle,
                           "data-subtitle-track-id": preview.id,
                           "data-subtitle-phrase-id":
                             preview.timing.secondaryPhrase?.id ?? "",
@@ -131,8 +114,7 @@ export function useSubtitleRendering({
                         createElement(
                           PreviewWordFill,
                           {
-                            $progress: word.progress,
-                            $readColor: word.readColor,
+                            style: word.fillStyle,
                             "data-subtitle-track-id": preview.id,
                             "data-subtitle-phrase-id":
                               preview.timing.secondaryPhrase?.id ?? "",
