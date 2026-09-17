@@ -4,11 +4,14 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const tar = require("tar");
+const { pipeline } = require("node:stream/promises");
+const { Transform } = require("node:stream");
+const runtimeInstalls = new Map();
 const { pythonBinary, ffmpegBinary } = require("./projects.cjs");
 
 const UV_VERSION = "0.12.9";
 const PYTHON_VERSION = "3.11.16";
-const WORKER_VERSION = "0.4.12";
+const WORKER_VERSION = "0.4.13";
 const WORKER_FINGERPRINT_FILE = "worker-source.sha256";
 const WORKER_COPY_FILTER = (source) =>
   !source
@@ -111,15 +114,23 @@ function uvBinary(dataRoot) {
 }
 
 function commandWorks(command, args = ["--version"], options = {}) {
-  return spawnSync(command, args, { ...options, stdio: "ignore" }).status === 0;
+  return (
+    spawnSync(command, args, {
+      timeout: 30_000,
+      windowsHide: true,
+      ...options,
+      stdio: "ignore",
+    }).status === 0
+  );
 }
 
-function commandWorksAsync(command, args = ["--version"], options = {}) {
-  return new Promise((resolve) => {
-    const child = spawn(command, args, { ...options, stdio: "ignore" });
-    child.once("error", () => resolve(false));
-    child.once("close", (code) => resolve(code === 0));
-  });
+async function commandWorksAsync(command, args = ["--version"], options = {}) {
+  try {
+    await runCommand(command, args, { timeoutMs: 30_000, ...options });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function workerSourceFingerprint(workerSource) {
@@ -265,7 +276,7 @@ async function verifyInstalledPackages(dataRoot) {
 function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const { timeoutMs, ...spawnOptions } = options;
-    const child = spawn(command, args, spawnOptions);
+    const child = spawn(command, args, { windowsHide: true, ...spawnOptions });
     let output = "";
     let errorOutput = "";
     let settled = false;
@@ -359,23 +370,36 @@ function uvAsset() {
 }
 
 async function download(url, destination, onProgress) {
-  const response = await fetch(url, { redirect: "follow" });
+  const response = await fetch(url, {
+    redirect: "follow",
+    signal: AbortSignal.timeout(30 * 60_000),
+  });
   if (!response.ok || !response.body)
     throw new Error(`Download failed with HTTP ${response.status}`);
   await fs.promises.mkdir(path.dirname(destination), { recursive: true });
   const temporary = `${destination}.part`;
-  const file = fs.createWriteStream(temporary);
-  const writeError = new Promise((_, reject) => file.once("error", reject));
   const total = Number(response.headers.get("content-length")) || null;
   let completed = 0;
-  for await (const chunk of response.body) {
-    completed += chunk.length;
-    if (!file.write(chunk))
-      await new Promise((resolve) => file.once("drain", resolve));
-    onProgress?.(completed, total);
+  const meter = new Transform({
+    transform(chunk, encoding, callback) {
+      completed += chunk.length;
+      try {
+        onProgress?.(completed, total);
+        callback(null, chunk);
+      } catch (error) {
+        callback(error);
+      }
+    },
+  });
+  try {
+    await pipeline(response.body, meter, fs.createWriteStream(temporary));
+    if (completed === 0 || (total !== null && completed !== total))
+      throw new Error("The download is incomplete");
+    await fs.promises.rename(temporary, destination);
+  } catch (error) {
+    await fs.promises.rm(temporary, { force: true }).catch(() => {});
+    throw error;
   }
-  await Promise.race([new Promise((resolve) => file.end(resolve)), writeError]);
-  await fs.promises.rename(temporary, destination);
 }
 
 async function sha256(file) {
@@ -473,7 +497,25 @@ async function installWhisperModel(
   }
 }
 
-async function ensureRuntime(dataRoot, model, emit, appPath) {
+function ensureRuntime(dataRoot, model, emit, appPath) {
+  const active = runtimeInstalls.get(dataRoot);
+  if (active) {
+    if (active.modelId !== model.id)
+      return Promise.reject(
+        new Error("Another runtime installation is already in progress")
+      );
+    return active.promise;
+  }
+  const installation = installRuntime(dataRoot, model, emit, appPath).finally(
+    () => {
+      runtimeInstalls.delete(dataRoot);
+    }
+  );
+  runtimeInstalls.set(dataRoot, { modelId: model.id, promise: installation });
+  return installation;
+}
+
+async function installRuntime(dataRoot, model, emit, appPath) {
   const jobId = "runtime-bootstrap";
   const progress = (componentId, value, message = componentId) =>
     emitProgress(emit, {
@@ -561,14 +603,7 @@ async function ensureRuntime(dataRoot, model, emit, appPath) {
     { env }
   );
   await verifyInstalledPackages(dataRoot);
-  await runCommand(
-    python,
-    [
-      "-c",
-      "import torch; import torchaudio; from demucs.pretrained import get_model",
-    ],
-    { env }
-  );
+  await runCommand(python, ["-m", "karaoke_worker", "--healthcheck"], { env });
   await fs.promises.writeFile(
     path.join(dataRoot, "runtime", "worker-installed.sha256"),
     workerSource.fingerprint,
@@ -619,6 +654,15 @@ async function ensureRuntime(dataRoot, model, emit, appPath) {
     JSON.stringify({ id: "demucs-htdemucs", model: "htdemucs" }, null, 2)
   );
   await installWhisperModel(dataRoot, model, emit, jobId);
+  progress("validation", 99);
+  const verified = await runtimeComponents(dataRoot, appPath);
+  if (
+    !verified.every((component) => component.verified) ||
+    !modelInstalled(dataRoot, model) ||
+    !modelInstalled(dataRoot, defaultDemucs)
+  ) {
+    throw new Error("Runtime validation failed after installation");
+  }
   emitProgress(emit, {
     jobId,
     componentId: "runtime",
@@ -753,27 +797,35 @@ async function run(command, args, context) {
         fs.promises.mkdir(directory, { recursive: true })
       )
     );
+    // mkdir succeeds for existing read-only directories; check actual writes too.
+    for (const directory of directories) {
+      const probe = path.join(directory, `.write-check-${crypto.randomUUID()}`);
+      const handle = await fs.promises.open(probe, "wx");
+      await handle.close();
+      await fs.promises.unlink(probe);
+    }
     let installedWhisperModelIds = MODELS.filter((model) =>
       modelInstalled(dataRoot, model)
     ).map((model) => model.id);
     let installedDemucsModelIds = DEMUCS_MODELS.filter((model) =>
       modelInstalled(dataRoot, model)
     ).map((model) => model.id);
-    let workerReady = await workerVersionMatches(dataRoot, context.appPath);
-    if (!workerReady && installedWhisperModelIds.length > 0) {
+    let components = await runtimeComponents(dataRoot, context.appPath);
+    if (
+      !components.every((component) => component.verified) &&
+      installedWhisperModelIds.length > 0
+    ) {
       const model = MODELS.find(
         (entry) => entry.id === installedWhisperModelIds[0]
       );
-      if (model) {
-        await ensureRuntime(dataRoot, model, context.emit, context.appPath);
-        workerReady = await workerVersionMatches(dataRoot, context.appPath);
-        installedWhisperModelIds = MODELS.filter((entry) =>
-          modelInstalled(dataRoot, entry)
-        ).map((entry) => entry.id);
-        installedDemucsModelIds = DEMUCS_MODELS.filter((entry) =>
-          modelInstalled(dataRoot, entry)
-        ).map((entry) => entry.id);
-      }
+      await ensureRuntime(dataRoot, model, context.emit, context.appPath);
+      components = await runtimeComponents(dataRoot, context.appPath);
+      installedWhisperModelIds = MODELS.filter((entry) =>
+        modelInstalled(dataRoot, entry)
+      ).map((entry) => entry.id);
+      installedDemucsModelIds = DEMUCS_MODELS.filter((entry) =>
+        modelInstalled(dataRoot, entry)
+      ).map((entry) => entry.id);
     }
     return {
       dataDirectory: dataRoot,
@@ -782,8 +834,7 @@ async function run(command, args, context) {
       architecture: process.arch,
       runtimeProfile: commandWorks("nvidia-smi", ["-L"]) ? "cuda" : "cpu",
       runtimeReady:
-        workerReady &&
-        fs.existsSync(ffmpegBinary(dataRoot)) &&
+        components.every((component) => component.verified) &&
         installedWhisperModelIds.length > 0 &&
         installedDemucsModelIds.length > 0,
       installedWhisperModelIds,
@@ -918,4 +969,4 @@ async function run(command, args, context) {
   return undefined;
 }
 
-module.exports = { run, runCommand, PACKAGE_INTEGRITY_CHECK };
+module.exports = { run, runCommand, download, PACKAGE_INTEGRITY_CHECK };

@@ -1,15 +1,19 @@
 import { isDesktop, listenDesktop } from "../services/desktop";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { bootstrapApplication } from "../services/bootstrap";
 import { installRuntime, type InstallProgress } from "../services/models";
 import { selectStorageDirectory } from "../services/storage";
 import { useAppContext } from "./useAppContext";
 import { useDownloadedData } from "./useDownloadedData";
+import { useRecursiveState } from "./useRecursiveState";
 import { useModels } from "./useModels";
 
 export function useOnboarding() {
   const [data, setData] = useAppContext();
-  const [isSettingStorage, setIsSettingStorage] = useState(false);
+  const [{ isSettingStorage }, setStorageState] = useRecursiveState({
+    isSettingStorage: false,
+  });
+  const storageBusy = useRef(false);
   const { models, refresh } = useModels();
   const { removeDownloads } = useDownloadedData();
 
@@ -84,9 +88,10 @@ export function useOnboarding() {
 
   const setStorageDirectory = useCallback(
     async (storageDirectory: string | null) => {
-      if (isSettingStorage) return;
+      if (storageBusy.current) return;
+      storageBusy.current = true;
 
-      setIsSettingStorage(true);
+      setStorageState({ isSettingStorage: true });
       setData({
         onboarding: { error: null, errorCode: null },
       });
@@ -104,7 +109,6 @@ export function useOnboarding() {
           },
           onboarding: { step: "models", error: null, errorCode: null },
         });
-        void refresh();
       } catch (error) {
         setData({
           onboarding: {
@@ -113,10 +117,11 @@ export function useOnboarding() {
           },
         });
       } finally {
-        setIsSettingStorage(false);
+        storageBusy.current = false;
+        setStorageState({ isSettingStorage: false });
       }
     },
-    [isSettingStorage, refresh, setData]
+    [setStorageState, setData]
   );
 
   const useDefaultStorage = useCallback(
@@ -125,11 +130,18 @@ export function useOnboarding() {
   );
 
   const chooseStorageDirectory = useCallback(async () => {
-    const directory = await selectStorageDirectory();
-    if (directory) {
-      await setStorageDirectory(directory);
+    try {
+      const directory = await selectStorageDirectory();
+      if (directory) await setStorageDirectory(directory);
+    } catch (error) {
+      setData({
+        onboarding: {
+          error: error instanceof Error ? error.message : String(error),
+          errorCode: "STORAGE_UNAVAILABLE",
+        },
+      });
     }
-  }, [setStorageDirectory]);
+  }, [setStorageDirectory, setData]);
 
   const selectModel = useCallback(
     (modelId: string) => setData({ onboarding: { selectedModelId: modelId } }),
@@ -177,10 +189,16 @@ export function useOnboarding() {
     setData,
   ]);
 
-  const finish = useCallback(
-    () => setData({ preferences: { onboardingCompleted: true } }),
-    [setData]
-  );
+  const finish = useCallback(() => {
+    if (data.onboarding.step !== "success") return;
+    setData({
+      preferences: {
+        onboardingCompleted: true,
+        defaultWhisperModelId: data.onboarding.selectedModelId,
+        defaultDemucsModelId: "demucs-htdemucs",
+      },
+    });
+  }, [data.onboarding.step, data.onboarding.selectedModelId, setData]);
 
   return {
     onboarding: data.onboarding,

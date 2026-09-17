@@ -60,41 +60,45 @@ function subtitlePreview(track: SubtitleTrack, currentTime: number) {
     track.style.positionReferenceWidth ?? LEGACY_EDITOR_PREVIEW_WIDTH;
   const positionReferenceHeight =
     track.style.positionReferenceHeight ?? LEGACY_EDITOR_PREVIEW_HEIGHT;
-  const words = (timing.primaryPhrase?.words ?? []).map((word) => {
-    const style = resolveSubtitleStyle(
-      track.style,
-      timing.primaryPhrase?.style,
-      word.style
-    );
-    return {
+  const words = (timing.primaryPhrase?.words ?? [])
+    .filter((word) => word.type !== "gap")
+    .map((word) => {
+      const style = resolveSubtitleStyle(
+        track.style,
+        timing.primaryPhrase?.style,
+        word.style
+      );
+      return {
+        ...word,
+        progress: timing.primaryFullyRead
+          ? 1
+          : wordReadProgress(
+              word,
+              currentTime,
+              resolveTimingCurve(
+                track.curve,
+                timing.primaryPhrase?.curve,
+                word.curve
+              )
+            ),
+        ...style,
+        offsetX: ((word.style?.x ?? 0) / positionReferenceWidth) * 100,
+        offsetY: ((word.style?.y ?? 0) / positionReferenceHeight) * 100,
+      };
+    });
+  const secondaryWords = (timing.secondaryPhrase?.words ?? [])
+    .filter((word) => word.type !== "gap")
+    .map((word) => ({
       ...word,
-      progress: timing.primaryFullyRead
-        ? 1
-        : wordReadProgress(
-            word,
-            currentTime,
-            resolveTimingCurve(
-              track.curve,
-              timing.primaryPhrase?.curve,
-              word.curve
-            )
-          ),
-      ...style,
+      progress: 0,
+      ...resolveSubtitleStyle(
+        track.style,
+        timing.secondaryPhrase?.style,
+        word.style
+      ),
       offsetX: ((word.style?.x ?? 0) / positionReferenceWidth) * 100,
       offsetY: ((word.style?.y ?? 0) / positionReferenceHeight) * 100,
-    };
-  });
-  const secondaryWords = (timing.secondaryPhrase?.words ?? []).map((word) => ({
-    ...word,
-    progress: 0,
-    ...resolveSubtitleStyle(
-      track.style,
-      timing.secondaryPhrase?.style,
-      word.style
-    ),
-    offsetX: ((word.style?.x ?? 0) / positionReferenceWidth) * 100,
-    offsetY: ((word.style?.y ?? 0) / positionReferenceHeight) * 100,
-  }));
+    }));
   return {
     id: track.id,
     timing,

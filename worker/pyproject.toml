@@ -1,13 +1,17 @@
 [project]
 name = "karaoke-worker"
-version = "0.4.12"
+version = "0.4.13"
 description = "Isolated local processing worker for KaraokAI"
 requires-python = ">=3.11,<3.12"
 dependencies = [
   "demucs==4.0.1",
   "faster-whisper==1.1.0",
   "lingua-language-detector>=2,<3",
-  "whisperx==3.3.1",
+  # Explicit pin: this release accepts fixed CTranslate2 wheels with Torch 2.6.
+  # See docs/runtime-installation.md for the upstream yanked-release caveat.
+  "whisperx==3.3.2",
+  # 4.6.0 fixes Linux wheels requesting an executable stack (glibc 2.41+).
+  "ctranslate2==4.6.0",
   "setuptools>=68,<82",
   "torch==2.6.0",
   "torchaudio==2.6.0",

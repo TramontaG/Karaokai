@@ -79,7 +79,7 @@ export function PreparingScreen() {
           render={behavior.renderStage}
         />
       </StageList>
-      <Render when={behavior.hasFailed}>
+      <Render when={behavior.canOpenEditor}>
         <ActionButton type="button" onClick={behavior.onOpenEditor}>
           {behavior.openEditor}
         </ActionButton>

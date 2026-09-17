@@ -60,6 +60,11 @@ export function useEditorSession({
         projectId,
         data.preferences.storageDirectory
       );
+      if (!loaded) {
+        setAppData({ currentProject: null });
+        await navigate({ to: "/library" });
+        return;
+      }
       if (loaded) {
         const normalized = setLiveProject(loaded);
         if (

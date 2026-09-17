@@ -57,14 +57,18 @@ export function useBehavior(_: Record<string, never>) {
         projectId,
         data.preferences.storageDirectory
       );
-      if (!project) return;
+      if (!project) {
+        setAppData({ currentProject: null });
+        await navigate({ to: "/library" });
+        return;
+      }
       setProjectName(project.name);
       setStages(project.processing);
       setAppData({ currentProject: { id: project.id, name: project.name } });
     } catch {
       setStages((current) => current);
     }
-  }, [data.preferences.storageDirectory, projectId, setAppData]);
+  }, [data.preferences.storageDirectory, projectId, setAppData, navigate]);
 
   useEffect(() => {
     void refresh();
@@ -190,6 +194,9 @@ export function useBehavior(_: Record<string, never>) {
     renderStage,
     getStageId: (stage: (typeof uiStages)[number]) => stage.id,
     hasFailed,
+    canOpenEditor:
+      hasFailed &&
+      stages.find((stage) => stage.id === "separation")?.status === "completed",
     awaitingLyrics,
     lyrics,
     lyricsError,

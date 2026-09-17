@@ -35,6 +35,7 @@ const PROJECT_COMMANDS = new Set([
   "remove_youtube_cookies",
 ]);
 const renderJobs = new Map();
+const applicationWindows = new Set();
 const RENDER_FRAME_RATE = 240;
 const VIDEO_ASSET_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".mkv"]);
 const X264_PRESETS = new Set([
@@ -67,10 +68,34 @@ function dataRoot(storageDirectory) {
     : defaultDataRoot();
 }
 
+function sendToWindow(window, channel, payload) {
+  if (window.isDestroyed()) return false;
+  const contents = window.webContents;
+  if (
+    contents.isDestroyed() ||
+    contents.isCrashed() ||
+    contents.isLoadingMainFrame()
+  )
+    return false;
+  try {
+    const frame = contents.mainFrame;
+    if (!frame || frame.detached) return false;
+    frame.send(channel, payload);
+    return true;
+  } catch {
+    // The frame can disappear between the availability check and IPC delivery.
+    return false;
+  }
+}
+
 function emit(channel, payload) {
-  for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed())
-      window.webContents.send(`karaokai:event:${channel}`, payload);
+  for (const window of applicationWindows)
+    sendToWindow(window, `karaokai:event:${channel}`, payload);
+}
+
+function stopActiveRenders(reason) {
+  for (const job of [...renderJobs.values()]) {
+    if (!job.parent) failRenderJob(job, reason);
   }
 }
 
@@ -255,7 +280,7 @@ function videoCompositeArguments(parent, frameStart) {
     "[background-tail][background-loop]concat=n=2:v=1:a=0[background-sequence]",
     `[background-sequence]${fittedBackground},setsar=1[background]`,
     "[0:v]format=rgba,setpts=PTS-STARTPTS[overlay]",
-    "[background][overlay]overlay=format=auto:alpha=premultiplied,format=yuv420p[video]",
+    "[background][overlay]overlay=shortest=1:format=auto:alpha=premultiplied,format=yuv420p[video]",
   ].join(";");
   return {
     inputs: [
@@ -386,6 +411,17 @@ function createRenderWorker(parent, frameStart, frameEnd, index) {
   window.webContents.once("did-fail-load", (_event, _code, description) =>
     failRenderJob(parent, `Worker ${index + 1} failed to load: ${description}`)
   );
+  window.webContents.once("render-process-gone", (_event, details) => {
+    if (!worker.finished)
+      failRenderJob(
+        parent,
+        `Worker ${index + 1} exited: ${details.reason} (${details.exitCode})`
+      );
+  });
+  window.once("closed", () => {
+    if (!worker.finished)
+      failRenderJob(parent, `Worker ${index + 1} was closed`);
+  });
   ffmpeg.once("error", (error) => failRenderJob(parent, error.message));
   ffmpeg.stdin.on("error", (error) =>
     stopRenderForEncoderFailure(
@@ -553,11 +589,13 @@ function requestRenderFrame(job) {
         `Timed out waiting for render frame ${job.frame}`
       );
   }, 30_000);
-  job.window.webContents.send("karaokai:event:render-frame", {
+  const sent = sendToWindow(job.window, "karaokai:event:render-frame", {
     jobId: job.jobId,
     frame: job.frame,
     time: (job.frame / job.args.fps) * 1000,
   });
+  if (!sent)
+    failRenderJob(job.parent, `Renderer unavailable for frame ${job.frame}`);
 }
 
 async function encodeRenderFrame(job, frame, bitmap) {
@@ -574,11 +612,17 @@ async function encodeRenderFrame(job, frame, bitmap) {
       (total, worker) => total + worker.frame - worker.frameStart,
       0
     );
-    emit("project-render-progress", {
-      jobId: job.parent.jobId,
-      status: "rendering",
-      progress: Math.round((completedFrames / job.parent.totalFrames) * 100),
-    });
+    const progress = Math.round(
+      (completedFrames / job.parent.totalFrames) * 100
+    );
+    if (progress !== job.parent.lastProgress) {
+      job.parent.lastProgress = progress;
+      emit("project-render-progress", {
+        jobId: job.parent.jobId,
+        status: "rendering",
+        progress,
+      });
+    }
     requestRenderFrame(job);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -607,6 +651,22 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
     },
+  });
+  applicationWindows.add(window);
+  window.once("closed", () => {
+    applicationWindows.delete(window);
+    if (applicationWindows.size === 0)
+      stopActiveRenders("Application window closed");
+  });
+  let recoveredRenderer = false;
+  window.webContents.on("render-process-gone", (_event, details) => {
+    const message = `Application renderer exited: ${details.reason} (${details.exitCode})`;
+    console.error(message);
+    stopActiveRenders(message);
+    if (!window.isDestroyed() && !recoveredRenderer) {
+      recoveredRenderer = true;
+      window.webContents.reload();
+    }
   });
   window.once("ready-to-show", () => window.show());
   window.webContents.on("did-finish-load", () => {
@@ -818,3 +878,5 @@ app.whenReady().then(() => {
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
+
+app.on("before-quit", () => stopActiveRenders("Application quitting"));

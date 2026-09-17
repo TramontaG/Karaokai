@@ -2,6 +2,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const readline = require("node:readline");
+const { recoverFailedProject } = require("./project-recovery.cjs");
 const { spawn } = require("node:child_process");
 
 const audioRegistry = new Map();
@@ -26,7 +27,13 @@ async function writeJson(file, value) {
 }
 
 async function loadProject(dataRoot, projectId) {
-  return readJson(path.join(projectRoot(dataRoot, projectId), "project.json"));
+  const directory = projectRoot(dataRoot, projectId);
+  const project = await readJson(path.join(directory, "project.json"));
+  const previous = JSON.stringify(project);
+  const recovered = await recoverFailedProject(directory, project);
+  if (recovered && JSON.stringify(recovered) !== previous)
+    await writeJson(path.join(directory, "project.json"), recovered);
+  return recovered;
 }
 
 async function saveProject(dataRoot, project) {
@@ -236,6 +243,7 @@ async function processProject({
 }) {
   const notify = async (stage, status, progress, message) => {
     await updateStage(directory, stage, status, progress, message);
+    if (status === "failed") await loadProject(dataRoot, projectId);
     emit("project-processing-progress", {
       projectId,
       stage,
@@ -330,6 +338,7 @@ async function processTranscription({ dataRoot, projectId, lyrics, emit }) {
   const directory = projectRoot(dataRoot, projectId);
   const notify = async (stage, status, progress, message) => {
     await updateStage(directory, stage, status, progress, message);
+    if (status === "failed") await loadProject(dataRoot, projectId);
     emit("project-processing-progress", {
       projectId,
       stage,
@@ -839,7 +848,14 @@ async function run(command, args, context) {
     });
     return null;
   }
-  if (command === "load_project") return loadProject(dataRoot, args.projectId);
+  if (command === "load_project") {
+    try {
+      return await loadProject(dataRoot, args.projectId);
+    } catch (error) {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    }
+  }
   if (command === "list_projects") {
     const directory = path.join(dataRoot, "projects");
     await fs.promises.mkdir(directory, { recursive: true });

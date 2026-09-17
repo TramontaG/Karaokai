@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { saveUserPreferences } from "../config/userPreferences";
 import { bootstrapApplication } from "../services/bootstrap";
 import { useAppContext } from "./useAppContext";
@@ -8,13 +8,19 @@ import { useTranslation } from "./useTranslation";
 export function useAppBootstrap() {
   const [data, setData] = useAppContext();
   const { theme } = useTheme();
+  const bootstrapRunning = useRef(false);
   useTranslation();
 
   useEffect(() => {
-    if (!data.preferencesLoaded || data.bootstrap.status !== "waiting") {
+    if (
+      !data.preferencesLoaded ||
+      data.bootstrap.status !== "waiting" ||
+      bootstrapRunning.current
+    ) {
       return;
     }
 
+    bootstrapRunning.current = true;
     const bootstrap = async () => {
       setData({ bootstrap: { status: "running" } });
 
@@ -58,6 +64,8 @@ export function useAppBootstrap() {
             error: error instanceof Error ? error.message : String(error),
           },
         });
+      } finally {
+        bootstrapRunning.current = false;
       }
     };
 

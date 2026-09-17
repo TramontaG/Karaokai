@@ -3,7 +3,7 @@
 A local-first desktop application that turns songs into karaoke projects: it separates vocals and instrumental tracks, transcribes lyrics with word-level timestamps, provides a visual timeline editor, and exports the result as a video.
 
 > [!NOTE]
-> Current version: `1.0.0`. Windows and Linux releases are published through GitHub Actions. Windows code signing is being set up through SignPath Foundation; macOS distribution still requires signing and notarization.
+> Current version: `1.1.1`. Windows and Linux releases are published through GitHub Actions. Windows code signing is being set up through SignPath Foundation; macOS distribution still requires signing and notarization.
 
 ## What KaraokAI does
 
