@@ -1,5 +1,9 @@
 import { createElement, useCallback, useEffect, useMemo } from "react";
-import { parseCubicBezier, resolveSubtitleStyle } from "../../domain/project";
+import {
+  parseCubicBezier,
+  resolveSubtitleStyle,
+  resolveBannerStyle,
+} from "../../domain/project";
 import { subtitleFontOptions } from "../../services/subtitleFonts";
 import { curveOptionsWithCurrent } from "../../util/editor/subtitleStyles";
 import { type CurveOption } from "../../util/editor/types";
@@ -120,7 +124,11 @@ export function useSubtitleStyleValues({
     [selectedWord?.id, storedWordScaleInputValue]
   );
 
-  const trackStyle = resolveSubtitleStyle(subtitleTrack?.style ?? {});
+  const resolveStyle =
+    subtitleTrack?.karaokeMode === "banner"
+      ? resolveBannerStyle
+      : resolveSubtitleStyle;
+  const trackStyle = resolveStyle(subtitleTrack?.style ?? {});
 
   const availableFontOptions = subtitleFontOptions(
     data.preferences.customFonts
@@ -135,12 +143,12 @@ export function useSubtitleStyleValues({
         { id: trackStyle.fontFamily, name: trackStyle.fontFamily },
       ];
 
-  const phraseStyle = resolveSubtitleStyle(
+  const phraseStyle = resolveStyle(
     subtitleTrack?.style ?? {},
     activePhrase?.style
   );
 
-  const wordStyle = resolveSubtitleStyle(
+  const wordStyle = resolveStyle(
     subtitleTrack?.style ?? {},
     activePhrase?.style,
     selectedWord?.style

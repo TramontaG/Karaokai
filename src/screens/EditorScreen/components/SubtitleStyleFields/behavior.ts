@@ -1,3 +1,4 @@
+import { useTranslation } from "../../../../hooks/useTranslation";
 import type { EditorSidebarModel } from "../../../../hooks/editor/componentModels";
 
 export interface SubtitleStyleFieldsProps {
@@ -9,6 +10,16 @@ export function useBehavior({
   scope,
   model: behavior,
 }: SubtitleStyleFieldsProps) {
+  const { t } = useTranslation();
+  const bannerColors = (
+    [
+      "currentColor",
+      "playheadColor",
+      "unreadRectangleColor",
+      "currentRectangleColor",
+      "readRectangleColor",
+    ] as const
+  ).map((property) => ({ property, label: t(`editor.${property}`) }));
   const lower = scope.toLowerCase() as "track" | "phrase" | "word";
   const style = behavior[`${lower}Style`];
   const onStyleChange = behavior[`on${scope}StyleChange`];
@@ -35,6 +46,25 @@ export function useBehavior({
 
   return {
     behavior,
+    bannerColors,
+    bannerSpeedLabel: t("editor.bannerSpeed"),
+    bannerFontSizeLabel: t("editor.bannerFontSize"),
+    bannerTransparencyLabel: t("editor.bannerTransparency"),
+    bannerLongWordAlignmentLabel: t("editor.bannerLongWordAlignment"),
+    bannerAlignCenterLabel: t("editor.bannerAlignCenter"),
+    bannerAlignLeftLabel: t("editor.bannerAlignLeft"),
+    bannerTransparency: Math.round((1 - style.bannerRectangleOpacity) * 100),
+    onBannerTransparencyChange: (value: string) => {
+      const percentage = Number(value);
+      if (value.trim() && Number.isFinite(percentage))
+        onStyleChange(
+          "bannerRectangleOpacity",
+          1 - Math.max(0, Math.min(100, percentage)) / 100
+        );
+    },
+    showBanner: behavior.animationTemplate === "banner",
+    showBannerSpeed:
+      behavior.animationTemplate === "banner" && scope === "Track",
     scope,
     lower,
     style,

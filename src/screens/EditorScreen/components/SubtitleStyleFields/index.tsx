@@ -18,6 +18,17 @@ import { useBehavior, type SubtitleStyleFieldsProps } from "./behavior";
 export function SubtitleStyleFields(props: SubtitleStyleFieldsProps) {
   const {
     behavior,
+    bannerColors,
+    bannerSpeedLabel,
+    bannerFontSizeLabel,
+    bannerTransparencyLabel,
+    bannerLongWordAlignmentLabel,
+    bannerAlignCenterLabel,
+    bannerAlignLeftLabel,
+    bannerTransparency,
+    onBannerTransparencyChange,
+    showBanner,
+    showBannerSpeed,
     scope,
     lower,
     style,
@@ -67,16 +78,18 @@ export function SubtitleStyleFields(props: SubtitleStyleFieldsProps) {
             onBlur={onScaleBlur}
           />
         </Field>
-        <Field>
-          <span>{behavior.readAnimationLabel}</span>
-          <select value={curve} onChange={onCurveChange}>
-            <ForEach
-              data={curveOptions}
-              idCompute={behavior.getCurveOptionId}
-              render={behavior.renderCurveOption}
-            />
-          </select>
-        </Field>
+        <Render when={!showBanner}>
+          <Field>
+            <span>{behavior.readAnimationLabel}</span>
+            <select value={curve} onChange={onCurveChange}>
+              <ForEach
+                data={curveOptions}
+                idCompute={behavior.getCurveOptionId}
+                render={behavior.renderCurveOption}
+              />
+            </select>
+          </Field>
+        </Render>
         <FullWidthField>
           <span>{behavior.fontFamilyLabel}</span>
           <select
@@ -219,8 +232,118 @@ export function SubtitleStyleFields(props: SubtitleStyleFieldsProps) {
             </Render>
           </ColorFieldControl>
         </ColorField>
+        <Render when={showBannerSpeed}>
+          <Field>
+            <span>{bannerSpeedLabel}</span>
+            <DraggableNumberInput
+              min="1"
+              max="1000"
+              value={style.bannerSpeed}
+              onValueChange={(value) =>
+                onStyleChange(
+                  "bannerSpeed",
+                  Math.max(1, Math.min(1000, Number(value) || 300))
+                )
+              }
+            />
+          </Field>
+        </Render>
+        <Render when={showBanner}>
+          <Field>
+            <span>{bannerFontSizeLabel}</span>
+            <DraggableNumberInput
+              min="6"
+              max="96"
+              step="1"
+              value={style.bannerFontSize}
+              onValueChange={(value) =>
+                onStyleChange(
+                  "bannerFontSize",
+                  Math.max(6, Math.min(96, Number(value) || 14))
+                )
+              }
+            />
+            <Render when={onStyleInherit !== null}>
+              <button
+                type="button"
+                aria-label={`${behavior.inheritLabel} ${bannerFontSizeLabel}`}
+                onClick={() => onStyleInherit?.("bannerFontSize")}
+              >
+                {behavior.inheritLabel}
+              </button>
+            </Render>
+          </Field>
+          <Field>
+            <span>{bannerTransparencyLabel}</span>
+            <DraggableNumberInput
+              min="0"
+              max="100"
+              step="1"
+              value={bannerTransparency}
+              onValueChange={onBannerTransparencyChange}
+            />
+            <Render when={onStyleInherit !== null}>
+              <button
+                type="button"
+                aria-label={`${behavior.inheritLabel} ${bannerTransparencyLabel}`}
+                onClick={() => onStyleInherit?.("bannerRectangleOpacity")}
+              >
+                {behavior.inheritLabel}
+              </button>
+            </Render>
+          </Field>
+          <Field>
+            <span>{bannerLongWordAlignmentLabel}</span>
+            <select
+              value={style.bannerLongWordAlignment}
+              onChange={(event) =>
+                onStyleChange(
+                  "bannerLongWordAlignment",
+                  event.target.value as "center" | "left"
+                )
+              }
+            >
+              <option value="center">{bannerAlignCenterLabel}</option>
+              <option value="left">{bannerAlignLeftLabel}</option>
+            </select>
+            <Render when={onStyleInherit !== null}>
+              <button
+                type="button"
+                aria-label={`${behavior.inheritLabel} ${bannerLongWordAlignmentLabel}`}
+                onClick={() => onStyleInherit?.("bannerLongWordAlignment")}
+              >
+                {behavior.inheritLabel}
+              </button>
+            </Render>
+          </Field>
+          <ForEach
+            data={bannerColors}
+            idCompute={(item) => item.property}
+            render={(item) => (
+              <ColorField>
+                <span>{item.label}</span>
+                <ColorFieldControl>
+                  <ColorInput
+                    color={style[item.property]}
+                    label={item.label}
+                    onChange={(color) => onStyleChange(item.property, color)}
+                  />
+                  <Render when={onStyleInherit !== null}>
+                    <button
+                      type="button"
+                      aria-label={`${behavior.inheritLabel} ${item.label}`}
+                      onClick={() => onStyleInherit?.(item.property)}
+                    >
+                      {behavior.inheritLabel}
+                    </button>
+                  </Render>
+                </ColorFieldControl>
+              </ColorField>
+            )}
+          />
+        </Render>
       </FieldGrid>
-      <Render when={showBezier}>
+      <Render when={showBezier && !showBanner}>
         <CubicBezierEditor
           value={curve}
           labels={behavior.bezierLabels}

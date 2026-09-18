@@ -25,6 +25,17 @@ export interface TimedElement {
 export interface SubtitleStyle {
   unreadColor?: string;
   readColor?: string;
+  currentColor?: string;
+  playheadColor?: string;
+  unreadRectangleColor?: string;
+  currentRectangleColor?: string;
+  readRectangleColor?: string;
+  bannerSpeed?: number;
+  bannerFontSize?: number;
+  bannerRectangleOpacity?: number;
+  bannerLongWordAlignment?: "center" | "left";
+  bannerUnreadColor?: string;
+  bannerReadColor?: string;
   scale?: number;
   fontFamily?: SubtitleFontFamily;
   fontWeight?: "normal" | "bold";
@@ -105,6 +116,8 @@ export function hasSubtitlePhraseTiming(
   );
 }
 
+export type KaraokeMode = "continuity" | "banner";
+
 export type SubtitleAnimationTemplate = "template-1";
 
 export interface SubtitleAnimation {
@@ -116,6 +129,7 @@ export interface SubtitleTrack extends BaseTrack {
   style: SubtitleStyle;
   curve?: string;
   animation?: SubtitleAnimation;
+  karaokeMode?: KaraokeMode;
   phrases: SubtitlePhrase[];
 }
 
@@ -290,6 +304,64 @@ export function resolveSubtitleStyle(
   word?: SubtitleStyle
 ): Required<SubtitleStyle> {
   return {
+    currentColor:
+      word?.currentColor ??
+      phrase?.currentColor ??
+      track.currentColor ??
+      "#FFFFFF",
+    playheadColor:
+      word?.playheadColor ??
+      phrase?.playheadColor ??
+      track.playheadColor ??
+      "#FFFFFF",
+    unreadRectangleColor:
+      word?.unreadRectangleColor ??
+      phrase?.unreadRectangleColor ??
+      track.unreadRectangleColor ??
+      "#6B3B93",
+    currentRectangleColor:
+      word?.currentRectangleColor ??
+      phrase?.currentRectangleColor ??
+      track.currentRectangleColor ??
+      "#80539F",
+    readRectangleColor:
+      word?.readRectangleColor ??
+      phrase?.readRectangleColor ??
+      track.readRectangleColor ??
+      "#6B3B93",
+    bannerSpeed: track.bannerSpeed ?? 300,
+    bannerRectangleOpacity: Math.max(
+      0,
+      Math.min(
+        1,
+        word?.bannerRectangleOpacity ??
+          phrase?.bannerRectangleOpacity ??
+          track.bannerRectangleOpacity ??
+          1
+      )
+    ),
+    // Normalize the earlier right-edge option to the corrected left alignment.
+    bannerLongWordAlignment:
+      (word?.bannerLongWordAlignment ??
+        phrase?.bannerLongWordAlignment ??
+        track.bannerLongWordAlignment) === "center"
+        ? "center"
+        : "left",
+    bannerFontSize:
+      word?.bannerFontSize ??
+      phrase?.bannerFontSize ??
+      track.bannerFontSize ??
+      14,
+    bannerUnreadColor:
+      word?.bannerUnreadColor ??
+      phrase?.bannerUnreadColor ??
+      track.bannerUnreadColor ??
+      "#FFFFFF",
+    bannerReadColor:
+      word?.bannerReadColor ??
+      phrase?.bannerReadColor ??
+      track.bannerReadColor ??
+      "#FFFFFF",
     unreadColor:
       word?.unreadColor ??
       phrase?.unreadColor ??
@@ -321,6 +393,20 @@ export function resolveSubtitleStyle(
     y: (track.y ?? 0) + (phrase?.y ?? 0) + (word?.y ?? 0),
     positionReferenceWidth: track.positionReferenceWidth ?? 640,
     positionReferenceHeight: track.positionReferenceHeight ?? 360,
+  };
+}
+
+// Banner owns its text palette independently of Continuity's read fill.
+export function resolveBannerStyle(
+  track: SubtitleStyle,
+  phrase?: SubtitleStyle,
+  word?: SubtitleStyle
+) {
+  const style = resolveSubtitleStyle(track, phrase, word);
+  return {
+    ...style,
+    unreadColor: style.bannerUnreadColor,
+    readColor: style.bannerReadColor,
   };
 }
 

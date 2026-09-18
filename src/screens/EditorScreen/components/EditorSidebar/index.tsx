@@ -1,3 +1,4 @@
+import { KaraokeModeSelector } from "../../../../components/KaraokeModeSelector";
 import { FileUp, Plus, Trash2, X } from "lucide-react";
 import { memo } from "react";
 import { DraggableNumberInput } from "../../../../components/DraggableNumberInput";
@@ -202,14 +203,10 @@ function EditorSidebarView({ model: behavior }: { model: EditorSidebarModel }) {
             <SubtitleStyleFields scope="Track" model={behavior} />
             <Field>
               <span>{behavior.animationTemplateLabel}</span>
-              <select
+              <KaraokeModeSelector
                 value={behavior.animationTemplate}
                 onChange={behavior.onAnimationTemplateChange}
-              >
-                <option value="template-1">
-                  {behavior.animationTemplateOneLabel}
-                </option>
-              </select>
+              />
             </Field>
             <AnimationDescription>
               {behavior.animationTemplateOneDescription}

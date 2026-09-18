@@ -1,3 +1,4 @@
+import { karaokeModeFor } from "../../util/karaoke/modes";
 import { createElement, useCallback } from "react";
 import { type SubtitleWord } from "../../domain/project";
 import {
@@ -40,6 +41,12 @@ export function useSubtitleRendering({
   const renderSubtitlePreview = useCallback(
     (preview: (typeof subtitlePreviews)[number]) => {
       if (!preview.visible) return null;
+      const Renderer = karaokeModeFor(preview.track).renderer;
+      if (Renderer)
+        return createElement(Renderer, {
+          track: preview.track,
+          currentTime: preview.currentTime,
+        });
       const renderEntryCue = (phraseId: string | undefined) =>
         preview.showEntryCue && preview.entryCuePhrase?.id === phraseId
           ? createElement(

@@ -1,8 +1,6 @@
+import { karaokeModes } from "../../util/karaoke/modes";
 import { useCallback, type ChangeEvent } from "react";
-import {
-  type SubtitleAnimationTemplate,
-  type SubtitleStyle,
-} from "../../domain/project";
+import { type KaraokeMode, type SubtitleStyle } from "../../domain/project";
 import {
   MAXIMUM_SCALE_PERCENTAGE,
   MINIMUM_SCALE_PERCENTAGE,
@@ -41,6 +39,17 @@ export function useSubtitleStyles({
       scope: SubtitlePropertyScope,
       property: keyof Pick<
         SubtitleStyle,
+        | "currentColor"
+        | "playheadColor"
+        | "unreadRectangleColor"
+        | "currentRectangleColor"
+        | "readRectangleColor"
+        | "bannerRectangleOpacity"
+        | "bannerLongWordAlignment"
+        | "bannerFontSize"
+        | "bannerUnreadColor"
+        | "bannerReadColor"
+        | "bannerSpeed"
         | "unreadColor"
         | "readColor"
         | "x"
@@ -53,6 +62,10 @@ export function useSubtitleStyles({
       >,
       value: NonNullable<SubtitleStyle[typeof property]>
     ) => {
+      if (subtitleTrack?.karaokeMode === "banner") {
+        if (property === "readColor") property = "bannerReadColor";
+        if (property === "unreadColor") property = "bannerUnreadColor";
+      }
       const currentProject = projectRef.current;
       if (!currentProject || !subtitleTrack) return;
       if (scope === "track") {
@@ -112,6 +125,10 @@ export function useSubtitleStyles({
       scope: Exclude<SubtitlePropertyScope, "track">,
       property: keyof SubtitleStyle | "typography"
     ) => {
+      if (subtitleTrack?.karaokeMode === "banner") {
+        if (property === "readColor") property = "bannerReadColor";
+        if (property === "unreadColor") property = "bannerUnreadColor";
+      }
       const currentProject = projectRef.current;
       if (!currentProject || !subtitleTrack || !activePhrase) return;
       if (scope === "phrase") {
@@ -281,14 +298,15 @@ export function useSubtitleStyles({
     (event: ChangeEvent<HTMLSelectElement>) => {
       const currentProject = projectRef.current;
       if (!currentProject || !subtitleTrack) return;
-      const template = event.target.value as SubtitleAnimationTemplate;
+      const karaokeMode = event.target.value as KaraokeMode;
+      if (!Object.hasOwn(karaokeModes, karaokeMode)) return;
       persistProject(
         {
           ...currentProject,
           updatedAt: String(Date.now()),
           tracks: currentProject.tracks.map((track) =>
             track.type === "subtitle" && track.id === subtitleTrack.id
-              ? { ...track, animation: { template } }
+              ? { ...track, karaokeMode }
               : track
           ),
         },

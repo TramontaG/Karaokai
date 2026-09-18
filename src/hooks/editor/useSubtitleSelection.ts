@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { type SubtitleAnimationTemplate } from "../../domain/project";
+import { type KaraokeMode } from "../../domain/project";
 import { subtitlePreviewView } from "../../util/editor/subtitlePreview";
 import type { EditorDataState } from "./useEditorDataState";
 import type { EditorProjectValues } from "./useEditorProjectValues";
@@ -21,8 +21,8 @@ export function useSubtitleSelection({
 }: Options) {
   const { subtitleTrack, subtitleTracks } = editorProjectValues;
   const { currentTime, selectedPhraseId, selectedWordId } = editorDataState;
-  const animationTemplate: SubtitleAnimationTemplate =
-    subtitleTrack?.animation?.template ?? "template-1";
+  const animationTemplate: KaraokeMode =
+    subtitleTrack?.karaokeMode ?? "continuity";
 
   const subtitlePreviews = useMemo(
     () =>

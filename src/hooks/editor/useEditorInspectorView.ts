@@ -1,3 +1,4 @@
+import { karaokeModes } from "../../util/karaoke/modes";
 import { type ChangeEvent } from "react";
 import { type SubtitleWord } from "../../domain/project";
 import { type SubtitleFontOption } from "../../services/subtitleFonts";
@@ -256,7 +257,7 @@ export function useEditorInspectorView({
     animationTemplateLabel: t("editor.animationTemplate"),
     animationTemplateOneLabel: t("editor.animationTemplateOne"),
     animationTemplateOneDescription: t(
-      "editor.animationTemplateOneDescription"
+      karaokeModes[animationTemplate].description
     ),
     deletePhraseLabel: t("editor.deletePhrase"),
     deletePhraseShortcut: t("editor.deletePhraseShortcut"),

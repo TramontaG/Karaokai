@@ -116,13 +116,18 @@ export function subtitlePreviewView(track: SubtitleTrack, currentTime: number) {
 
   return {
     id: track.id,
+    track,
+    currentTime,
     timing,
     playingPhrase,
     entryCuePhrase,
     words: words.map(withSubtitleWordStyles),
     secondaryWords: secondaryWords.map(withSubtitleWordStyles),
     visible:
-      track.visible && (words.length > 0 || timing.secondaryPhrase !== null),
+      track.visible &&
+      (track.karaokeMode === "banner" ||
+        words.length > 0 ||
+        timing.secondaryPhrase !== null),
     containerStyle: {
       left: `calc(50% + ${((track.style.x ?? 0) / positionReferenceWidth) * 100}%)`,
       top: `calc(50% + ${((track.style.y ?? 0) / positionReferenceHeight) * 100}%)`,

@@ -101,6 +101,8 @@ function subtitlePreview(track: SubtitleTrack, currentTime: number) {
     }));
   return {
     id: track.id,
+    track,
+    currentTime,
     timing,
     entryCuePhraseId: entryCuePhrase?.id ?? null,
     words: words.map(withSubtitleWordStyles),
@@ -130,7 +132,10 @@ function subtitlePreview(track: SubtitleTrack, currentTime: number) {
     showCurrentPhrase: words.length > 0,
     showNextPhrase: timing.secondaryPhrase !== null,
     visible:
-      track.visible && (words.length > 0 || timing.secondaryPhrase !== null),
+      track.visible &&
+      (track.karaokeMode === "banner" ||
+        words.length > 0 ||
+        timing.secondaryPhrase !== null),
   };
 }
 

@@ -7,6 +7,7 @@ const vm = require("node:vm");
 const { createRequire } = require("node:module");
 const { pathToFileURL } = require("node:url");
 const { execFileSync } = require("node:child_process");
+const bannerMode = process.argv.includes("--banner");
 const root = path.resolve(__dirname, "../..");
 const directory = fs.mkdtempSync(
   path.join(os.tmpdir(), "karaokai-render-check-")
@@ -106,6 +107,20 @@ const timeout = setTimeout(() => {
               visible: true,
               zIndex: 1,
               style: { readColor: "#ff0000", unreadColor: "#ffffff", scale: 1 },
+              karaokeMode: bannerMode ? "banner" : "continuity",
+              ...(bannerMode
+                ? {
+                    style: {
+                      unreadColor: "#ffffff",
+                      currentColor: "#ffffff",
+                      readColor: "#ffffff",
+                      unreadRectangleColor: "#00ff00",
+                      currentRectangleColor: "#ffff00",
+                      readRectangleColor: "#ff0000",
+                      bannerSpeed: 100,
+                    },
+                  }
+                : {}),
               curve: "linear",
               phrases: [
                 {
@@ -115,8 +130,56 @@ const timeout = setTimeout(() => {
                   end: 1200,
                   words: [
                     { id: "word", text: "MMMMMMMMMMMM", start: 200, end: 1000 },
+                    ...(bannerMode
+                      ? [
+                          {
+                            id: "next",
+                            text: "Overlapping label",
+                            start: 1050,
+                            end: 1100,
+                          },
+                          {
+                            id: "last",
+                            text: "Another word",
+                            start: 1100,
+                            end: 1200,
+                          },
+                        ]
+                      : []),
                   ],
                 },
+                ...(bannerMode
+                  ? [
+                      {
+                        id: "after-gap",
+                        text: "Next",
+                        start: 1800,
+                        end: 2100,
+                        words: [
+                          {
+                            id: "next-phrase-word",
+                            text: "Next",
+                            start: 1800,
+                            end: 2100,
+                          },
+                        ],
+                      },
+                      {
+                        id: "touching",
+                        text: "Touching",
+                        start: 2100,
+                        end: 2500,
+                        words: [
+                          {
+                            id: "touching-word",
+                            text: "Touching",
+                            start: 2100,
+                            end: 2500,
+                          },
+                        ],
+                      },
+                    ]
+                  : []),
               ],
             },
           ],
@@ -168,6 +231,38 @@ const timeout = setTimeout(() => {
         throw new Error(`Incorrect frame count: ${raw.length / frameBytes}`);
       let previous = -1;
       for (let frame = 0; frame < job.totalFrames; frame++) {
+        if (bannerMode && !blank) {
+          const time = (frame / fps) * 1000;
+          const scale = width / 640;
+          const x = Math.round((320 + (200 - time) / 10 + 8) * scale);
+          const y = Math.round((167 * height) / 360);
+          // The source has no word/phrase in 1200–1800 ms. Banner must fill
+          // this short inter-phrase interval with an unread, hatched rectangle.
+          const gapX = Math.round((320 + (1500 - time) / 10) * scale);
+          const gapY = Math.round((180 * height) / 360);
+          const gapPixel = frame * frameBytes + (gapY * width + gapX) * 3;
+          const [gapR, gapG, gapB] = raw.subarray(gapPixel, gapPixel + 3);
+          if (!(gapG > 170 && gapR < 100 && gapB < 100))
+            throw new Error(
+              `Missing Banner inter-phrase silence at ${width} frame ${frame}: ${gapR},${gapG},${gapB}`
+            );
+          // Stay away from the stationary playhead and codec edge ringing.
+          if (Math.abs(x - width / 2) > 5 * scale) {
+            const pixel = frame * frameBytes + (y * width + x) * 3;
+            const [r, g, b] = raw.subarray(pixel, pixel + 3);
+            const valid =
+              time < 200
+                ? g > 180 && r < 80 && b < 80
+                : time < 1000
+                  ? r > 180 && g > 180 && b < 80
+                  : r > 180 && g < 80 && b < 80;
+            if (!valid)
+              throw new Error(
+                `Banner rectangle timing/position mismatch at ${width} frame ${frame}: ${r},${g},${b}`
+              );
+          }
+          continue;
+        }
         let redPixels = 0;
         // Inspect the word itself; the entry cue below it animates before
         // the word starts and disappears afterwards.

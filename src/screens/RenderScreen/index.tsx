@@ -1,3 +1,4 @@
+import { KaraokeModePreview } from "../../components/KaraokeModePreview";
 import { ForEach } from "../../components/ForEach";
 import { Render } from "../../components/Render";
 import {
@@ -36,66 +37,71 @@ export function RenderScreen() {
         data={behavior.previews}
         idCompute={(preview) => preview.id}
         render={(preview) => (
-          <SubtitlePreview style={preview.containerStyle}>
-            <Render when={preview.showCurrentPhrase}>
-              <CurrentPhrase style={preview.currentStyle}>
-                <ForEach
-                  data={preview.words}
-                  idCompute={(word) => word.id}
-                  render={(word) => (
-                    <PreviewWord style={word.previewStyle}>
-                      {word.text}
-                      <PreviewWordFill style={word.fillStyle}>
+          <KaraokeModePreview
+            track={preview.track}
+            currentTime={preview.currentTime}
+          >
+            <SubtitlePreview style={preview.containerStyle}>
+              <Render when={preview.showCurrentPhrase}>
+                <CurrentPhrase style={preview.currentStyle}>
+                  <ForEach
+                    data={preview.words}
+                    idCompute={(word) => word.id}
+                    render={(word) => (
+                      <PreviewWord style={word.previewStyle}>
                         {word.text}
-                      </PreviewWordFill>
-                    </PreviewWord>
-                  )}
-                />
-                <Render
-                  when={
-                    preview.showEntryCue &&
-                    preview.entryCuePhraseId ===
-                      preview.timing.primaryPhrase?.id
-                  }
-                >
-                  <EntryCue style={preview.entryCueStyle}>
-                    <EntryCueBar>
-                      <EntryCueBarFill />
-                    </EntryCueBar>
-                  </EntryCue>
-                </Render>
-              </CurrentPhrase>
-            </Render>
-            <Render when={preview.showNextPhrase}>
-              <NextPhrase style={preview.nextPhraseStyle}>
-                <ForEach
-                  data={preview.secondaryWords}
-                  idCompute={(word) => word.id}
-                  render={(word) => (
-                    <PreviewWord style={word.previewStyle}>
-                      {word.text}
-                      <PreviewWordFill style={word.fillStyle}>
+                        <PreviewWordFill style={word.fillStyle}>
+                          {word.text}
+                        </PreviewWordFill>
+                      </PreviewWord>
+                    )}
+                  />
+                  <Render
+                    when={
+                      preview.showEntryCue &&
+                      preview.entryCuePhraseId ===
+                        preview.timing.primaryPhrase?.id
+                    }
+                  >
+                    <EntryCue style={preview.entryCueStyle}>
+                      <EntryCueBar>
+                        <EntryCueBarFill />
+                      </EntryCueBar>
+                    </EntryCue>
+                  </Render>
+                </CurrentPhrase>
+              </Render>
+              <Render when={preview.showNextPhrase}>
+                <NextPhrase style={preview.nextPhraseStyle}>
+                  <ForEach
+                    data={preview.secondaryWords}
+                    idCompute={(word) => word.id}
+                    render={(word) => (
+                      <PreviewWord style={word.previewStyle}>
                         {word.text}
-                      </PreviewWordFill>
-                    </PreviewWord>
-                  )}
-                />
-                <Render
-                  when={
-                    preview.showEntryCue &&
-                    preview.entryCuePhraseId ===
-                      preview.timing.secondaryPhrase?.id
-                  }
-                >
-                  <EntryCue style={preview.entryCueStyle}>
-                    <EntryCueBar>
-                      <EntryCueBarFill />
-                    </EntryCueBar>
-                  </EntryCue>
-                </Render>
-              </NextPhrase>
-            </Render>
-          </SubtitlePreview>
+                        <PreviewWordFill style={word.fillStyle}>
+                          {word.text}
+                        </PreviewWordFill>
+                      </PreviewWord>
+                    )}
+                  />
+                  <Render
+                    when={
+                      preview.showEntryCue &&
+                      preview.entryCuePhraseId ===
+                        preview.timing.secondaryPhrase?.id
+                    }
+                  >
+                    <EntryCue style={preview.entryCueStyle}>
+                      <EntryCueBar>
+                        <EntryCueBarFill />
+                      </EntryCueBar>
+                    </EntryCue>
+                  </Render>
+                </NextPhrase>
+              </Render>
+            </SubtitlePreview>
+          </KaraokeModePreview>
         )}
       />
       <FrameStamp style={behavior.frameStampStyle} aria-hidden="true" />
