@@ -116,7 +116,7 @@ export function hasSubtitlePhraseTiming(
   );
 }
 
-export type KaraokeMode = "continuity" | "banner";
+export type KaraokeMode = "continuity" | "banner" | "book" | "teleprompter";
 
 export type SubtitleAnimationTemplate = "template-1";
 

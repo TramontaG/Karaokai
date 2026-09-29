@@ -125,7 +125,7 @@ export function subtitlePreviewView(track: SubtitleTrack, currentTime: number) {
     secondaryWords: secondaryWords.map(withSubtitleWordStyles),
     visible:
       track.visible &&
-      (track.karaokeMode === "banner" ||
+      ((track.karaokeMode ?? "continuity") !== "continuity" ||
         words.length > 0 ||
         timing.secondaryPhrase !== null),
     containerStyle: {

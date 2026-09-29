@@ -1,17 +1,13 @@
 import { useRecursiveState } from "../../hooks/useRecursiveState";
 import { createElement, useEffect, useMemo, useId } from "react";
 import type { CSSProperties } from "react";
-import { type SubtitleTrack } from "../../domain/project";
+import type { KaraokePreviewProps } from "../../util/karaoke/types";
+export type { KaraokePreviewProps } from "../../util/karaoke/types";
 import {
   bannerWordState,
   layoutBanner,
   bannerPlayheadsAt,
 } from "../../util/karaoke/banner";
-
-export interface KaraokePreviewProps {
-  track: SubtitleTrack;
-  currentTime: number;
-}
 
 export function useBehavior({ track, currentTime }: KaraokePreviewProps) {
   const clipPrefix = useId();

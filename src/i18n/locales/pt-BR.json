@@ -450,5 +450,9 @@
   "editor.bannerTransparency": "Transparência dos retângulos (%)",
   "editor.bannerLongWordAlignment": "Alinhamento de palavras longas",
   "editor.bannerAlignCenter": "Centro",
-  "editor.bannerAlignLeft": "Esquerda"
+  "editor.bannerAlignLeft": "Esquerda",
+  "editor.teleprompter": "Teleprompter",
+  "editor.teleprompterDescription": "Frases rolam conforme são cantadas. Os offsets X e Y posicionam o ponto de leitura.",
+  "editor.book": "Book — Livro",
+  "editor.bookDescription": "Frases em linhas, lidas de cima para baixo. Cada linha lida recebe uma nova frase, retornando ao topo após a última linha. Frases entram até 10 segundos antes; após uma pausa maior, a leitura reinicia no topo. A quantidade de linhas se ajusta ao espaço disponível."
 }

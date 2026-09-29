@@ -66,3 +66,65 @@ Validation:
 - `env -u ELECTRON_RUN_AS_NODE npx electron electron/tests/render-frames.cjs --banner`
   verifies encoded rectangle positions and state colors at 30/60 fps and 360p/1080p,
   with solid and video backgrounds. Omit `--banner` to check Continuity.
+
+## Book
+
+`src/util/karaoke/book.ts` measures and wraps phrases, then assigns them to a
+sequence of fixed positions for each section between long pauses. Phrases pack
+using their actual heights and compact line spacing, then wrap to the page top.
+Their coordinates never change during playback. A replacement waits until its
+entire footprint is free, including any neighboring phrase it would overlap.
+At its reading start it removes any remaining intersecting phrases; unrelated
+phrases stay in place. Empty space stays empty until a phrase can occupy it.
+The first page of each section fades in together three seconds before singing
+resumes; it stays hidden throughout the preceding long silence. Subsequent
+replacements retain the ten-second lookahead and wait for occupied space.
+Phrase fades last 350 ms, with fade-out after reading and shortened transitions
+when an incoming active phrase requires the space. Opacity is calculated from
+song time, never CSS animation or playback history.
+A bar anticipates only the first phrase or a return after at least four seconds
+without singing, matching Continuity. It fills during the two seconds before
+the first word and remains full until that word ends, using inherited colors.
+Oversized individual words
+are scaled to fit; a phrase taller than the page is proportionally reduced to
+fit as one block. Safe margins and bounded offsets keep glyphs inside the frame.
+The ordinary font, scale, colors, emphasis, and reading curves are inherited.
+
+Read order is top to bottom, then back to the top. The initial page appears as a group; later phrases appear in their scheduled
+positions once there is room and within ten seconds of their own start. Completed phrases disappear if their replacement is still
+too far away. Pauses greater than 10 seconds split sections and restart the next
+section at row zero. A gap of exactly 10 seconds keeps the existing cycle. With
+overlapping phrases and insufficient rows, the next active phrase takes the row
+rather than drawing two phrases on top of one another.
+
+The schedule is precomputed from source times, so direct seeks and exports do
+not depend on which frames were played earlier. The shared `BookKaraoke`
+component draws identical clipped read-color fills in editor and export, using
+`wordReadProgress` and `resolveTimingCurve` from Continuity. No source phrases,
+word times, or timeline behavior are modified. Empty tracks render nothing.
+
+`tests/book-karaoke.test.mjs` covers replacement, the 10-second boundary, restart,
+seeking, wrapping, inherited styles, exact read progress, extreme offsets, and
+frame bounds at landscape and portrait dimensions. Run the production frame
+check with `env -u ELECTRON_RUN_AS_NODE npx electron electron/tests/render-frames.cjs --book`.
+
+## Teleprompter
+
+Teleprompter shares Book's glyph layout, wrapping, inherited styles, read-color
+clipping and entry cue. Phrases form a continuous vertical column instead of
+reusing page rows. Between phrase starts, the column scrolls upward by the outgoing phrase's
+height and spacing, arriving at the reading anchor exactly when the next phrase
+starts. Movement continues through short gaps, independently of word fill. Monotone cubic
+interpolation shares a positive velocity across adjacent phrase starts, smoothly
+varying speed without stopping or overshooting the next reading anchor. Long-pause entrances and exits stay unchanged. The reading anchor defaults to the left margin and
+vertical center; track X/Y offsets translate that anchor, including negative
+values, without changing wrapping or timing. SVG clips content at the frame.
+
+After pauses greater than ten seconds, a new column scrolls in from below during
+the three seconds before singing. Completed sections scroll off the top over
+one second. There are no opacity fades. Positions are computed from song time,
+so seeking and export reproduce the same frame without playback history.
+
+`tests/teleprompter-karaoke.test.mjs` covers scrolling, pauses, anchor offsets,
+reference resolutions and deterministic seeks. Run encoded frame validation with
+`env -u ELECTRON_RUN_AS_NODE npx electron electron/tests/render-frames.cjs --teleprompter`.

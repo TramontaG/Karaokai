@@ -450,5 +450,9 @@
   "editor.bannerTransparency": "Rectangle transparency (%)",
   "editor.bannerLongWordAlignment": "Long word alignment",
   "editor.bannerAlignCenter": "Center",
-  "editor.bannerAlignLeft": "Left"
+  "editor.bannerAlignLeft": "Left",
+  "editor.teleprompter": "Teleprompter",
+  "editor.teleprompterDescription": "Phrases scroll as they are sung. X and Y offsets position the reading anchor.",
+  "editor.book": "Book",
+  "editor.bookDescription": "Read stacked phrases from top to bottom. Each completed row receives a new phrase, cycling back to the top after the last row. Phrases appear up to 10 seconds ahead; after a longer pause, reading restarts at the top. The number of rows adapts to the available space."
 }

@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.2.0] - 2026-09-28
+
+### Added
+
+- Banner karaoke mode with timestamp-accurate word rectangles, a configurable playhead, speed, font size, state colors, rectangle transparency, shadows, and word separators.
+- Book karaoke mode with compact stacked phrases, fixed reading positions, automatic page capacity, and cyclic replacements that wait for enough space.
+- Teleprompter karaoke mode with continuous scrolling, smoothly varying speed across phrase boundaries, and configurable X/Y reading anchors.
+- A shared karaoke mode registry for switching between Continuity, Banner, Book, and Teleprompter without changing project phrases or timeline geometry.
+
+### Improved
+
+- Banner renders explicit pauses and joins consecutive phrases with gaps of up to two seconds, preserves phrase-wide rounded corners, and accommodates long labels with padding and collision handling.
+- Banner playhead fades in and out over one second around active content.
+- Book pages appear together three seconds before singing resumes after long pauses, with phrase fades and anticipation cues only at the first entry or after a pause of at least four seconds.
+- Teleprompter scrolls through short pauses, reaches the reading anchor exactly at each phrase start, and handles long pauses with coordinated scroll entrances and exits.
+- Preview and exported frames share mode renderers, inherited text styling, word timing curves, and deterministic positions when seeking.
+
+### Fixed
+
+- Prevent taller Book replacements from moving other visible phrases or overlapping occupied space.
+- Expand read-color clipping for accented and italic glyphs in Book and Teleprompter, and paint completed words without clipping to prevent unread remnants.
+
+### Tests
+
+- Added layout and timing coverage for Banner, Book, and Teleprompter, including pauses, text bounds, stable positions, anchor offsets, continuous scroll velocity, and deterministic seeking.
+- Expanded encoded-frame checks for karaoke modes and accented/italic text at 30/60 fps and 360p/1080p with solid and video backgrounds.
+
 ## [1.1.1] - 2026-09-16
 
 ### Fixed
@@ -50,6 +77,7 @@
 
 - Initial stable desktop release with local karaoke editing, stem separation, synchronized subtitles, and Windows and Linux installers.
 
+[1.2.0]: https://github.com/TramontaG/Karaokai/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/TramontaG/Karaokai/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/TramontaG/Karaokai/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/TramontaG/Karaokai/releases/tag/v1.0.0

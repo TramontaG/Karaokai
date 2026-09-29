@@ -8,6 +8,9 @@ const { createRequire } = require("node:module");
 const { pathToFileURL } = require("node:url");
 const { execFileSync } = require("node:child_process");
 const bannerMode = process.argv.includes("--banner");
+const teleprompterMode = process.argv.includes("--teleprompter");
+const glyphMode = process.argv.includes("--glyphs");
+const bookMode = process.argv.includes("--book");
 const root = path.resolve(__dirname, "../..");
 const directory = fs.mkdtempSync(
   path.join(os.tmpdir(), "karaokai-render-check-")
@@ -107,7 +110,13 @@ const timeout = setTimeout(() => {
               visible: true,
               zIndex: 1,
               style: { readColor: "#ff0000", unreadColor: "#ffffff", scale: 1 },
-              karaokeMode: bannerMode ? "banner" : "continuity",
+              karaokeMode: teleprompterMode
+                ? "teleprompter"
+                : bookMode
+                  ? "book"
+                  : bannerMode
+                    ? "banner"
+                    : "continuity",
               ...(bannerMode
                 ? {
                     style: {
@@ -148,6 +157,22 @@ const timeout = setTimeout(() => {
                       : []),
                   ],
                 },
+                ...(bookMode || teleprompterMode
+                  ? Array.from({ length: 10 }, (_, index) => ({
+                      id: `book-${index}`,
+                      text: `Upcoming phrase ${index + 1}`,
+                      start: 1400 + index * 1200,
+                      end: 2400 + index * 1200,
+                      words: [
+                        {
+                          id: `book-word-${index}`,
+                          text: `Upcoming phrase ${index + 1}`,
+                          start: 1400 + index * 1200,
+                          end: 2400 + index * 1200,
+                        },
+                      ],
+                    }))
+                  : []),
                 ...(bannerMode
                   ? [
                       {
@@ -200,6 +225,24 @@ const timeout = setTimeout(() => {
         job.project.tracks = job.project.tracks.filter(
           (track) => track.type !== "subtitle"
         );
+      if (glyphMode && !blank) {
+        const subtitles = job.project.tracks.find(
+          (track) => track.type === "subtitle"
+        );
+        subtitles.style = { ...subtitles.style, scale: 3, fontStyle: "italic" };
+        subtitles.phrases = [
+          {
+            id: "glyphs",
+            text: "É J Á Ç j",
+            start: 200,
+            end: 2000,
+            words: [
+              { id: "glyphs", text: "É J Á Ç j", start: 200, end: 1000 },
+              { id: "hold", text: "", type: "gap", start: 1000, end: 2000 },
+            ],
+          },
+        ];
+      }
       const started = performance.now();
       await new Promise((resolve, reject) => {
         context.testJob = job;
@@ -230,7 +273,34 @@ const timeout = setTimeout(() => {
       if (raw.length !== frameBytes * job.totalFrames)
         throw new Error(`Incorrect frame count: ${raw.length / frameBytes}`);
       let previous = -1;
+      const fillHistory = [];
       for (let frame = 0; frame < job.totalFrames; frame++) {
+        if (glyphMode) {
+          if (!blank && frame / fps >= 1) {
+            let unread = 0,
+              read = 0;
+            for (
+              let p = frame * frameBytes;
+              p < (frame + 1) * frameBytes;
+              p += 3
+            ) {
+              const r = raw[p],
+                g = raw[p + 1],
+                b = raw[p + 2];
+              if (
+                Math.min(r, g, b) > 100 &&
+                Math.min(r, g, b) > Math.max(r, g, b) * 0.8
+              )
+                unread++;
+              if (r > 150 && r > g * 2 && r > b * 2) read++;
+            }
+            if (unread || read < 100)
+              throw new Error(
+                `Incomplete glyph fill: ${unread} unread pixels, ${read} read pixels at frame ${frame}`
+              );
+          }
+          continue;
+        }
         if (bannerMode && !blank) {
           const time = (frame / fps) * 1000;
           const scale = width / 640;
@@ -264,12 +334,31 @@ const timeout = setTimeout(() => {
           continue;
         }
         let redPixels = 0;
-        // Inspect the word itself; the entry cue below it animates before
-        // the word starts and disappears afterwards.
+        const time = (frame / fps) * 1000;
+        const teleProgress = Math.max(0, Math.min(1, (time - 200) / 1200));
+        const teleTop =
+          0.5 -
+          teleProgress *
+            teleProgress *
+            (2 - teleProgress) *
+            ((0.03 * width * 1.45) / height);
+        // Inspect the first word itself, excluding its entry cue and the
+        // next Book row (including that row's cue above its text).
         const firstPixel =
-          frame * frameBytes + Math.floor(height * 0.44) * width * 3;
+          frame * frameBytes +
+          Math.floor(
+            height * (teleprompterMode ? teleTop : bookMode ? 0.06 : 0.44)
+          ) *
+            width *
+            3;
         const lastPixel =
-          frame * frameBytes + Math.floor(height * 0.55) * width * 3;
+          frame * frameBytes +
+          Math.floor(
+            height *
+              (teleprompterMode ? teleTop + 0.055 : bookMode ? 0.11 : 0.55)
+          ) *
+            width *
+            3;
         for (let p = firstPixel; p < lastPixel; p += 3) {
           if (
             raw[p] > 150 &&
@@ -278,15 +367,20 @@ const timeout = setTimeout(() => {
           )
             redPixels++;
         }
-        const time = (frame / fps) * 1000;
         if ((blank || time <= 200) && redPixels !== 0)
           throw new Error(`Subtitle filled before its start at frame ${frame}`);
         // Before/after the word, identical subtitle pixels are intentional.
-        if (!blank && time > 200 && time < 1000 && redPixels <= previous)
+        // Scrolling glyphs change rasterization at subpixel boundaries. Compare
+        // over 150 ms so codec/edge noise cannot masquerade as a stall.
+        const referenceFill = teleprompterMode
+          ? (fillHistory.at(-Math.ceil(fps * 0.15)) ?? -1)
+          : previous;
+        if (!blank && time > 200 && time < 1000 && redPixels <= referenceFill)
           throw new Error(
             `${width}x${height} ${fps}fps video=${video}: frozen/backward fill at frame ${frame}: ${previous} -> ${redPixels}`
           );
         previous = redPixels;
+        fillHistory.push(redPixels);
       }
       console.log(
         `PASS ${width}x${height} ${fps}fps video=${video} blank=${blank}: ${job.totalFrames} decoded frames; ${elapsedMs.toFixed(0)}ms export`
