@@ -1,145 +1,150 @@
+![KaraokAI — Your music. Your lyrics. Your karaoke.](docs/images/karaokai-banner-v2.png)
+
+<div align="center">
+
 # KaraokAI
 
-A local-first desktop application that turns songs into karaoke projects: it separates vocals and instrumental tracks, transcribes lyrics with word-level timestamps, provides a visual timeline editor, and exports the result as a video.
+### Your music. Your lyrics. Your karaoke.
 
-> [!NOTE]
-> Current version: `1.1.1`. Windows and Linux releases are published through GitHub Actions. Windows code signing is being set up through SignPath Foundation; macOS distribution still requires signing and notarization.
+Turn a song into a karaoke video — with local AI, precise lyric timing, and four ways to bring the words to life.
 
-## What KaraokAI does
+**Free & open source · Local processing · Windows & Linux**
 
-```text
-Import a song or YouTube video
-             ↓
-Separate vocals and instrumental locally
-             ↓
-Transcribe and create synchronized subtitles
-             ↓
-Edit lyrics, timing, appearance, and background
-             ↓
-Export a karaoke video
-```
+[**Download KaraokAI**](https://github.com/TramontaG/Karaokai/releases/latest) · [See the modes](#four-modes-one-song) · [What's new](CHANGELOG.md) · [Build from source](#development)
 
-Audio and video processing run on the user's computer. Internet access is only required to download the runtime and models on first use and, naturally, to import a YouTube video.
+</div>
 
-## Features
+![KaraokAI editor showing synchronized lyrics, a multitrack timeline, and typography and color controls](docs/images/editor.png)
 
-### Project creation and processing
+<p align="center"><em>From the first word to the final chorus: shape the timing, style the lyrics, and see your video come together.</em></p>
 
-- local file import (`.mp3`, `.wav`, `.flac`, `.m4a`, `.aac`, and `.ogg`);
-- YouTube video import, preserving the video as the project's background;
-- optional YouTube cookies for cases where the platform requires authentication;
-- local vocal and instrumental separation with Demucs;
-- vocal transcription with word-level timestamps;
-- explicit pause tokens between words, preserved in both the project and timeline;
-- progress for every processing stage: import, separation, transcription, and subtitle generation.
+## Make every word shine
 
-### Karaoke editor
+KaraokAI gives you an editable starting point and the tools to make it your own. Separate vocals from the instrumental, generate lyrics with word-level timestamps, then fine-tune the result in a visual editor.
 
-- multiple subtitle tracks, as well as audio and background tracks;
-- phrase and word text editing directly from the side panel;
-- insert, remove, and edit words and pauses;
-- automatic splitting of multiple words entered into one item, distributing its duration proportionally to word length;
-- phrase splitting with the `S` shortcut or the split tool, using the word boundary nearest the cursor;
-- horizontal phrase dragging and movement between tracks;
-- `Ctrl`-dragging words to redistribute timing without leaving empty space in a phrase;
-- timeline zoom with `Ctrl` + scroll, BPM/offset grid, and optional playback following;
-- undo and redo history for edits;
-- track, phrase, and word styling: font, weight, italic, underline, superscript/subscript, scale, position, and read colors;
-- animation curves and inter-phrase transitions;
-- video, image, album-art, solid-color, and gradient backgrounds with `cover` and `contain` modes;
-- user-imported fonts;
-- project thumbnails generated from the editor preview.
+| Start with a song                                                                               | Make it yours                                                                       | Share the result                                                              |
+| ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Import local audio or a YouTube video. Run vocal separation and transcription on your computer. | Adjust words and pauses, choose a karaoke mode, and style your text and background. | Export a karaoke video with instrumental, vocals, or a mix — at 30 or 60 FPS. |
 
-### Library and export
+**Your projects stay on your computer.** No account, telemetry, or mandatory song upload. Runtime and model downloads happen during setup; YouTube imports use the network. [Read the privacy policy →](PRIVACY.md)
 
-- project library in grid or list view;
-- rename, duplicate, delete, open the project folder, and reopen projects;
-- project and asset persistence in the selected data directory;
-- video export from 480p to 1440p, at 30 or 60 FPS, with instrumental/vocals/mix audio modes and H.264 presets;
-- render progress, safe cancellation, and editing lock while a video is being generated.
+## Four modes, one song
 
-## Technology
+Choose the presentation that fits your video. Switch modes without rebuilding your lyrics or changing the timeline. The editor preview and video export share the same mode renderers.
 
-| Layer      | Technologies                                 |
-| ---------- | -------------------------------------------- |
-| Desktop    | Electron, Node.js                            |
-| Interface  | React 19, TypeScript, Vite                   |
-| Styling    | Emotion Styled                               |
-| Navigation | TanStack Router                              |
-| Processing | Python 3.11, PyTorch, Demucs, faster-whisper |
-| Media      | FFmpeg, yt-dlp                               |
+<table>
+  <tr>
+    <td width="50%">
+      <h3>Continuity</h3>
+      <img src="docs/images/continuity.png" alt="Continuity: the current lyric is highlighted word by word, with the next phrase below it" width="100%">
+      <p>Keep the focus on the current line. Word-by-word highlighting, a preview of the next phrase, and anticipation cues help the singer follow along.</p>
+    </td>
+    <td width="50%">
+      <h3>Banner</h3>
+      <img src="docs/images/banner.png" alt="Banner: timed purple word rectangles move past a vertical playhead" width="100%">
+      <p>Bring the timeline into the video. Timed word rectangles travel past a playhead, with visible pauses, configurable speed, colors, and transparency.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <h3>Book</h3>
+      <img src="docs/images/book.png" alt="Book: several compact lyric lines form a page, with the current words highlighted in pink" width="100%">
+      <p>Read a page of lyrics at a glance. Lines stay in place, completed phrases make room for new ones, and pages appear together after long pauses.</p>
+    </td>
+    <td width="50%">
+      <h3>Teleprompter</h3>
+      <img src="docs/images/teleprompter.png" alt="Teleprompter: a vertical column of lyrics scrolls through a configurable reading position" width="100%">
+      <p>Let the lyrics flow. Continuous scrolling changes speed smoothly to meet each phrase on time, with a reading anchor you can position yourself.</p>
+    </td>
+  </tr>
+</table>
 
-## Local runtime
+<sub>Captured from KaraokAI 1.2.0 using an original demonstration project. Images show actual editor previews.</sub>
 
-The application bundle does not include Python, models, or large binaries. On first use, the Runtime Manager installs everything in the selected data directory without modifying the system Python, `PATH`, or Windows Registry.
+## A little automation. A lot of control.
 
-| Component | Source                                         |
-| --------- | ---------------------------------------------- |
-| `uv`      | Official Astral release, verified with SHA-256 |
-| Python    | Private installation managed by `uv`           |
-| ML Worker | PyPI and the official PyTorch wheel index      |
-| FFmpeg    | `imageio-ffmpeg` wheel from PyPI               |
-| yt-dlp    | PyPI                                           |
-| Whisper   | Pinned revisions from Hugging Face             |
-| Demucs    | Meta's model repository                        |
+- **Get a head start with local AI.** Demucs separates vocals and instrumental audio; transcription produces editable lyrics with word-level timing.
+- **Tune every syllable.** Edit phrases, words, and pauses. Split phrases, drag timing boundaries, move phrases between tracks, and undo or redo your changes.
+- **Work to the beat.** Use the metronome, BPM and time-signature changes, timeline zoom, snapping, and playback following.
+- **Build your own look.** Set fonts, colors, scale, position, and reading curves at track, phrase, or word level. Import your own fonts.
+- **Set the scene.** Use video, images, album art, solid colors, or gradients as backgrounds, with cover and contain options.
+- **Choose your mix.** Export at 480p–1440p, with 30/60 FPS, H.264 presets, and instrumental, vocals, or mixed audio.
+- **Keep your work organized.** Browse projects in a grid or list, duplicate versions, and reopen everything from your local library.
 
-Models, runtime components, and cache can be checked, removed, or reinstalled from Settings. See [docs/runtime-installation.md](docs/runtime-installation.md) for details.
+## Start your next karaoke video
+
+1. **[Download the latest release](https://github.com/TramontaG/Karaokai/releases/latest)** for your platform.
+2. **Choose a data directory.** On first launch, KaraokAI guides you through installing the local runtime and models.
+3. **Import your song.** Let the processing stages finish, then review and refine the generated lyrics.
+4. **Pick a mode and press play.** Adjust the timing and appearance, then export your video.
+
+| Platform    | Download                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------ |
+| Windows x64 | [NSIS installer (.exe)](https://github.com/TramontaG/Karaokai/releases/latest)             |
+| Linux x64   | [AppImage or Debian package (.deb)](https://github.com/TramontaG/Karaokai/releases/latest) |
+
+Each release includes `checksums.txt` for download verification. Windows installers are currently unsigned; signing is being set up through SignPath Foundation. macOS is not currently distributed as a signed, notarized release.
+
+**Already using KaraokAI?** [Version 1.2.0](https://github.com/TramontaG/Karaokai/releases/tag/v1.2.0) adds Banner, Book, and Teleprompter. See the [full changelog](CHANGELOG.md).
+
+## Local by design
+
+The desktop bundle does not include the large AI models or processing binaries. The Runtime Manager installs them in your selected data directory, using a private Python installation without changing your system Python, `PATH`, or Windows Registry.
+
+Models, runtime components, and cache can be inspected, removed, or reinstalled from Settings. Once the required components are installed, local audio processing does not need a song upload.
+
+[How runtime installation works →](docs/runtime-installation.md)
 
 ## Development
 
-### Prerequisites
+Built with **Electron, React, TypeScript, and Vite**, with a Python processing worker and FFmpeg for media output.
 
-- Node.js 22 LTS;
-- npm.
-
-### Installation
+Requires **Node.js 22** and **npm**.
 
 ```bash
-git clone git@github.com:TramontaG/Karaokai.git
+git clone https://github.com/TramontaG/Karaokai.git
 cd Karaokai
 npm install
-```
-
-### Run in development
-
-```bash
 npm run dev
 ```
 
-This command starts Vite and the Electron window.
+`npm run dev` starts Vite and the Electron application.
 
-### Commands
+<details>
+<summary><strong>Development commands and project structure</strong></summary>
 
-| Command                       | Description                                              |
-| ----------------------------- | -------------------------------------------------------- |
-| `npm run dev`                 | Runs Electron with Vite in development mode              |
-| `npm run dev:web`             | Runs only the Vite frontend                              |
-| `npm run build`               | Type-checks and generates the web bundle                 |
-| `npm test`                    | Runs the automated unit tests                            |
-| `npm run build:desktop`       | Packages targets for the current platform                |
-| `npm run build:windows`       | Builds the Windows x64 NSIS installer                    |
-| `npm run build:windows:store` | Builds the Microsoft Store AppX package on Windows 10/11 |
-| `npm run format`              | Formats the repository with Prettier                     |
-| `npm run format:check`        | Checks formatting without changing files                 |
+| Command                       | Purpose                                           |
+| ----------------------------- | ------------------------------------------------- |
+| `npm run dev:web`             | Start only the Vite frontend                      |
+| `npm run build`               | Type-check and build the application              |
+| `npm test`                    | Run automated tests                               |
+| `npm run test:render`         | Build and validate encoded video frames           |
+| `npm run build:desktop`       | Package desktop targets for the current platform  |
+| `npm run build:windows`       | Build the Windows x64 NSIS installer              |
+| `npm run build:windows:store` | Build the Microsoft Store AppX package on Windows |
+| `npm run format`              | Format the repository                             |
+| `npm run format:check`        | Check formatting                                  |
 
-Artifacts are written to `release/`.
+Packaging artifacts are written to `release/`. Store distribution requires a Partner Center account and the reserved application identity in `electron-builder.yml`.
 
-## Distribution
+```text
+src/                  React UI, editor, and rendering
+electron/            Desktop process, IPC, and runtime management
+worker/              Python separation and transcription worker
+docs/                Technical documentation and screenshots
+src-tauri/           Previous desktop implementation
+```
 
-| Platform        | Current target      | Status                                                                                   |
-| --------------- | ------------------- | ---------------------------------------------------------------------------------------- |
-| Linux           | AppImage and `.deb` | Packaging validated                                                                      |
-| Windows x64     | NSIS `.exe`         | Releases are built by GitHub Actions; signing is being set up with SignPath              |
-| Microsoft Store | AppX                | Configured; requires a Partner Center account and reserved identity                      |
-| macOS           | DMG                 | Configured; requires a macOS build, signing, and notarization before public distribution |
+</details>
 
-Before submitting to the Microsoft Store, reserve the app name in Partner Center and replace `appx.identityName` in `electron-builder.yml` with the exact value supplied by Microsoft. The `appx` target is the Store package format supported by electron-builder; Microsoft signs the published package.
+## Explore, contribute, or report an issue
 
-Stable releases are published from `vX.Y.Z` tags by GitHub Actions. Each
-release includes the Windows x64 installer, Linux x64 AppImage and Debian
-package, and a `checksums.txt` file. Until the SignPath integration is enabled,
-Windows installers are explicitly marked as unsigned in their release notes.
-See [the release process](docs/release-process.md).
+Found a timing edge case? Have an idea for another karaoke mode? [Open an issue](https://github.com/TramontaG/Karaokai/issues) with the steps to reproduce it or the workflow you would like to improve. Pull requests are welcome.
+
+- [Karaoke modes and renderer architecture](docs/karaoke-modes.md)
+- [Runtime installation](docs/runtime-installation.md)
+- [Release process](docs/release-process.md)
+- [Changelog](CHANGELOG.md)
 
 ## Code signing policy
 
@@ -169,37 +174,12 @@ a KaraokAI-operated cloud service. Network requests occur only when explicitly
 initiated by the user, including runtime/model downloads and YouTube imports.
 See [PRIVACY.md](PRIVACY.md) for details.
 
-## Privacy
-
-- audio, stems, projects, and renders stay on the device;
-- there is no telemetry, advertising, or mandatory song upload;
-- runtime and model downloads are stored only in the selected data directory;
-- YouTube imports use the network to retrieve video information and download the video;
-- all managed data can be removed from Settings.
-
 ## License and third-party software
 
-KaraokAI is free software licensed under the
-[GNU General Public License v3.0 or later](LICENSE). Third-party components
-remain subject to their own licenses; see
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Read
-[PRIVACY.md](PRIVACY.md) and [CONTENT_RIGHTS.md](CONTENT_RIGHTS.md) before
-importing or publishing media.
+KaraokAI is free software under the [GNU General Public License v3.0 or later](LICENSE). Third-party components keep their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-## Repository structure
+Please review [CONTENT_RIGHTS.md](CONTENT_RIGHTS.md) before importing or publishing media.
 
-```text
-Karaokai/
-├── src/                  # React UI, editor, and renderer services
-├── electron/             # Main process, IPC, rendering, and runtime
-├── worker/               # Python separation and transcription worker
-├── docs/                 # Technical documentation
-├── src-tauri/            # Previous implementation, kept temporarily
-├── electron-builder.yml  # Build targets and packaging configuration
-└── projectDefinition.md  # Technical and product specification
-```
+---
 
-## Additional documentation
-
-- [Runtime installation](docs/runtime-installation.md)
-- [Technical and product specification](projectDefinition.md)
+<p align="center"><strong>Make something worth singing along to.</strong><br><a href="https://github.com/TramontaG/Karaokai/releases/latest">Download KaraokAI</a> · <a href="https://github.com/TramontaG/Karaokai">Star the project</a></p>
