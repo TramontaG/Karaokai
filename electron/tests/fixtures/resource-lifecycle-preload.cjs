@@ -31,7 +31,13 @@ const resources = (window.resources = {
   urls: new Map(),
   pointers: new Set(),
   subscriptions: new Set(),
+  mediaReleases: 0,
 });
+const loadMedia = HTMLMediaElement.prototype.load;
+HTMLMediaElement.prototype.load = function () {
+  if (!this.hasAttribute("src")) resources.mediaReleases++;
+  return loadMedia.call(this);
+};
 const createUrl = URL.createObjectURL.bind(URL);
 const revokeUrl = URL.revokeObjectURL.bind(URL);
 URL.createObjectURL = (blob) => {

@@ -39,6 +39,8 @@ export const Actions = styled.div<{ $alignEnd: boolean }>`
 `;
 export const EditPopover = styled.div`
   position: fixed;
+  right: auto;
+  bottom: auto;
   margin: 0;
   padding: 0.75rem;
   box-sizing: border-box;

@@ -36,7 +36,7 @@ export function timelineFollowScrollLeft(
   contentWidth: number,
   viewportWidth: number,
   scrollWidth: number,
-  viewportAnchor = 0.45
+  viewportAnchor = 0.5
 ) {
   const playheadPosition =
     contentOffset +

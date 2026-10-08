@@ -100,6 +100,7 @@ export function useEditorPlayback({
       instrumental.pause();
       vocals?.pause();
       backgroundVideo.current?.pause();
+      setCurrentTime(Math.round(instrumental.currentTime * 1000));
       setIsPlaying(false);
       return;
     }

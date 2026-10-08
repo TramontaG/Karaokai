@@ -17,7 +17,7 @@ interface VideoSyncState {
 export function createBackgroundVideoSync() {
   const states = new WeakMap<HTMLVideoElement, VideoSyncState>();
 
-  return function syncBackgroundVideo(
+  function syncBackgroundVideo(
     video: HTMLVideoElement,
     seconds: number,
     playing: boolean,
@@ -137,5 +137,14 @@ export function createBackgroundVideoSync() {
       .finally(() => {
         syncState.playPending = false;
       });
+  }
+
+  syncBackgroundVideo.dispose = (video: HTMLVideoElement) => {
+    const state = states.get(video);
+    if (state?.seekedHandler)
+      video.removeEventListener("seeked", state.seekedHandler);
+    states.delete(video);
   };
+
+  return syncBackgroundVideo;
 }

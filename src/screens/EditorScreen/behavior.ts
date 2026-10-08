@@ -36,6 +36,7 @@ import { useSubtitleStyleValues } from "../../hooks/editor/useSubtitleStyleValue
 import { useSubtitleStyles } from "../../hooks/editor/useSubtitleStyles";
 import { useSubtitleTextEditing } from "../../hooks/editor/useSubtitleTextEditing";
 import { useSubtitleTiming } from "../../hooks/editor/useSubtitleTiming";
+import { usePhraseFineAlignment } from "../../hooks/editor/usePhraseFineAlignment";
 import { useTimelineGestures } from "../../hooks/editor/useTimelineGestures";
 import { useTimelineInteractions } from "../../hooks/editor/useTimelineInteractions";
 import { useTimelineRendering } from "../../hooks/editor/useTimelineRendering";
@@ -165,6 +166,13 @@ export function useBehavior(_: Record<string, never>) {
     subtitleSelection,
     editorHistory,
   });
+  const phraseFineAlignment = usePhraseFineAlignment({
+    editorRuntime,
+    editorDataState,
+    editorProjectValues,
+    editorEnvironment,
+    editorHistory,
+  });
   const editorTracks = useEditorTracks({
     editorDataState,
     editorRuntime,
@@ -258,6 +266,7 @@ export function useBehavior(_: Record<string, never>) {
     subtitleStyles,
     subtitleColorPreview,
     subtitleTiming,
+    phraseFineAlignment,
     subtitlePhraseActions,
   });
   const editorPlaybackView = useEditorPlaybackView({

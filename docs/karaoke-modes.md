@@ -92,7 +92,9 @@ The ordinary font, scale, colors, emphasis, and reading curves are inherited.
 
 Read order is top to bottom, then back to the top. The initial page appears as a group; later phrases appear in their scheduled
 positions once there is room and within ten seconds of their own start. Completed phrases disappear if their replacement is still
-too far away. Pauses greater than 10 seconds split sections and restart the next
+too far away. After wrapping, fade-ins follow timeline order even when lower
+rows become free before upper rows; a phrase never waits past its reading start.
+Pauses greater than 10 seconds split sections and restart the next
 section at row zero. A gap of exactly 10 seconds keeps the existing cycle. With
 overlapping phrases and insufficient rows, the next active phrase takes the row
 rather than drawing two phrases on top of one another.

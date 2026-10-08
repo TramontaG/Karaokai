@@ -100,9 +100,13 @@ export function useTimeSignatureMarker({
     onEdit: (event: MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation();
       const bounds = event.currentTarget.getBoundingClientRect();
-      if (!popover.current) return;
-      popover.current.style.left = `${Math.max(8, Math.min(bounds.left, window.innerWidth - 268))}px`;
-      popover.current.style.top = `${Math.max(8, Math.min(bounds.bottom + 8, window.innerHeight - 200))}px`;
+      requestAnimationFrame(() => {
+        const element = popover.current;
+        if (!element?.matches(":popover-open")) return;
+        const { width, height } = element.getBoundingClientRect();
+        element.style.left = `${Math.max(8, Math.min(bounds.left, window.innerWidth - width - 8))}px`;
+        element.style.top = `${Math.max(8, Math.min(bounds.bottom + 8, window.innerHeight - height - 8))}px`;
+      });
     },
     onChange: (signature: TimeSignature) => model.update(marker.id, signature),
     onDelete: (event: MouseEvent<HTMLButtonElement>) => {

@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.3.0] - 2026-10-08
+
+### Added
+
+- Identify imported songs using MP3 metadata or AcoustID, confirm artist and title, and look up synchronized lyrics from LRCLIB before transcription. Users can provide their own lyrics when no match is available.
+- Align confirmed lyrics to vocals with WhisperX, including phrase-level fine alignment in the editor and a retry action when transcription fails.
+- Delete projects from the library with a confirmation dialog.
+- Prefill track information during import and support moving phrases between subtitle tracks.
+
+### Improved
+
+- Queue lyric alignment until stem separation completes and show clearer preparation progress and lookup errors.
+- Improve timeline beat and time-signature snapping, phrase dragging, playback behavior, and background video synchronization.
+- Keep Book mode fade-ins in timeline order after wrapping, while showing phrases by their reading start.
+
+### Tests
+
+- Add coverage for track lookup, MP3 metadata, queued lyrics, phrase alignment, project deletion, import, track prefill, timeline gestures, and preparation flows.
+
 ## [1.2.0] - 2026-09-28
 
 ### Added
@@ -77,6 +96,7 @@
 
 - Initial stable desktop release with local karaoke editing, stem separation, synchronized subtitles, and Windows and Linux installers.
 
+[1.3.0]: https://github.com/TramontaG/Karaokai/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/TramontaG/Karaokai/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/TramontaG/Karaokai/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/TramontaG/Karaokai/compare/v1.0.0...v1.1.0

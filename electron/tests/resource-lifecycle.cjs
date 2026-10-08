@@ -49,6 +49,7 @@ app.whenReady().then(async () => {
       "Playback must not accumulate CSS rules"
     );
     const cycles = [];
+    let previousMediaReleases = 0;
     for (let cycle = 0; cycle < 5; cycle++) {
       // Begin a real drag, then navigate away before pointerup.
       await js(
@@ -75,8 +76,14 @@ app.whenReady().then(async () => {
       );
       await wait(200);
       const resources = await js(
-        `({urls:Array.from(window.resources.urls.values()).filter(type=>type.startsWith("audio/")).length,pointers:window.resources.pointers.size,subscriptions:window.resources.subscriptions.size})`
+        `({urls:Array.from(window.resources.urls.values()).filter(type=>type.startsWith("audio/")).length,pointers:window.resources.pointers.size,subscriptions:window.resources.subscriptions.size,mediaReleases:window.resources.mediaReleases})`
       );
+      assert.ok(
+        resources.mediaReleases >= previousMediaReleases + 1,
+        "Leaving editor must unload the audio decoder"
+      );
+      previousMediaReleases = resources.mediaReleases;
+      delete resources.mediaReleases;
       cycles.push(resources);
       assert.equal(resources.urls, 0, "Leaving editor must revoke media URLs");
       assert.equal(

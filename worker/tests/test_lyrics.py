@@ -1,6 +1,6 @@
 import unittest
 
-from karaoke_worker.lyrics import MIN_GENERATED_GAP_MS, approximate_line_word_timings, align_token_sequences, build_alignment_regions, extract_temporal_anchors, localize_lyrics, monotonic_timing_blocks, normalize_generated_word_gaps, tokenize_asr, tokenize_lyrics
+from karaoke_worker.lyrics import MIN_GENERATED_GAP_MS, approximate_line_word_timings, align_token_sequences, build_alignment_regions, extract_temporal_anchors, localize_lyrics, monotonic_timing_blocks, normalize_generated_word_gaps, tokenize_asr, tokenize_lyrics, synced_lyric_segments
 
 
 def asr_words(text, start=0.0, step=0.5):
@@ -9,6 +9,15 @@ def asr_words(text, start=0.0, step=0.5):
 
 
 class CoarseLyricsAlignmentTests(unittest.TestCase):
+    def test_synced_lyrics_use_next_timestamp_as_line_boundary(self):
+        self.assertEqual(
+            synced_lyric_segments("[00:01.00] First line\n[00:03.50]\n[00:04.25] Second line", 6.0),
+            [
+                {"start": 1.0, "end": 3.5, "text": "First line"},
+                {"start": 4.25, "end": 6.0, "text": "Second line"},
+            ],
+        )
+
     def plan(self, lyrics, transcription):
         return localize_lyrics(lyrics, asr_words(transcription))
 

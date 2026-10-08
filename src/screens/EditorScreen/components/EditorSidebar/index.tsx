@@ -1,5 +1,12 @@
 import { KaraokeModeSelector } from "../../../../components/KaraokeModeSelector";
-import { FileUp, Plus, Trash2, X } from "lucide-react";
+import {
+  FileUp,
+  LoaderCircle,
+  Plus,
+  Trash2,
+  WandSparkles,
+  X,
+} from "lucide-react";
 import { memo } from "react";
 import { DraggableNumberInput } from "../../../../components/DraggableNumberInput";
 import { ForEach } from "../../../../components/ForEach";
@@ -11,6 +18,10 @@ import {
   BackgroundAssetName,
   Field,
   FieldGrid,
+  FineAlignButton,
+  FineAlignFeedback,
+  FineAlignHint,
+  FineAlignPanel,
   InheritanceHint,
   Inspector,
   PhraseActions,
@@ -250,6 +261,50 @@ function EditorSidebarView({ model: behavior }: { model: EditorSidebarModel }) {
                   />
                 </Field>
               </FieldGrid>
+              <Render when={behavior.fineAlignSelected}>
+                <FineAlignPanel>
+                  <FineAlignButton
+                    type="button"
+                    onClick={behavior.onFineAlign}
+                    disabled={!behavior.canFineAlign}
+                  >
+                    <Render when={behavior.fineAlignBusy}>
+                      <LoaderCircle
+                        className="fine-align-spinner"
+                        size={16}
+                        aria-hidden="true"
+                      />
+                    </Render>
+                    <Render when={!behavior.fineAlignBusy}>
+                      <WandSparkles size={16} aria-hidden="true" />
+                    </Render>
+                    {behavior.fineAlignBusy
+                      ? behavior.fineAlignBusyLabel
+                      : behavior.fineAlignLabel}
+                  </FineAlignButton>
+                  <FineAlignHint>{behavior.fineAlignDescription}</FineAlignHint>
+                  <Render when={!behavior.fineAlignVocalsAvailable}>
+                    <FineAlignHint>
+                      {behavior.fineAlignUnavailable}
+                    </FineAlignHint>
+                  </Render>
+                  <Render when={behavior.fineAlignBusy}>
+                    <FineAlignFeedback role="status">
+                      {behavior.fineAlignBusyLabel}
+                    </FineAlignFeedback>
+                  </Render>
+                  <Render when={behavior.fineAlignSuccess}>
+                    <FineAlignFeedback role="status">
+                      {behavior.fineAlignDone}
+                    </FineAlignFeedback>
+                  </Render>
+                  <Render when={behavior.fineAlignError !== null}>
+                    <FineAlignFeedback role="alert" $error>
+                      {behavior.fineAlignError}
+                    </FineAlignFeedback>
+                  </Render>
+                </FineAlignPanel>
+              </Render>
               <SubtitleStyleFields scope="Phrase" model={behavior} />
               <Field>
                 <span>{behavior.wordsLabel}</span>

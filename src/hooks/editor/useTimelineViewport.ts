@@ -36,7 +36,10 @@ interface Options {
     "timelineDuration" | "subtitleTracks"
   >;
   editorTransientState: Pick<EditorTransientState, "setTimelineVisibleRange">;
-  editorDataState: Pick<EditorDataState, "timelineZoom" | "setEditorData">;
+  editorDataState: Pick<
+    EditorDataState,
+    "isPlaying" | "timelineZoom" | "setEditorData"
+  >;
 }
 
 export function useTimelineViewport({
@@ -61,7 +64,7 @@ export function useTimelineViewport({
   } = editorRuntime;
   const { timelineDuration, subtitleTracks } = editorProjectValues;
   const { setTimelineVisibleRange } = editorTransientState;
-  const { timelineZoom, setEditorData } = editorDataState;
+  const { isPlaying, timelineZoom, setEditorData } = editorDataState;
   const followScroll = useMemo(
     () =>
       createTimelineFollowScroll({
@@ -90,9 +93,16 @@ export function useTimelineViewport({
         viewport.clientWidth,
         viewport.scrollWidth
       );
-      followScroll.follow(nextScrollLeft);
+      if (isPlaying) {
+        // The playhead and scroll must use the same playback frame. Easing the
+        // scroll behind the audio clock makes the playhead sway on screen.
+        followScroll.cancel();
+        viewport.scrollLeft = nextScrollLeft;
+      } else {
+        followScroll.follow(nextScrollLeft);
+      }
     },
-    [timelineAutoFollow, timelineDuration, followScroll]
+    [isPlaying, timelineAutoFollow, timelineDuration, followScroll]
   );
 
   const updateTimelinePlayhead = useCallback(

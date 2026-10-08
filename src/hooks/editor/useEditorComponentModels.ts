@@ -71,6 +71,10 @@ export function useEditorComponentModels(view: EditorView) {
       markerToolLabel: view.markerToolLabel,
       onToggleMarkerTool: view.onToggleMarkerTool,
       joinPhrasesDisabled: view.joinPhrasesDisabled,
+      canAlignPhrasesToGrid: view.canAlignPhrasesToGrid,
+      onAlignPhrasesToGrid: view.onAlignPhrasesToGrid,
+      alignPhrasesToGridLabel: view.alignPhrasesToGridLabel,
+      alignPhrasesToGridHint: view.alignPhrasesToGridHint,
       joinPhrasesLabel: view.joinPhrasesLabel,
       onJoinPhrases: view.onJoinPhrases,
       timelineSubdivision: view.timelineSubdivision,
@@ -117,7 +121,13 @@ export function useEditorComponentModels(view: EditorView) {
       onSelectTrack: view.onSelectTrack,
       onRenameTrack: view.onRenameTrack,
     }),
-    [view.timelineRenderKey, view.timeSignatures, view.tempoChanges]
+    [
+      view.timelineRenderKey,
+      view.timeSignatures,
+      view.tempoChanges,
+      view.canAlignPhrasesToGrid,
+      view.onAlignPhrasesToGrid,
+    ]
   );
   const editorSidebarModel = useMemo<EditorSidebarModel>(
     () => ({
@@ -189,6 +199,18 @@ export function useEditorComponentModels(view: EditorView) {
       onRequestDeleteTrack: view.onRequestDeleteTrack,
       deleteTrackLabel: view.deleteTrackLabel,
       activePhrase: view.activePhrase,
+      canFineAlign: view.canFineAlign,
+      fineAlignSelected: view.fineAlignSelected,
+      fineAlignBusy: view.fineAlignBusy,
+      fineAlignError: view.fineAlignError,
+      fineAlignSuccess: view.fineAlignSuccess,
+      fineAlignVocalsAvailable: view.fineAlignVocalsAvailable,
+      onFineAlign: view.onFineAlign,
+      fineAlignLabel: view.fineAlignLabel,
+      fineAlignBusyLabel: view.fineAlignBusyLabel,
+      fineAlignDescription: view.fineAlignDescription,
+      fineAlignUnavailable: view.fineAlignUnavailable,
+      fineAlignDone: view.fineAlignDone,
       textLabel: view.textLabel,
       onPhraseTextCommit: view.onPhraseTextCommit,
       startLabel: view.startLabel,
@@ -260,7 +282,14 @@ export function useEditorComponentModels(view: EditorView) {
       onWordStyleInherit: view.onWordStyleInherit,
       inheritedWordScalePlaceholder: view.inheritedWordScalePlaceholder,
     }),
-    [view.sidebarRenderKey]
+    [
+      view.sidebarRenderKey,
+      view.canFineAlign,
+      view.fineAlignBusy,
+      view.fineAlignError,
+      view.fineAlignSuccess,
+      view.fineAlignVocalsAvailable,
+    ]
   );
   return {
     editorHeaderModel,

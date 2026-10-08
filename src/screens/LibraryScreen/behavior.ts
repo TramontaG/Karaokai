@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { type ProjectSort } from "../../config/userPreferences";
@@ -40,6 +41,9 @@ interface LibraryState extends Record<string, unknown> {
   searchQuery: string;
   openMenuProjectId: string | null;
   renameProjectId: string | null;
+  deleteProjectId: string | null;
+  deleting: boolean;
+  deleteError: string | null;
 }
 
 const covers: ProjectCover[] = [
@@ -92,6 +96,9 @@ export function useBehavior(_: Record<string, never>) {
     searchQuery: "",
     openMenuProjectId: null,
     renameProjectId: null,
+    deleteProjectId: null,
+    deleting: false,
+    deleteError: null,
   });
   const refresh = useCallback(() => {
     void listProjects(data.preferences.storageDirectory)
@@ -127,6 +134,13 @@ export function useBehavior(_: Record<string, never>) {
         thumbnail: project.thumbnail ?? null,
         isFavorite: data.preferences.favoriteProjectIds.includes(project.id),
         isRecent: isRecent(project.updatedAt),
+        needsTranscriptionRetry:
+          project.processing.some(
+            (stage) => stage.id === "transcription" && stage.status === "failed"
+          ) &&
+          project.processing.some(
+            (stage) => stage.id === "separation" && stage.status === "completed"
+          ),
       })),
     [data.preferences.favoriteProjectIds, storedProjects, t]
   );
@@ -176,7 +190,9 @@ export function useBehavior(_: Record<string, never>) {
             currentProject: { id: project.id, name: project.title },
           });
         void navigate({
-          to: "/projects/$projectId/editor",
+          to: project?.needsTranscriptionRetry
+            ? "/projects/$projectId/preparing"
+            : "/projects/$projectId/editor",
           params: { projectId },
         });
       }
@@ -210,27 +226,8 @@ export function useBehavior(_: Record<string, never>) {
       }
       if (action === "open-folder")
         await openProjectFolder(projectId, data.preferences.storageDirectory);
-      if (action === "delete") {
-        if (
-          project &&
-          window.confirm(
-            t("projects.deleteConfirmation", { project: project.title })
-          )
-        ) {
-          await deleteProject(projectId, data.preferences.storageDirectory);
-          if (data.currentProject?.id === projectId)
-            setAppData({ currentProject: null });
-          if (data.preferences.favoriteProjectIds.includes(projectId))
-            setAppData({
-              preferences: {
-                favoriteProjectIds: data.preferences.favoriteProjectIds.filter(
-                  (id) => id !== projectId
-                ),
-              },
-            });
-          refresh();
-        }
-      }
+      if (action === "delete" && project)
+        setState({ deleteProjectId: projectId, deleteError: null });
       setState({ openMenuProjectId: null });
     },
     [
@@ -299,6 +296,50 @@ export function useBehavior(_: Record<string, never>) {
       setState,
     ]
   );
+  const deleteInFlight = useRef(false);
+  const deleteTarget =
+    projects.find((project) => project.id === state.deleteProjectId) ?? null;
+  const onCancelDelete = useCallback(() => {
+    if (!deleteInFlight.current)
+      setState({ deleteProjectId: null, deleteError: null });
+  }, [setState]);
+  const onConfirmDelete = useCallback(async () => {
+    const projectId = state.deleteProjectId;
+    if (!projectId || deleteInFlight.current) return;
+    deleteInFlight.current = true;
+    setState({ deleting: true, deleteError: null });
+    try {
+      await deleteProject(projectId, data.preferences.storageDirectory);
+      setAppData((current) => ({
+        currentProject:
+          current.currentProject?.id === projectId
+            ? null
+            : current.currentProject,
+        preferences: {
+          favoriteProjectIds: current.preferences.favoriteProjectIds.filter(
+            (id) => id !== projectId
+          ),
+        },
+      }));
+      setStoredProjects((current) =>
+        current.filter((project) => project.id !== projectId)
+      );
+      setState({ deleteProjectId: null });
+      refresh();
+    } catch {
+      setState({ deleteError: t("projects.delete.error") });
+    } finally {
+      deleteInFlight.current = false;
+      setState({ deleting: false });
+    }
+  }, [
+    state.deleteProjectId,
+    data.preferences.storageDirectory,
+    setAppData,
+    setState,
+    refresh,
+    t,
+  ]);
   const sortOptions: ProjectSortOption[] = [
     { id: "updated-desc", label: t("projects.sort.recent") },
     { id: "updated-asc", label: t("projects.sort.oldest") },
@@ -306,6 +347,19 @@ export function useBehavior(_: Record<string, never>) {
   ];
 
   return {
+    deleteProject: deleteTarget,
+    deleteTitle: t("projects.actions.delete"),
+    deleteDescription: t("projects.deleteConfirmation", {
+      project: deleteTarget?.title ?? "",
+    }),
+    deleteCancelLabel: t("projects.rename.cancel"),
+    deleteConfirmLabel: state.deleting
+      ? t("projects.delete.busy")
+      : t("projects.actions.delete"),
+    deleting: state.deleting,
+    deleteError: state.deleteError,
+    onCancelDelete,
+    onConfirmDelete,
     title: t("projects.title"),
     description: t("projects.description"),
     newProject: t("projects.new"),

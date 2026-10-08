@@ -64,6 +64,7 @@ Choose the presentation that fits your video. Switch modes without rebuilding yo
 ## A little automation. A lot of control.
 
 - **Get a head start with local AI.** Demucs separates vocals and instrumental audio; transcription produces editable lyrics with word-level timing.
+- **Find the right lyrics.** With a valid AcoustID application key, KaraokAI identifies imported audio and lets you confirm the artist and song before checking LRCLIB for synchronized lyrics. Confirmed lines guide WhisperX word timing; you can supply your own lyrics instead.
 - **Tune every syllable.** Edit phrases, words, and pauses. Split phrases, drag timing boundaries, move phrases between tracks, and undo or redo your changes.
 - **Work to the beat.** Use the metronome, BPM and time-signature changes, timeline zoom, snapping, and playback following.
 - **Build your own look.** Set fonts, colors, scale, position, and reading curves at track, phrase, or word level. Import your own fonts.
@@ -75,7 +76,7 @@ Choose the presentation that fits your video. Switch modes without rebuilding yo
 
 1. **[Download the latest release](https://github.com/TramontaG/Karaokai/releases/latest)** for your platform.
 2. **Choose a data directory.** On first launch, KaraokAI guides you through installing the local runtime and models.
-3. **Import your song.** Let the processing stages finish, then review and refine the generated lyrics.
+3. **Import your song.** Confirm the artist, title, and any lyrics found, then review and refine the word timing.
 4. **Pick a mode and press play.** Adjust the timing and appearance, then export your video.
 
 | Platform    | Download                                                                                   |

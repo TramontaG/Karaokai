@@ -1,10 +1,10 @@
 import { useNavigate } from "@tanstack/react-router";
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
   type ChangeEvent,
-  type DragEvent,
   type FormEvent,
 } from "react";
 import { useAppContext } from "../../hooks/useAppContext";
@@ -70,32 +70,54 @@ export function useBehavior(_: Record<string, never>) {
   );
   const importFile = useCallback(
     (file: File | undefined) => {
-      if (!file) return;
-      const sourcePath = isDesktop()
-        ? desktopFilePath(file)
-        : ((file as File & { path?: string }).path ?? file.name);
-      void importAudioPath(sourcePath);
+      if (!file) {
+        setError(t("home.import.dropError.noFile"));
+        return;
+      }
+      try {
+        const sourcePath = isDesktop()
+          ? desktopFilePath(file)
+          : ((file as File & { path?: string }).path ?? file.name);
+        if (!sourcePath) {
+          setError(t("home.import.dropError.noPath"));
+          return;
+        }
+        void importAudioPath(sourcePath);
+      } catch {
+        setError(t("home.import.dropError.noPath"));
+      }
     },
-    [importAudioPath]
+    [importAudioPath, t]
   );
   const onFileChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
-      void importFile(event.target.files?.[0]);
+      const file = event.target.files?.[0];
       event.target.value = "";
+      if (file) importFile(file);
     },
     [importFile]
   );
-  const onDrop = useCallback(
-    (event: DragEvent<HTMLElement>) => {
+  useEffect(() => {
+    const isFileDrag = (event: DragEvent) =>
+      event.dataTransfer?.types.includes("Files") ||
+      Boolean(event.dataTransfer?.files.length);
+    const onDragOver = (event: DragEvent) => {
+      if (!isFileDrag(event)) return;
       event.preventDefault();
-      void importFile(event.dataTransfer.files[0]);
-    },
-    [importFile]
-  );
-  const onDragOver = useCallback(
-    (event: DragEvent<HTMLElement>) => event.preventDefault(),
-    []
-  );
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    };
+    const onDrop = (event: DragEvent) => {
+      if (!isFileDrag(event)) return;
+      event.preventDefault();
+      importFile(event.dataTransfer?.files[0]);
+    };
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [importFile]);
   const onChooseFile = useCallback(() => {
     const choose = async () => {
       if (isDesktop()) {
@@ -190,8 +212,6 @@ export function useBehavior(_: Record<string, never>) {
     onFileChange,
     fileInputRef,
     onChooseFile,
-    onDrop,
-    onDragOver,
     isImporting,
     isYoutubeImporting,
     youtubeDialogOpen: isYoutubeImporting || youtubeError !== null,

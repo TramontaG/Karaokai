@@ -219,12 +219,16 @@ export function layoutBook(track: SubtitleTrack, measure: BookMeasureText) {
     const scheduled: Entry[] = [];
     const slots = new Map<number, number>();
     let cursor = 0;
+    let wrapped = false;
     const pageShowAt =
       section.phrases[0].words[0].word.start - BOOK_PAGE_LEAD_MS;
     for (const phrase of section.phrases) {
       // Pack by actual height once, then wrap at the bottom of the page.
       // A phrase never changes coordinates during its visible lifetime.
-      if (cursor + phrase.height > area.height + 1e-7) cursor = 0;
+      if (cursor + phrase.height > area.height + 1e-7) {
+        cursor = 0;
+        wrapped = true;
+      }
       const top = area.y + cursor;
       if (!slots.has(top)) slots.set(top, slots.size);
       const blockers = scheduled.filter(
@@ -241,7 +245,13 @@ export function layoutBook(track: SubtitleTrack, measure: BookMeasureText) {
           blockers.length
             ? Math.max(pageShowAt, phrase.start - BOOK_LOOKAHEAD_MS)
             : pageShowAt,
-          ...blockers.map((entry) => entry.hideAt)
+          ...blockers.map((entry) => entry.hideAt),
+          // Rows may clear in a different order from the timeline. Once
+          // wrapping starts, let the preceding phrase finish fading in before
+          // the next one appears, without delaying an already active phrase.
+          wrapped && scheduled.length
+            ? scheduled[scheduled.length - 1].showAt + BOOK_FADE_MS
+            : -Infinity
         )
       );
       for (const blocker of blockers) {

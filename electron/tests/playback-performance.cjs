@@ -52,6 +52,11 @@ app.whenReady().then(async () => {
         result.frames > 20 && result.commits > 20,
         "The test must exercise playback updates"
       );
+      assert.ok(
+        result.commits >= result.frames * 0.8 &&
+          result.commits <= result.frames * 1.2,
+        "The production preview should commit once per playback frame"
+      );
       assert.equal(
         result.timelineChanges,
         0,

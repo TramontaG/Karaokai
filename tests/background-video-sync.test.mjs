@@ -48,6 +48,12 @@ function createVideo(overrides = {}) {
     addEventListener(type, listener) {
       events.set(type, listener);
     },
+    removeEventListener(type, listener) {
+      if (events.get(type) === listener) events.delete(type);
+    },
+    listenerCount() {
+      return events.size;
+    },
     dispatchEvent(type) {
       events.get(type)?.();
     },
@@ -176,4 +182,16 @@ test("paused audio does not restart video and missing metadata is deferred", () 
   sync(loading, 5, true, true, 0);
   assert.deepEqual(loading.seeks, []);
   assert.equal(loading.playCalls, 0);
+});
+
+test("disposing video sync removes its seek listener and state", () => {
+  const sync = createBackgroundVideoSync();
+  const video = createVideo();
+  sync(video, 5, true, false, 0);
+  assert.equal(video.listenerCount(), 1);
+  sync.dispose(video);
+  assert.equal(video.listenerCount(), 0);
+  video.seeks.length = 0;
+  sync(video, 8, true, false, 0);
+  assert.deepEqual(video.seeks, [8]);
 });

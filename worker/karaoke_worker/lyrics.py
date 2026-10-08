@@ -18,6 +18,23 @@ SUBSTITUTION_PENALTY = -0.9
 MIN_GENERATED_GAP_MS = 250
 
 
+def synced_lyric_segments(lyrics: str, duration: float) -> list[dict]:
+    """Turn LRC line starts into nonoverlapping WhisperX alignment windows."""
+    entries = []
+    for line in lyrics.splitlines():
+        match = re.match(r"^\[(\d+):(\d{2})(?:\.(\d{1,3}))?\]\s*(.*)$", line)
+        if match:
+            start = int(match[1]) * 60 + int(match[2]) + int((match[3] or "0").ljust(3, "0")) / 1000
+            entries.append((start, match[4].strip()))
+    entries.sort(key=lambda entry: entry[0])
+    segments = []
+    for index, (start, text) in enumerate(entries):
+        end = entries[index + 1][0] if index + 1 < len(entries) else duration
+        if text and end > start and start < duration:
+            segments.append({"start": start, "end": min(end, duration), "text": text})
+    return segments
+
+
 def lyric_lines(lyrics: str) -> list[str]:
     return [line.strip() for line in lyrics.splitlines() if line.strip()]
 

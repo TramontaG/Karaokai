@@ -75,10 +75,53 @@ export const LyricsTextArea = styled.textarea`
     outline: none;
   }
 `;
+export const TrackInput = styled.input`
+  width: 100%;
+  padding: 0.7rem;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 0.5rem;
+  color: ${({ theme }) => theme.colors.text};
+  background: ${({ theme }) => theme.colors.surface};
+  font: inherit;
+  font-size: 0.84rem;
+  &:focus {
+    border-color: ${({ theme }) => theme.colors.accent};
+    outline: none;
+  }
+`;
+export const LyricsPreview = styled(LyricsTextArea)`
+  display: block;
+  margin-bottom: 0.8rem;
+  white-space: pre-wrap;
+`;
 export const LyricsError = styled.p`
   margin: 0;
   color: #ff839a;
   font-size: 0.75rem;
+`;
+export const ProcessingNotice = styled.p`
+  display: flex;
+  margin: 1.5rem auto;
+  padding: 0.9rem 1rem;
+  border: 1px solid
+    color-mix(in srgb, ${({ theme }) => theme.colors.accent} 45%, transparent);
+  border-radius: 0.7rem;
+  color: ${({ theme }) => theme.colors.text};
+  background: ${({ theme }) => theme.colors.surface};
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  font-size: 0.84rem;
+  svg {
+    flex: none;
+    color: ${({ theme }) => theme.colors.accent};
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 `;
 export const ProgressBar = styled.div`
   height: 0.5rem;

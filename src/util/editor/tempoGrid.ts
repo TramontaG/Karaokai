@@ -1,5 +1,8 @@
 import type { TimelineSubdivision } from "../../config/userPreferences";
 import type {
+  KaraokeProject,
+  SubtitlePhrase,
+  SubtitleWord,
   TimeSignature,
   TimeSignatureMarker,
   TempoChangeMarker,
@@ -141,6 +144,165 @@ export function nearestGridTime(lines: TempoGridLine[], time: number) {
   const before = lines[Math.max(0, low - 1)].time;
   const after = lines[Math.min(low, lines.length - 1)].time;
   return time - before < after - time ? before : after;
+}
+
+function nearestGridIndex(
+  grid: number[],
+  time: number,
+  minimum: number,
+  maximum: number
+) {
+  let low = minimum;
+  let high = maximum + 1;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (grid[middle] < time) low = middle + 1;
+    else high = middle;
+  }
+  const before = Math.max(minimum, low - 1);
+  const after = Math.min(maximum, low);
+  return time - grid[before] < grid[after] - time ? before : after;
+}
+
+/** Snap phrase and word boundaries to the visible grid without losing words. */
+export function alignSubtitlePhrasesToGrid(
+  project: KaraokeProject,
+  lines: TempoGridLine[]
+) {
+  if (lines.length < 2) return { project, alignedCount: 0 };
+  const grid = [...new Set(lines.map((line) => Math.round(line.time)))].sort(
+    (left, right) => left - right
+  );
+  if (grid.length < 2) return { project, alignedCount: 0 };
+  let alignedCount = 0;
+  const tracks = project.tracks.map((track) => {
+    if (track.type !== "subtitle" || track.locked) return track;
+    const phrases = track.phrases.map((phrase, index): SubtitlePhrase => {
+      if (
+        !Number.isFinite(phrase.start) ||
+        !Number.isFinite(phrase.end) ||
+        phrase.end <= phrase.start
+      )
+        return phrase;
+      const startIndex = nearestGridIndex(
+        grid,
+        phrase.start,
+        0,
+        grid.length - 1
+      );
+      const endIndex = nearestGridIndex(grid, phrase.end, 0, grid.length - 1);
+      const nextEndIndex = endIndex > startIndex ? endIndex : startIndex + 1;
+      if (nextEndIndex >= grid.length) return phrase;
+      const start = grid[startIndex];
+      const nextEnd = grid[nextEndIndex];
+      const previousPhrase = track.phrases[index - 1];
+      const nextPhrase = track.phrases[index + 1];
+      if (
+        (previousPhrase &&
+          previousPhrase.end <= phrase.start &&
+          start < previousPhrase.end) ||
+        (nextPhrase &&
+          phrase.end <= nextPhrase.start &&
+          nextEnd > nextPhrase.start)
+      )
+        return phrase;
+      const sourceWordIndices = phrase.words.flatMap((word, wordIndex) =>
+        word.type === "gap" ? [] : [wordIndex]
+      );
+      const sourceWords = sourceWordIndices.map(
+        (wordIndex) => phrase.words[wordIndex]
+      );
+      if (
+        sourceWords.some(
+          (word) =>
+            !Number.isFinite(word.start) ||
+            !Number.isFinite(word.end) ||
+            word.start < phrase.start ||
+            word.end > phrase.end ||
+            word.end <= word.start
+        )
+      )
+        return phrase;
+      if (nextEndIndex - startIndex < sourceWordIndices.length) return phrase;
+      const ratio = (nextEnd - start) / (phrase.end - phrase.start);
+      const target = (time: number) => start + (time - phrase.start) * ratio;
+      const words: SubtitleWord[] = [];
+      const alignedWords: SubtitleWord[] = [];
+      let previousEndIndex = startIndex;
+      for (let index = 0; index < sourceWordIndices.length; index += 1) {
+        const source = sourceWords[index];
+        const remaining = sourceWordIndices.length - index - 1;
+        const wordStartIndex =
+          index === 0
+            ? startIndex
+            : nearestGridIndex(
+                grid,
+                target(source.start),
+                previousEndIndex,
+                nextEndIndex - remaining - 1
+              );
+        const wordEndIndex =
+          remaining === 0
+            ? nextEndIndex
+            : nearestGridIndex(
+                grid,
+                target(source.end),
+                wordStartIndex + 1,
+                nextEndIndex - remaining
+              );
+        const word = {
+          ...source,
+          start: grid[wordStartIndex],
+          end: grid[wordEndIndex],
+        };
+        const previous = words.at(-1);
+        if (previous && previous.end < word.start) {
+          const previousSourceIndex = sourceWordIndices[index - 1];
+          const existingGap = phrase.words
+            .slice(previousSourceIndex + 1, sourceWordIndices[index])
+            .find((entry) => entry.type === "gap");
+          if (existingGap)
+            words.push({
+              ...existingGap,
+              start: previous.end,
+              end: word.start,
+            });
+        }
+        words.push(word);
+        alignedWords.push(word);
+        previousEndIndex = wordEndIndex;
+      }
+      if (
+        words.some(
+          (word) =>
+            !Number.isFinite(word.start) ||
+            !Number.isFinite(word.end) ||
+            word.end <= word.start ||
+            word.start < start ||
+            word.end > nextEnd
+        )
+      )
+        return phrase;
+      if (
+        start === phrase.start &&
+        nextEnd === phrase.end &&
+        sourceWords.every((source, index) => {
+          const aligned = alignedWords[index];
+          return source.start === aligned.start && source.end === aligned.end;
+        })
+      )
+        return phrase;
+      alignedCount += 1;
+      return { ...phrase, start, end: nextEnd, words };
+    });
+    return { ...track, phrases };
+  });
+  return alignedCount
+    ? {
+        project: { ...project, updatedAt: String(Date.now()), tracks },
+        alignedCount,
+      }
+    : { project, alignedCount };
 }
 
 export function snapTimeToGrid(

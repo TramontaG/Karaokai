@@ -12,6 +12,11 @@ const PROJECT_COMMANDS = new Set([
   "create_local_project",
   "create_youtube_project",
   "continue_project_processing",
+  "retry_project_transcription",
+  "align_project_phrase",
+  "identify_project_track",
+  "confirm_project_track",
+  "lookup_project_lyrics",
   "load_project",
   "list_projects",
   "save_project",
@@ -105,6 +110,7 @@ function nativeContext() {
     dataRoot,
     emit,
     shell,
+    isDevelopment: !app.isPackaged,
   };
 }
 
@@ -669,9 +675,6 @@ function createWindow() {
     }
   });
   window.once("ready-to-show", () => window.show());
-  window.webContents.on("did-finish-load", () => {
-    if (!app.isPackaged) window.webContents.openDevTools({ mode: "detach" });
-  });
   window.webContents.on("before-input-event", (event, input) => {
     const toggleDevTools =
       input.type === "keyDown" &&

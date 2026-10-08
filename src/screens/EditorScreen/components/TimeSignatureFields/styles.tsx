@@ -1,14 +1,15 @@
 import styled from "@emotion/styled";
 
 export const Fields = styled.div`
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto repeat(4, minmax(0, 1fr));
   align-items: center;
-  justify-content: space-between;
-  gap: 0.4rem;
+  gap: 0.25rem;
   input[type="number"],
   button {
     box-sizing: border-box;
-    width: 3.4rem;
+    min-width: 0;
+    width: 100%;
     height: 2.1rem;
     border: 1px solid ${({ theme }) => theme.colors.border};
     border-radius: 0.45rem;

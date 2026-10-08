@@ -140,6 +140,30 @@ test("a replacement waits until it is within ten seconds while other rows keep t
   );
 });
 
+test("recycled rows fade in in timeline order even when their old rows clear out of order", () => {
+  const layout = layoutBook(
+    track(
+      [
+        phrase("A", 0, 10000),
+        phrase("B", 1000, 2000),
+        phrase("C", 3000, 4000),
+        phrase("D", 4000, 5000),
+      ],
+      { scale: 3, positionReferenceWidth: 640, positionReferenceHeight: 200 }
+    ),
+    measure
+  );
+  const [a, b, c, d] = layout.entries;
+  assert.equal(c.top, a.top);
+  assert.equal(d.top, b.top);
+  assert.ok(c.showAt < d.showAt, "C must begin fading before D");
+  assert.ok(
+    !bookViewAt(layout, c.showAt - 0.001).some((row) => row.phrase.id === "D")
+  );
+  assert.ok(bookViewAt(layout, c.showAt).some((row) => row.phrase.id === "C"));
+  assert.ok(bookViewAt(layout, d.showAt).some((row) => row.phrase.id === "D"));
+});
+
 test("font, scale, wrapping, long words and offsets determine capacity without overflowing the frame", () => {
   for (const [width, height] of [
     [640, 360],

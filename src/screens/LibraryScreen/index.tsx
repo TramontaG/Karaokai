@@ -11,6 +11,7 @@ import { ForEach } from "../../components/ForEach";
 import { Render } from "../../components/Render";
 import { useBehavior } from "./behavior";
 import { EmptyProjects } from "./components/EmptyProjects";
+import { DeleteProjectDialog } from "./components/DeleteProjectDialog";
 import { RenameProjectDialog } from "./components/RenameProjectDialog";
 import {
   CountBadge,
@@ -166,6 +167,18 @@ export function LibraryScreen() {
           localLabel={behavior.localLabel}
           privateLabel={behavior.privateLabel}
           unlimitedLabel={behavior.unlimitedLabel}
+        />
+      </Render>
+      <Render when={behavior.deleteProject !== null}>
+        <DeleteProjectDialog
+          title={behavior.deleteTitle}
+          description={behavior.deleteDescription}
+          cancelLabel={behavior.deleteCancelLabel}
+          confirmLabel={behavior.deleteConfirmLabel}
+          busy={behavior.deleting}
+          error={behavior.deleteError}
+          onCancel={behavior.onCancelDelete}
+          onConfirm={behavior.onConfirmDelete}
         />
       </Render>
       <Render when={behavior.renameProject !== null}>

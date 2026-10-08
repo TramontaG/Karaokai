@@ -17,6 +17,7 @@ import type { SubtitleStyles } from "./useSubtitleStyles";
 import type { SubtitleStyleValues } from "./useSubtitleStyleValues";
 import type { SubtitleTextEditing } from "./useSubtitleTextEditing";
 import type { SubtitleTiming } from "./useSubtitleTiming";
+import type { PhraseFineAlignment } from "./usePhraseFineAlignment";
 import type { TimelineRendering } from "./useTimelineRendering";
 
 interface Options {
@@ -111,6 +112,7 @@ interface Options {
     SubtitlePhraseActions,
     "onInsertPhrase" | "onDeletePhrase"
   >;
+  phraseFineAlignment: PhraseFineAlignment;
 }
 
 export function useEditorInspectorView({
@@ -128,6 +130,7 @@ export function useEditorInspectorView({
   subtitleColorPreview,
   subtitleTiming,
   subtitlePhraseActions,
+  phraseFineAlignment,
 }: Options) {
   const {
     error,
@@ -198,9 +201,30 @@ export function useEditorInspectorView({
   const { updatePhraseTime, updateWordTime, updateInspectorWordTime } =
     subtitleTiming;
   const { onInsertPhrase, onDeletePhrase } = subtitlePhraseActions;
+  const {
+    canFineAlign,
+    fineAlignSelected,
+    fineAlignBusy,
+    fineAlignError,
+    fineAlignSuccess,
+    fineAlignVocalsAvailable,
+    onFineAlign,
+  } = phraseFineAlignment;
   return {
     error,
     activePhrase,
+    canFineAlign,
+    fineAlignSelected,
+    fineAlignBusy,
+    fineAlignError,
+    fineAlignSuccess,
+    fineAlignVocalsAvailable,
+    onFineAlign,
+    fineAlignLabel: t("editor.fineAlign.action"),
+    fineAlignBusyLabel: t("editor.fineAlign.busy"),
+    fineAlignDescription: t("editor.fineAlign.description"),
+    fineAlignUnavailable: t("editor.fineAlign.unavailable"),
+    fineAlignDone: t("editor.fineAlign.done"),
     selectedWord,
     selectedTrackId,
     animationTemplate,

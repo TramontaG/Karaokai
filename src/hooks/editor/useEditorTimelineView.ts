@@ -35,6 +35,8 @@ interface Options {
   timelineTempo: Pick<
     TimelineTempo,
     | "timelineGridLines"
+    | "canAlignPhrasesToGrid"
+    | "onAlignPhrasesToGrid"
     | "tempoOffset"
     | "removeAllTimelineMarkers"
     | "removeTimelineMarker"
@@ -99,6 +101,8 @@ export function useEditorTimelineView({
   } = editorDataState;
   const {
     timelineGridLines,
+    canAlignPhrasesToGrid,
+    onAlignPhrasesToGrid,
     tempoOffset,
     removeAllTimelineMarkers,
     removeTimelineMarker,
@@ -127,6 +131,10 @@ export function useEditorTimelineView({
     timelinePlayheadRef,
     timelineContentStyle: { width: `${timelineZoom * 100}%` },
     timelineGridLines,
+    canAlignPhrasesToGrid,
+    onAlignPhrasesToGrid,
+    alignPhrasesToGridLabel: t("editor.alignPhrasesToGrid"),
+    alignPhrasesToGridHint: t("editor.alignPhrasesToGridHint"),
     timelineMarkers,
     timelineMarkerDeleteLabel: t("editor.timelineMarkerDelete"),
     hideTimelineGrid,

@@ -585,11 +585,17 @@ export const TimelineViewport = styled.div`
   overflow: auto;
   padding: 0.5rem 0.8rem 0.8rem 0;
 `;
-export const TimelineContent = styled.div<{ $splitting: boolean }>`
+export const TimelineContent = styled.div<{
+  $splitting: boolean;
+  $followPlayback: boolean;
+}>`
   position: relative;
   display: grid;
   box-sizing: border-box;
   min-width: max(34rem, 100%);
+  /* Leave enough runway to keep time zero and the end at the viewport center. */
+  margin-inline: ${({ $followPlayback }) =>
+    $followPlayback ? "calc(50% + 0.4rem)" : "0"};
   gap: 0.45rem;
   cursor: ${({ $splitting }) => ($splitting ? "crosshair" : "default")};
 `;
@@ -610,7 +616,9 @@ export const TimelineBeatGrid = styled.div`
   }
 
   span[data-bar="true"] {
+    width: 2px;
     background: rgb(211 137 255 / 30%);
+    transform: translateX(-1px);
   }
 `;
 export const TimelineLabels = styled.div`
@@ -1241,6 +1249,63 @@ export const PhraseActions = styled.div`
     background: rgb(0 0 0 / 16%);
     font-size: 0.58rem;
   }
+`;
+export const FineAlignPanel = styled.div`
+  display: grid;
+  gap: 0.35rem;
+`;
+export const FineAlignButton = styled.button`
+  display: flex;
+  width: 100%;
+  min-height: 2.45rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid
+    color-mix(in srgb, ${({ theme }) => theme.colors.accent} 60%, transparent);
+  border-radius: 0.45rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: ${({ theme }) => theme.colors.text};
+  background: color-mix(
+    in srgb,
+    ${({ theme }) => theme.colors.accent} 15%,
+    transparent
+  );
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 650;
+  cursor: pointer;
+  &:hover:not(:disabled) {
+    background: color-mix(
+      in srgb,
+      ${({ theme }) => theme.colors.accent} 25%,
+      transparent
+    );
+  }
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .fine-align-spinner {
+    animation: fine-align-spin 1s linear infinite;
+  }
+  @keyframes fine-align-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+`;
+export const FineAlignHint = styled.p`
+  margin: 0;
+  color: ${({ theme }) => theme.colors.textMuted};
+  font-size: 0.68rem;
+  line-height: 1.35;
+`;
+export const FineAlignFeedback = styled.p<{ $error?: boolean }>`
+  margin: 0;
+  color: ${({ $error, theme }) => ($error ? "#ff8ca2" : theme.colors.text)};
+  font-size: 0.7rem;
+  line-height: 1.4;
 `;
 export const TrackActions = styled(PhraseActions)`
   padding-top: 0.2rem;

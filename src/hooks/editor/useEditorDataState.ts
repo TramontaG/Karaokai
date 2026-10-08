@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import type { EditorData, TimelineTool } from "../../context/EditorData";
 import { type KaraokeProject } from "../../domain/project";
 import { type InspectorTab } from "../../util/editor/types";
@@ -6,10 +6,12 @@ import { useEditorData } from "./useEditorData";
 
 export function useEditorDataState() {
   const [editorData, setEditorData] = useEditorData();
+  // Playback changes every animation frame. Keep its clock out of the app-wide
+  // context so one frame does not commit both the provider and its subscribers.
+  const [currentTime, setCurrentTime] = useState(0);
 
   const {
     project,
-    currentTime,
     isPlaying,
     isAudioReady,
     selectedTrackId,
@@ -31,11 +33,6 @@ export function useEditorDataState() {
 
   const setProject = useCallback(
     (project: KaraokeProject | null) => setEditorData({ project }),
-    [setEditorData]
-  );
-
-  const setCurrentTime = useCallback(
-    (currentTime: number) => setEditorData({ currentTime }),
     [setEditorData]
   );
 

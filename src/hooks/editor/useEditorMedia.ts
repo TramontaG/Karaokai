@@ -2,6 +2,7 @@ import { createBackgroundVideoSync } from "../../util/editor/backgroundVideoSync
 import { useCallback, useEffect, useMemo } from "react";
 import { projectAudioSources, readProjectAudio } from "../../services/projects";
 import { clamp } from "../../util/editor/numbers";
+import { releaseMediaElement } from "../../util/editor/media";
 import type { EditorDataState } from "./useEditorDataState";
 import type { EditorEnvironment } from "./useEditorEnvironment";
 import type { EditorHistory } from "./useEditorHistory";
@@ -25,7 +26,10 @@ interface Options {
   >;
   editorEnvironment: Pick<EditorEnvironment, "projectId" | "data">;
   editorProjectValues: Pick<EditorProjectValues, "audioTrack">;
-  editorTransientState: Pick<EditorTransientState, "setBackgroundMediaReady">;
+  editorTransientState: Pick<
+    EditorTransientState,
+    "setBackgroundMediaReady" | "backgroundAssetUrl"
+  >;
 }
 
 export function useEditorMedia({
@@ -48,7 +52,7 @@ export function useEditorMedia({
     editorDataState;
   const { projectId, data } = editorEnvironment;
   const { audioTrack } = editorProjectValues;
-  const { setBackgroundMediaReady } = editorTransientState;
+  const { setBackgroundMediaReady, backgroundAssetUrl } = editorTransientState;
   const updateAudioMix = useCallback(
     (property: "volume" | "vocalsVolume", percentage: number) => {
       const currentProject = projectRef.current;
@@ -156,14 +160,29 @@ export function useEditorMedia({
     if (vocalsAudio.current) vocalsAudio.current.volume = vocalsVolume / 100;
   }, [instrumentalVolume, vocalsVolume]);
 
-  useEffect(
-    () => () => {
-      instrumentalAudio.current?.pause();
-      vocalsAudio.current?.pause();
-      backgroundVideo.current?.pause();
-    },
-    []
-  );
+  useEffect(() => {
+    const instrumental = instrumentalAudio.current;
+    const vocals = vocalsAudio.current;
+    return () => {
+      if (
+        instrumental &&
+        instrumental.getAttribute("src") === instrumentalSource
+      )
+        releaseMediaElement(instrumental);
+      if (vocals && vocals.getAttribute("src") === vocalsSource)
+        releaseMediaElement(vocals);
+    };
+  }, [instrumentalSource, vocalsSource]);
+
+  useEffect(() => {
+    const video = backgroundVideo.current;
+    return () => {
+      if (!video) return;
+      syncVideo.dispose(video);
+      if (video.getAttribute("src") === backgroundAssetUrl)
+        releaseMediaElement(video);
+    };
+  }, [backgroundAssetUrl, syncVideo]);
 
   const onBackgroundVideoLoadedMetadata = useCallback(() => {
     setBackgroundMediaReady(true);

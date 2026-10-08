@@ -3,11 +3,18 @@ const fs = require("node:fs");
 const path = require("node:path");
 const readline = require("node:readline");
 const { recoverFailedProject } = require("./project-recovery.cjs");
+const { readMp3Metadata } = require("./mp3-metadata.cjs");
+const {
+  identify,
+  lyricsFor,
+  parseSyncedLyrics,
+} = require("./track-lookup.cjs");
 const { spawn } = require("node:child_process");
 
 const audioRegistry = new Map();
 let processingQueue = Promise.resolve();
 const queuedTranscriptions = new Set();
+const queuedLyrics = new Map();
 
 function projectRoot(dataRoot, projectId) {
   if (!/^project-[a-zA-Z0-9-]+$/.test(projectId)) {
@@ -320,7 +327,9 @@ async function processProject({
       0,
       "Waiting for supplied lyrics or transcription"
     );
+    await startQueuedTranscription(dataRoot, projectId, emit);
   } catch (error) {
+    queuedLyrics.delete(projectId);
     const project = await loadProject(dataRoot, projectId);
     const failedStage =
       ["subtitles", "transcription", "separation"].find(
@@ -332,7 +341,29 @@ async function processProject({
   }
 }
 
-async function processTranscription({ dataRoot, projectId, lyrics, emit }) {
+async function startQueuedTranscription(dataRoot, projectId, emit) {
+  const project = await loadProject(dataRoot, projectId);
+  const separation = project.processing.find(
+    (stage) => stage.id === "separation"
+  );
+  const transcription = project.processing.find(
+    (stage) => stage.id === "transcription"
+  );
+  if (separation?.status !== "completed" || transcription?.status !== "pending")
+    return;
+  const choice = queuedLyrics.get(projectId);
+  if (!choice) return;
+  queuedLyrics.delete(projectId);
+  void processTranscription({ dataRoot, projectId, ...choice, emit });
+}
+
+async function processTranscription({
+  dataRoot,
+  projectId,
+  lyrics,
+  syncedLyrics,
+  emit,
+}) {
   if (queuedTranscriptions.has(projectId)) return;
   queuedTranscriptions.add(projectId);
   const directory = projectRoot(dataRoot, projectId);
@@ -364,6 +395,15 @@ async function processTranscription({ dataRoot, projectId, lyrics, emit }) {
     } else {
       await fs.promises.rm(lyricsPath, { force: true });
     }
+    const syncedLyricsPath = path.join(directory, "cache", "synced-lyrics.lrc");
+    if (syncedLyrics) {
+      await fs.promises.writeFile(syncedLyricsPath, syncedLyrics, {
+        encoding: "utf8",
+        mode: 0o600,
+      });
+    } else {
+      await fs.promises.rm(syncedLyricsPath, { force: true });
+    }
     const python = pythonBinary(dataRoot);
     await fs.promises.access(python);
     await notify("transcription", "running", 0, "Preparing lyric alignment");
@@ -377,6 +417,7 @@ async function processTranscription({ dataRoot, projectId, lyrics, emit }) {
       whisperModelDirectory(dataRoot, whisperModelId),
     ];
     if (lyrics) args.push("--lyrics-path", lyricsPath);
+    if (syncedLyrics) args.push("--synced-lyrics-path", syncedLyricsPath);
     const child = spawn(python, args, {
       cwd: dataRoot,
       env: environment(dataRoot, demucsModelId),
@@ -485,11 +526,21 @@ async function createLocalProject({
         path.join(directory, "audio", copiedSource)
       );
     }
+    const mp3Metadata =
+      extension === ".mp3"
+        ? await readMp3Metadata(ffmpegBinary(dataRoot), source).catch(() => ({
+            artist: "",
+            song: "",
+          }))
+        : { artist: "", song: "" };
     const now = String(Date.now());
     const project = {
       version: 1,
       id: projectId,
       name: path.basename(source, path.extname(source)),
+      ...(mp3Metadata.artist ? { artist: mp3Metadata.artist } : {}),
+      ...(mp3Metadata.song ? { song: mp3Metadata.song } : {}),
+      metadataConfirmed: false,
       createdAt: now,
       updatedAt: now,
       duration: 0,
@@ -749,6 +800,7 @@ async function createYoutubeProject({
       version: 1,
       id: projectId,
       name: youtubeTitle(titleOutput),
+      metadataConfirmed: false,
       createdAt: now,
       updatedAt: now,
       duration: 0,
@@ -821,12 +873,126 @@ async function run(command, args, context) {
   if (command === "create_youtube_project") {
     return createYoutubeProject({ dataRoot, emit: context.emit, ...args });
   }
+  if (command === "identify_project_track") {
+    const directory = projectRoot(dataRoot, args.projectId);
+    const source = await findSource(directory);
+    const cacheFile = path.join(directory, "cache", "fingerprint.json");
+    let cached = await readJson(cacheFile).catch(() => null);
+    const keyFile = path.join(dataRoot, "acoustid-client-key.txt");
+    const storedKey = await fs.promises
+      .readFile(keyFile, "utf8")
+      .catch(() => "");
+    const suppliedKey = String(args.clientKey ?? "").trim();
+    const key =
+      suppliedKey ||
+      process.env.ACOUSTID_API_KEY ||
+      storedKey.trim() ||
+      (context.isDevelopment ? "i-PwAaWLfAE" : "");
+    if (!cached || key) {
+      try {
+        const result = await identify(ffmpegBinary(dataRoot), source, key);
+        cached = { fingerprint: result.fingerprint, duration: result.duration };
+        await writeJson(cacheFile, cached);
+        if (suppliedKey && !result.error) {
+          await fs.promises.mkdir(dataRoot, { recursive: true });
+          await fs.promises.writeFile(keyFile, `${suppliedKey}\n`, {
+            mode: 0o600,
+          });
+          await fs.promises.chmod(keyFile, 0o600).catch(() => undefined);
+        }
+        return {
+          match: result.match,
+          duration: result.duration,
+          fingerprinted: true,
+          keyConfigured: Boolean(key && !result.error),
+          error: result.error,
+        };
+      } catch (error) {
+        if (!cached)
+          return {
+            match: null,
+            duration: 0,
+            fingerprinted: false,
+            keyConfigured: false,
+            error: error.message,
+          };
+      }
+    }
+    return {
+      match: null,
+      duration: cached.duration,
+      fingerprinted: true,
+      keyConfigured: Boolean(key),
+    };
+  }
+  if (command === "confirm_project_track") {
+    const artist = String(args.artist ?? "")
+      .trim()
+      .slice(0, 160);
+    const song = String(args.song ?? "")
+      .trim()
+      .slice(0, 160);
+    if (!artist || !song) throw new Error("Artist and song are required.");
+    const project = await loadProject(dataRoot, args.projectId);
+    project.artist = artist;
+    project.song = song;
+    project.name = `${artist} - ${song}`;
+    project.metadataConfirmed = true;
+    project.updatedAt = String(Date.now());
+    await saveProject(dataRoot, project);
+    return project;
+  }
+  if (command === "lookup_project_lyrics") {
+    const project = await loadProject(dataRoot, args.projectId);
+    if (!project.metadataConfirmed || !project.artist || !project.song)
+      throw new Error("Confirm the artist and song first.");
+    const cached = await readJson(
+      path.join(
+        projectRoot(dataRoot, args.projectId),
+        "cache",
+        "fingerprint.json"
+      )
+    ).catch(() => null);
+    return lyricsFor(project.artist, project.song, cached?.duration ?? 0);
+  }
   if (command === "continue_project_processing") {
     const projectId = String(args.projectId ?? "");
     const lyrics = String(args.lyrics ?? "").trim();
+    const syncedLyrics = String(args.syncedLyrics ?? "").trim();
     if (lyrics.length > 200_000) {
       throw new Error("Lyrics must be 200,000 characters or fewer.");
     }
+    if (
+      syncedLyrics.length > 200_000 ||
+      (syncedLyrics && !parseSyncedLyrics(syncedLyrics).length)
+    )
+      throw new Error("Invalid synchronized lyrics.");
+    const project = await loadProject(dataRoot, projectId);
+    if (project.metadataConfirmed === false)
+      throw new Error("Confirm the artist and song first.");
+    const separation = project.processing.find(
+      (stage) => stage.id === "separation"
+    );
+    const transcription = project.processing.find(
+      (stage) => stage.id === "transcription"
+    );
+    if (
+      !["pending", "running", "completed"].includes(separation?.status) ||
+      transcription?.status !== "pending" ||
+      queuedLyrics.has(projectId) ||
+      queuedTranscriptions.has(projectId)
+    ) {
+      throw new Error("This project is not ready for lyric alignment.");
+    }
+    queuedLyrics.set(projectId, {
+      lyrics: lyrics || null,
+      syncedLyrics: syncedLyrics || null,
+    });
+    await startQueuedTranscription(dataRoot, projectId, context.emit);
+    return null;
+  }
+  if (command === "retry_project_transcription") {
+    const projectId = String(args.projectId ?? "");
     const project = await loadProject(dataRoot, projectId);
     const separation = project.processing.find(
       (stage) => stage.id === "separation"
@@ -836,21 +1002,128 @@ async function run(command, args, context) {
     );
     if (
       separation?.status !== "completed" ||
-      transcription?.status !== "pending"
+      transcription?.status !== "failed" ||
+      queuedLyrics.has(projectId) ||
+      queuedTranscriptions.has(projectId)
     ) {
-      throw new Error("This project is not ready for lyric alignment.");
+      throw new Error("This project is not ready to retry lyric alignment.");
     }
-    void processTranscription({
-      dataRoot,
-      projectId,
+    const cache = path.join(projectRoot(dataRoot, projectId), "cache");
+    const lyrics = await fs.promises
+      .readFile(path.join(cache, "provided-lyrics.txt"), "utf8")
+      .catch((error) => {
+        if (error.code === "ENOENT") return "";
+        throw error;
+      });
+    const syncedLyrics = await fs.promises
+      .readFile(path.join(cache, "synced-lyrics.lrc"), "utf8")
+      .catch((error) => {
+        if (error.code === "ENOENT") return "";
+        throw error;
+      });
+    queuedLyrics.set(projectId, {
       lyrics: lyrics || null,
-      emit: context.emit,
+      syncedLyrics: syncedLyrics || null,
     });
-    return null;
+    try {
+      Object.assign(transcription, {
+        status: "pending",
+        progress: 0,
+        message: "Queued for retry",
+      });
+      const subtitles = project.processing.find(
+        (stage) => stage.id === "subtitles"
+      );
+      if (subtitles)
+        Object.assign(subtitles, {
+          status: "pending",
+          progress: 0,
+          message: "",
+        });
+      project.updatedAt = String(Date.now());
+      await saveProject(dataRoot, project);
+      await startQueuedTranscription(dataRoot, projectId, context.emit);
+    } catch (error) {
+      queuedLyrics.delete(projectId);
+      throw error;
+    }
+    return { hasLyrics: Boolean(lyrics.trim() || syncedLyrics.trim()) };
+  }
+  if (command === "align_project_phrase") {
+    const projectId = String(args.projectId ?? "");
+    const text = String(args.text ?? "").trim();
+    const start = Number(args.start);
+    const end = Number(args.end);
+    if (
+      !text ||
+      text.length > 2000 ||
+      !Number.isInteger(start) ||
+      !Number.isInteger(end) ||
+      start < 0 ||
+      end <= start ||
+      end - start > 120_000
+    ) {
+      throw new Error("Invalid phrase for fine alignment.");
+    }
+    const directory = projectRoot(dataRoot, projectId);
+    const vocals = path.join(directory, "audio", "vocals.wav");
+    await fs.promises.access(vocals).catch(() => {
+      throw new Error("Separated vocals are unavailable for this project.");
+    });
+    const python = pythonBinary(dataRoot);
+    await fs.promises.access(python).catch(() => {
+      throw new Error("The alignment runtime is unavailable.");
+    });
+    const task = async () => {
+      const output = await runProcess(
+        python,
+        [
+          "-m",
+          "karaoke_worker",
+          "--align-phrase",
+          "--project-directory",
+          directory,
+          "--phrase-start",
+          String(start),
+          "--phrase-end",
+          String(end),
+          "--phrase-text",
+          text,
+        ],
+        {
+          cwd: dataRoot,
+          env: environment(dataRoot, "demucs-htdemucs"),
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+        "Fine alignment failed"
+      );
+      const aligned = output
+        .split(/\r?\n/)
+        .map((line) => {
+          try {
+            return JSON.parse(line);
+          } catch {
+            return null;
+          }
+        })
+        .find((event) => event?.type === "phrase.aligned");
+      if (!aligned?.words?.length)
+        throw new Error("WhisperX could not align the selected phrase.");
+      return { start: aligned.start, end: aligned.end, words: aligned.words };
+    };
+    processingQueue = processingQueue.then(task, task);
+    return processingQueue;
   }
   if (command === "load_project") {
     try {
-      return await loadProject(dataRoot, args.projectId);
+      const project = await loadProject(dataRoot, args.projectId);
+      if (!project) return null;
+      return {
+        ...project,
+        lyricsQueued:
+          queuedLyrics.has(args.projectId) ||
+          queuedTranscriptions.has(args.projectId),
+      };
     } catch (error) {
       if (error.code === "ENOENT") return null;
       throw error;

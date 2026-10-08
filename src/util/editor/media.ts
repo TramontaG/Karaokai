@@ -29,6 +29,13 @@ export function jpegBlob(canvas: HTMLCanvasElement) {
   );
 }
 
+export function releaseMediaElement(media: HTMLMediaElement) {
+  media.pause();
+  media.removeAttribute("src");
+  // load() aborts pending reads and releases Chromium's decoder for this source.
+  media.load();
+}
+
 export const backgroundMimeType = (asset: string) => {
   const extension = asset.split(".").pop()?.toLowerCase();
   if (extension === "mp4") return "video/mp4";

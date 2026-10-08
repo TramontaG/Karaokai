@@ -35,4 +35,5 @@ export interface ProjectItem {
   cover: ProjectCover;
   isFavorite: boolean;
   isRecent: boolean;
+  needsTranscriptionRetry: boolean;
 }

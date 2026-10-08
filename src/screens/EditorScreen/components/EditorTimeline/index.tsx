@@ -8,6 +8,7 @@ import {
   Scissors,
   Trash2,
   Merge,
+  Magnet,
 } from "lucide-react";
 import { memo } from "react";
 import { ForEach } from "../../../../components/ForEach";
@@ -130,6 +131,17 @@ function EditorTimelineView({
                 <Grid2X2 size={14} />
                 <span aria-live="polite">{behavior.timelineSubdivision}</span>
               </TimelineToolButton>
+              <TimelineToolButton
+                type="button"
+                $active={false}
+                title={behavior.alignPhrasesToGridHint}
+                aria-label={behavior.alignPhrasesToGridLabel}
+                disabled={!behavior.canAlignPhrasesToGrid}
+                onClick={behavior.onAlignPhrasesToGrid}
+              >
+                <Magnet size={14} />
+                <span>{behavior.alignPhrasesToGridLabel}</span>
+              </TimelineToolButton>
             </TimelineToolGroup>
             <TimelineToolButton
               type="button"
@@ -169,6 +181,7 @@ function EditorTimelineView({
             ref={behavior.timelineContentRef}
             style={behavior.timelineContentStyle}
             $splitting={behavior.splitToolActive}
+            $followPlayback={behavior.timelineAutoFollow}
             onClick={behavior.onTimelineClick}
           >
             {behavior.hideTimelineGrid ? null : (

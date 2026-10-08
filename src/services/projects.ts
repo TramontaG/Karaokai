@@ -234,12 +234,95 @@ export async function createYoutubeProject(
 export async function continueProjectProcessing(
   id: string,
   lyrics: string,
-  storageDirectory: string | null
+  storageDirectory: string | null,
+  syncedLyrics = ""
 ) {
   if (!isDesktop()) return;
   await invokeDesktop<void>("continue_project_processing", {
     projectId: id,
     lyrics,
+    syncedLyrics,
+    storageDirectory,
+  });
+}
+
+export function retryProjectTranscription(
+  id: string,
+  storageDirectory: string | null
+) {
+  return invokeDesktop<{ hasLyrics: boolean }>("retry_project_transcription", {
+    projectId: id,
+    storageDirectory,
+  });
+}
+
+export interface PhraseAlignmentResult {
+  start: number;
+  end: number;
+  words: Array<{ text: string; start: number; end: number }>;
+}
+
+export function alignProjectPhrase(
+  projectId: string,
+  phrase: { text: string; start: number; end: number },
+  storageDirectory: string | null
+) {
+  return invokeDesktop<PhraseAlignmentResult>("align_project_phrase", {
+    projectId,
+    ...phrase,
+    storageDirectory,
+  });
+}
+
+export interface TrackIdentification {
+  match: { artist: string; song: string; score: number } | null;
+  duration: number;
+  fingerprinted: boolean;
+  keyConfigured: boolean;
+  error?: string;
+}
+
+export interface LrclibLyrics {
+  id: number;
+  artist: string;
+  song: string;
+  syncedLyrics: string;
+  plainLyrics: string;
+  syncLookupError?: string | null;
+}
+
+export function identifyProjectTrack(
+  id: string,
+  storageDirectory: string | null,
+  clientKey = ""
+) {
+  return invokeDesktop<TrackIdentification>("identify_project_track", {
+    projectId: id,
+    storageDirectory,
+    clientKey,
+  });
+}
+
+export function confirmProjectTrack(
+  id: string,
+  artist: string,
+  song: string,
+  storageDirectory: string | null
+) {
+  return invokeDesktop<KaraokeProject>("confirm_project_track", {
+    projectId: id,
+    artist,
+    song,
+    storageDirectory,
+  });
+}
+
+export function lookupProjectLyrics(
+  id: string,
+  storageDirectory: string | null
+) {
+  return invokeDesktop<LrclibLyrics | null>("lookup_project_lyrics", {
+    projectId: id,
     storageDirectory,
   });
 }

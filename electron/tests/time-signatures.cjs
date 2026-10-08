@@ -121,6 +121,13 @@ app.whenReady().then(async () => {
     await delay(400);
     assert.equal((await markers())[0].left, "18.75%");
     await clickLabel("Editar fórmula de compasso");
+    assert.deepEqual(
+      await js(
+        `(()=>{const popover=document.querySelector(':popover-open');return {horizontal:popover.scrollWidth>popover.clientWidth,vertical:popover.scrollHeight>popover.clientHeight}})()`
+      ),
+      { horizontal: false, vertical: false },
+      "The time-signature edit popover should fit without internal scrolling"
+    );
     await js(
       `Array.from(document.querySelector(':popover-open').querySelectorAll('button')).find(x=>x.textContent==='2/4').click()`
     );

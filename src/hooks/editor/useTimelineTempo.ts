@@ -11,7 +11,10 @@ import {
   MINIMUM_BPM,
 } from "../../util/editor/constants";
 import { clamp } from "../../util/editor/numbers";
-import { tempoGridLines } from "../../util/editor/tempoGrid";
+import {
+  alignSubtitlePhrasesToGrid,
+  tempoGridLines,
+} from "../../util/editor/tempoGrid";
 import type { EditorDataState } from "./useEditorDataState";
 import type { EditorHistory } from "./useEditorHistory";
 import type { EditorProjectValues } from "./useEditorProjectValues";
@@ -70,6 +73,23 @@ export function useTimelineTempo({
       project?.tempo?.changes,
     ]
   );
+
+  const canAlignPhrasesToGrid = useMemo(
+    () =>
+      project !== null &&
+      alignSubtitlePhrasesToGrid(project, timelineGridLines).alignedCount > 0,
+    [project, timelineGridLines]
+  );
+
+  const onAlignPhrasesToGrid = useCallback(() => {
+    const currentProject = projectRef.current;
+    if (!currentProject) return;
+    const result = alignSubtitlePhrasesToGrid(
+      currentProject,
+      timelineGridLines
+    );
+    if (result.alignedCount > 0) persistProject(result.project, true);
+  }, [persistProject, projectRef, timelineGridLines]);
 
   useEffect(() => setBpmInputValue(String(tempoBpm)), [tempoBpm]);
 
@@ -143,6 +163,8 @@ export function useTimelineTempo({
     removeAllTimelineMarkers,
     addTimelineMarkerAt,
     timelineGridLines,
+    canAlignPhrasesToGrid,
+    onAlignPhrasesToGrid,
     tempoOffset,
     removeTimelineMarker,
     commitBpmInput,

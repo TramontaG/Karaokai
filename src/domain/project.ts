@@ -254,6 +254,10 @@ export interface KaraokeProject {
   version: 1;
   id: string;
   name: string;
+  artist?: string;
+  song?: string;
+  metadataConfirmed?: boolean;
+  lyricsQueued?: boolean;
   createdAt: string;
   updatedAt: string;
   duration: number;

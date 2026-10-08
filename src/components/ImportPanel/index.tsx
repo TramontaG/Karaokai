@@ -53,7 +53,7 @@ export function ImportPanel() {
           </YoutubeDownloadDialog>
         </YoutubeDownloadOverlay>
       </Render>
-      <DropArea onDragOver={behavior.onDragOver} onDrop={behavior.onDrop}>
+      <DropArea>
         <FileInput
           ref={behavior.fileInputRef}
           aria-label={behavior.fileInputLabel}

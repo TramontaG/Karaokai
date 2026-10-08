@@ -13,9 +13,222 @@ const { outputText } = ts.transpileModule(source, {
     target: ts.ScriptTarget.ES2022,
   },
 });
-const { tempoGridLines, nearestGridTime, snapTimeToGrid } = await import(
+const {
+  tempoGridLines,
+  nearestGridTime,
+  snapTimeToGrid,
+  alignSubtitlePhrasesToGrid,
+} = await import(
   `data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`
 );
+
+test("aligns every unlocked phrase and word to the visible grid", () => {
+  const phrase = {
+    id: "first",
+    text: "Hello world",
+    start: 100,
+    end: 900,
+    style: { scale: 1.2 },
+    words: [
+      { id: "hello", text: "Hello", start: 100, end: 400 },
+      { id: "world", text: "world", start: 500, end: 900 },
+    ],
+  };
+  const short = {
+    id: "short",
+    text: "Hey",
+    start: 1100,
+    end: 1200,
+    words: [{ id: "hey", text: "Hey", start: 1100, end: 1200 }],
+  };
+  const project = {
+    tracks: [
+      {
+        id: "lyrics",
+        type: "subtitle",
+        locked: false,
+        phrases: [phrase, short],
+      },
+      { id: "locked", type: "subtitle", locked: true, phrases: [phrase] },
+    ],
+  };
+  const lines = tempoGridLines(2000, 120, 0, 4);
+  const result = alignSubtitlePhrasesToGrid(project, lines);
+  assert.equal(result.alignedCount, 2);
+  const [aligned, alignedShort] = result.project.tracks[0].phrases;
+  assert.deepEqual([aligned.start, aligned.end], [0, 1000]);
+  assert.deepEqual(
+    aligned.words.map(({ start, end }) => [start, end]),
+    [
+      [0, 500],
+      [500, 1000],
+    ]
+  );
+  assert.equal(aligned.text, phrase.text);
+  assert.deepEqual(aligned.style, phrase.style);
+  assert.deepEqual([alignedShort.start, alignedShort.end], [1000, 1500]);
+  assert.strictEqual(result.project.tracks[1].phrases[0], phrase);
+  assert.equal(
+    alignSubtitlePhrasesToGrid(result.project, lines).alignedCount,
+    0
+  );
+});
+
+test("aligns words when phrase bounds are already on the grid", () => {
+  const project = {
+    tracks: [
+      {
+        id: "lyrics",
+        type: "subtitle",
+        locked: false,
+        phrases: [
+          {
+            id: "phrase",
+            text: "Hello world",
+            start: 0,
+            end: 1000,
+            words: [
+              { id: "hello", text: "Hello", start: 0, end: 380 },
+              { id: "world", text: "world", start: 530, end: 1000 },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const lines = tempoGridLines(1000, 120, 0, 4);
+  const result = alignSubtitlePhrasesToGrid(project, lines);
+  assert.equal(result.alignedCount, 1);
+  assert.deepEqual(
+    result.project.tracks[0].phrases[0].words.map(({ start, end }) => [
+      start,
+      end,
+    ]),
+    [
+      [0, 500],
+      [500, 1000],
+    ]
+  );
+  assert.equal(
+    alignSubtitlePhrasesToGrid(result.project, lines).alignedCount,
+    0
+  );
+});
+
+test("keeps dense phrases intact until the subdivision can fit every word", () => {
+  const project = {
+    tracks: [
+      {
+        id: "lyrics",
+        type: "subtitle",
+        locked: false,
+        phrases: [
+          {
+            id: "phrase",
+            text: "One two three four",
+            start: 0,
+            end: 1000,
+            words: [
+              { id: "one", text: "One", start: 0, end: 200 },
+              { id: "two", text: "two", start: 200, end: 450 },
+              { id: "three", text: "three", start: 450, end: 700 },
+              { id: "four", text: "four", start: 700, end: 1000 },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const coarse = alignSubtitlePhrasesToGrid(
+    project,
+    tempoGridLines(1000, 120, 0, 4)
+  );
+  assert.equal(coarse.alignedCount, 0);
+  assert.strictEqual(coarse.project, project);
+  const fine = alignSubtitlePhrasesToGrid(
+    project,
+    tempoGridLines(1000, 120, 0, 16)
+  );
+  assert.equal(fine.alignedCount, 1);
+  const words = fine.project.tracks[0].phrases[0].words;
+  assert.equal(words.length, 4);
+  assert.ok(words.every((word) => word.end > word.start));
+  const grid = new Set(
+    tempoGridLines(1000, 120, 0, 16).map((line) => Math.round(line.time))
+  );
+  assert.ok(words.every((word) => grid.has(word.start) && grid.has(word.end)));
+});
+
+test("grid alignment follows tempo and time signature changes", () => {
+  const lines = tempoGridLines(
+    3000,
+    120,
+    0,
+    4,
+    [{ id: "signature", time: 1000, numerator: 3, denominator: 8 }],
+    [{ id: "tempo", time: 1750, bpm: 60 }]
+  );
+  const project = {
+    tracks: [
+      {
+        id: "lyrics",
+        type: "subtitle",
+        locked: false,
+        phrases: [
+          {
+            id: "one",
+            text: "One",
+            start: 1060,
+            end: 1830,
+            words: [{ id: "word", text: "One", start: 1060, end: 1830 }],
+          },
+        ],
+      },
+    ],
+  };
+  const result = alignSubtitlePhrasesToGrid(project, lines);
+  assert.equal(result.alignedCount, 1);
+  const aligned = result.project.tracks[0].phrases[0];
+  assert.ok(lines.some((line) => Math.round(line.time) === aligned.start));
+  assert.ok(lines.some((line) => Math.round(line.time) === aligned.end));
+});
+
+test("grid alignment does not create overlaps between close phrases", () => {
+  const project = {
+    tracks: [
+      {
+        id: "lyrics",
+        type: "subtitle",
+        locked: false,
+        phrases: [
+          {
+            id: "first",
+            text: "A",
+            start: 100,
+            end: 220,
+            words: [{ id: "a", text: "A", start: 100, end: 220 }],
+          },
+          {
+            id: "second",
+            text: "B",
+            start: 280,
+            end: 430,
+            words: [{ id: "b", text: "B", start: 280, end: 430 }],
+          },
+        ],
+      },
+    ],
+  };
+  const result = alignSubtitlePhrasesToGrid(
+    project,
+    tempoGridLines(1000, 120, 0, 4)
+  );
+  assert.equal(result.alignedCount, 1);
+  const [first, second] = result.project.tracks[0].phrases;
+  assert.deepEqual([first.start, first.end], [100, 220]);
+  assert.deepEqual([second.start, second.end], [500, 1000]);
+  assert.ok(first.end <= second.start);
+});
 
 test("creates every subdivision at its exact timestamp", () => {
   assert.deepEqual(tempoGridLines(2_000, 120, 0, 4), [

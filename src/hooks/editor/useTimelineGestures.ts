@@ -107,7 +107,8 @@ export function useTimelineGestures({
         selectedPhraseIds.includes(phrase.id)
           ? track.phrases.filter((item) => selectedPhraseIds.includes(item.id))
           : [phrase];
-      setSelectedPhraseIds(selectedPhrases.map((item) => item.id));
+      const movingPhraseIds = new Set(selectedPhrases.map((item) => item.id));
+      setSelectedPhraseIds([...movingPhraseIds]);
       if (word) setSelectedWordId(word.id);
 
       const grid = timelineSnapToGrid
@@ -188,7 +189,7 @@ export function useTimelineGestures({
                 return {
                   ...item,
                   phrases: item.phrases.filter(
-                    (itemPhrase) => !selectedPhraseIds.includes(itemPhrase.id)
+                    (itemPhrase) => !movingPhraseIds.has(itemPhrase.id)
                   ),
                 };
               if (item.id === targetTrackId)

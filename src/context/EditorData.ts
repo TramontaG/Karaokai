@@ -5,7 +5,6 @@ export type TimelineTool = "pointer" | "split" | "marker";
 
 export interface EditorData extends Record<string, unknown> {
   project: KaraokeProject | null;
-  currentTime: number;
   isPlaying: boolean;
   isAudioReady: boolean;
   selectedTrackId: string | null;
@@ -27,7 +26,6 @@ export interface EditorData extends Record<string, unknown> {
 
 export const initialEditorData: EditorData = {
   project: null,
-  currentTime: 0,
   isPlaying: false,
   isAudioReady: false,
   selectedTrackId: null,
