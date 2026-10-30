@@ -181,7 +181,6 @@ function EditorTimelineView({
             ref={behavior.timelineContentRef}
             style={behavior.timelineContentStyle}
             $splitting={behavior.splitToolActive}
-            $followPlayback={behavior.timelineAutoFollow}
             onClick={behavior.onTimelineClick}
           >
             {behavior.hideTimelineGrid ? null : (

@@ -16,7 +16,7 @@ import torchaudio
 import whisperx
 from lingua import LanguageDetectorBuilder
 from whisperx.alignment import DEFAULT_ALIGN_MODELS_HF, DEFAULT_ALIGN_MODELS_TORCH
-from karaoke_worker.fine_alignment import fine_alignment_result, phrase_window
+from karaoke_worker.fine_alignment import fine_alignment_result, phrase_window, refine_provided_phrases
 from karaoke_worker.lyrics import approximate_line_word_timings, comparable_words, localize_lyrics, monotonic_timing_blocks, normalize_generated_word_gaps, synced_lyric_segments
 
 
@@ -135,16 +135,15 @@ def is_cuda_runtime_error(error: Exception) -> bool:
     return any(marker in message for marker in ("cuda", "cudnn", "cublas", "out of memory"))
 
 
-def whisperx_align_with_fallback(vocals: Path | torch.Tensor, segments: list[dict], language: str, message: str) -> dict:
-    """Prefer GPU alignment, but retry on CPU when the CUDA runtime fails."""
+def with_whisperx_alignment_model(language: str, message: str, operation):
+    """Reuse one model per operation and retry on CPU if the CUDA runtime fails."""
     device = compute_device()
     for attempt_device in ([device, "cpu"] if device == "cuda" else [device]):
         align_model = None
         try:
             emit_progress("transcription", 35.0, message if attempt_device == device else "Falha na GPU; alinhando palavras na CPU")
             align_model, metadata = whisperx.load_align_model(language_code=language, device=attempt_device)
-            audio = str(vocals) if isinstance(vocals, Path) else vocals
-            return whisperx.align(segments, align_model, metadata, audio, attempt_device, return_char_alignments=False)
+            return operation(align_model, metadata, attempt_device)
         except Exception as error:
             if attempt_device != "cuda" or not is_cuda_runtime_error(error):
                 raise
@@ -159,6 +158,16 @@ def whisperx_align_with_fallback(vocals: Path | torch.Tensor, segments: list[dic
     raise RuntimeError("WhisperX alignment failed")
 
 
+def whisperx_align_with_fallback(vocals: Path | torch.Tensor, segments: list[dict], language: str, message: str) -> dict:
+    audio = str(vocals) if isinstance(vocals, Path) else vocals
+    return with_whisperx_alignment_model(
+        language, message,
+        lambda model, metadata, device: whisperx.align(
+            segments, model, metadata, audio, device, return_char_alignments=False
+        ),
+    )
+
+
 def lyric_language(lyrics: str) -> str:
     """Choose WhisperX's alignment model without sending lyrics to ASR."""
     detected = language_detector.detect_language_of(lyrics)
@@ -169,9 +178,8 @@ def lyric_language(lyrics: str) -> str:
     return language if language in supported else "en"
 
 
-def fine_align_phrase(project_directory: Path, text: str, start_ms: int, end_ms: int) -> None:
-    vocals = project_directory / "audio" / "vocals.wav"
-    metadata = torchaudio.info(str(vocals))
+def align_phrase_audio(vocals: Path, text: str, start_ms: int, end_ms: int, align, metadata=None) -> dict:
+    metadata = metadata if metadata is not None else torchaudio.info(str(vocals))
     window_start, window_end = phrase_window(
         start_ms, end_ms, metadata.num_frames / metadata.sample_rate
     )
@@ -186,6 +194,15 @@ def fine_align_phrase(project_directory: Path, text: str, start_ms: int, end_ms:
     if sample_rate != 16000:
         audio = torchaudio.functional.resample(audio, sample_rate, 16000)
     duration = audio.shape[-1] / 16000
+    segments = [{"start": 0.0, "end": duration, "text": " ".join(text.split())}]
+    aligned = align(audio, segments)
+    words = [word for segment in aligned.get("segments", []) for word in segment.get("words", [])]
+    bounds = (start_ms / 1000 - window_start, end_ms / 1000 - window_start)
+    return fine_alignment_result(text, words, window_start, duration, bounds)
+
+
+def fine_align_phrase(project_directory: Path, text: str, start_ms: int, end_ms: int) -> None:
+    vocals = project_directory / "audio" / "vocals.wav"
     raw_path = project_directory / "cache" / "whisper-raw.json"
     language = None
     if raw_path.exists():
@@ -198,12 +215,12 @@ def fine_align_phrase(project_directory: Path, text: str, start_ms: int, end_ms:
         lyrics_path = project_directory / "cache" / "provided-lyrics.txt"
         reference = lyrics_path.read_text(encoding="utf-8") if lyrics_path.exists() else text
         language = lyric_language(reference)
-    segments = [{"start": 0.0, "end": duration, "text": text}]
-    aligned = whisperx_align_with_fallback(
-        audio, segments, language, "Realinhando palavras da frase aos vocais"
+    result = align_phrase_audio(
+        vocals, text, start_ms, end_ms,
+        lambda audio, segments: whisperx_align_with_fallback(
+            audio, segments, language, "Realinhando palavras da frase aos vocais"
+        ),
     )
-    words = (aligned.get("segments") or [{}])[0].get("words", [])
-    result = fine_alignment_result(text, words, window_start, duration)
     emit({"type": "phrase.aligned", **result})
 
 
@@ -439,6 +456,39 @@ def forced_align_provided_lyrics(vocals: Path, plan: dict, language: str) -> lis
     return reconstruct_provided_lyrics(plan, aligned_by_region)
 
 
+def fine_align_provided_lyrics(vocals: Path, phrases: list[dict], language: str) -> list[dict]:
+    if not phrases:
+        return phrases
+    audio_metadata = torchaudio.info(str(vocals))
+
+    def refine(model, metadata, device):
+        def align_phrase(phrase):
+            try:
+                return align_phrase_audio(
+                    vocals, phrase["text"], phrase["start"], phrase["end"],
+                    lambda audio, segments: whisperx.align(
+                        segments, model, metadata, audio, device, return_char_alignments=False
+                    ),
+                    audio_metadata,
+                )
+            except Exception as error:
+                if device == "cuda" and is_cuda_runtime_error(error):
+                    raise RuntimeError(str(error)) from error
+                raise ValueError(str(error)) from error
+
+        return refine_provided_phrases(
+            phrases, align_phrase,
+            lambda completed, total: emit_progress(
+                "transcription", 40.0 + 55.0 * completed / total,
+                f"Refinando alinhamento por frase ({completed}/{total})",
+            ),
+        )
+
+    return with_whisperx_alignment_model(
+        language, "Preparando segunda passagem de alinhamento por frase", refine
+    )
+
+
 def forced_align_synced_lyrics(vocals: Path, synced_lyrics: str) -> list[dict]:
     metadata = torchaudio.info(str(vocals))
     duration = metadata.num_frames / metadata.sample_rate
@@ -510,6 +560,8 @@ def transcribe(project_directory: Path, whisper_model_path: Path, lyrics: str | 
         plan = localize_lyrics(lyrics.strip(), timing_segments)
         debug = {"asr": {"language": language, "wordTimestamps": True, "vadFilter": use_vad}, "anchors": plan["anchors"], "tokenAlignment": plan["alignment"], "regions": plan["regions"], "unresolvedLines": [], "lowConfidenceLines": []}
         phrases = forced_align_provided_lyrics(vocals, plan, language)
+        del model
+        phrases = fine_align_provided_lyrics(vocals, phrases, language)
         debug["unresolvedLines"] = [phrase["text"] for phrase in phrases if phrase["alignment_status"] == "unresolved"]
         debug["lowConfidenceLines"] = [phrase["text"] for phrase in phrases if phrase["confidence"] < 0.75]
         (project_directory / "cache" / "lyrics-alignment-debug.json").write_text(json.dumps(debug, ensure_ascii=False, indent=2), encoding="utf-8")

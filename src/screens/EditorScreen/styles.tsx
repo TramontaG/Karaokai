@@ -587,15 +587,13 @@ export const TimelineViewport = styled.div`
 `;
 export const TimelineContent = styled.div<{
   $splitting: boolean;
-  $followPlayback: boolean;
 }>`
   position: relative;
   display: grid;
   box-sizing: border-box;
   min-width: max(34rem, 100%);
-  /* Leave enough runway to keep time zero and the end at the viewport center. */
-  margin-inline: ${({ $followPlayback }) =>
-    $followPlayback ? "calc(50% + 0.4rem)" : "0"};
+  /* Keep the centering runway stable when playback following is toggled. */
+  margin-inline: calc(50% + 0.4rem);
   gap: 0.45rem;
   cursor: ${({ $splitting }) => ($splitting ? "crosshair" : "default")};
 `;

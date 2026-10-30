@@ -74,8 +74,21 @@ app.whenReady().then(async () => {
       advancing / (playback.length - 1) > 0.8,
       "Continuous follow must advance on most display frames"
     );
-    await js(`window.followInput.click()`);
+    const beforeDisable = await js(`(()=>{
+      const content=window.followViewport.firstElementChild;
+      const before={scroll:window.followViewport.scrollLeft,left:content.getBoundingClientRect().left};
+      window.followInput.click();
+      return before;
+    })()`);
     await wait(50);
+    const afterDisable = await js(
+      `({scroll:window.followViewport.scrollLeft,left:window.followViewport.firstElementChild.getBoundingClientRect().left})`
+    );
+    assert.deepEqual(
+      afterDisable,
+      beforeDisable,
+      "Disabling follow must preserve the scroll and visible content position"
+    );
     const disabled = await sample(250);
     assert.equal(
       Math.max(...disabled) - Math.min(...disabled),
